@@ -15,6 +15,12 @@ podman build -f Dockerfile -t leroy-ros:jazzy .
 podman build -f Dockerfile.xrslam -t leroy-ros:xrslam .
 ```
 
+The base image also builds a patched, pinned `usb_cam` 0.8.1
+in `/leroy_ws` to correct a confirmed V4L2 timestamp conversion bug.
+The XRSLAM image inherits that fixed driver. See
+[`CAMERA_TIMESTAMP_FIX.md`](CAMERA_TIMESTAMP_FIX.md) for verification
+and remaining synchronization limitations.
+
 The XRSLAM native source is pinned to
 `53adcdafd065ec1b2239b9d000205ea243e8342d`. Its CMake build downloads
 pinned third-party dependencies, so the first build needs network access and
