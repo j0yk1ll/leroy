@@ -54,8 +54,10 @@ ROS-independent clock mapper:
 - Slew-limit corrections to avoid discontinuities in published IMU and
   encoder timestamps. Preserve identical timestamps for a shared MCU tick.
 - Detect host ROS-clock steps relative to the system monotonic clock.
-  Discontinuities stop sensor publication, command zero wheel speed and
-  require a supervised bridge restart. No automatic VIO reinitialization.
+  Discontinuities stop sensor publication, command zero wheel speed,
+  withhold keepalives so the MCU's 500 ms watchdog can stop motion if the
+  stop packet is lost, and require a supervised bridge restart.
+  No automatic VIO reinitialization.
 - Log the estimated host-relative MCU clock-rate correction in ppm once the
   rate estimator has enough observations and roughly once per minute later.
 

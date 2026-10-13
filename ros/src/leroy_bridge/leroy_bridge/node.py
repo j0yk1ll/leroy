@@ -274,6 +274,10 @@ class LeroyBridgeNode(Node):
             self.get_logger().error(f'Serial write failed: {exc}')
 
     def _send_keepalive(self) -> None:
+        # On a clock fault, withhold keepalives so the MCU's independent
+        # watchdog stops motion even if the immediate stop packet is lost.
+        if self._clock_fault:
+            return
         self._send_command('keepalive')
 
     def _reader_loop(self) -> None:
