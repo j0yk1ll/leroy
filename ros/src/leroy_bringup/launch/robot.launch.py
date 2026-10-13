@@ -11,7 +11,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def _launch_xrslam(context, *args, **kwargs):
-    """Start the separately installed XRSLAM adapter, never an in-tree copy."""
+    """Start the Leroy-owned XRSLAM ROS 2 adapter when explicitly enabled."""
     def arg(name):
         return LaunchConfiguration(name).perform(context).strip()
 
@@ -144,7 +144,7 @@ def generate_launch_description():
     depthart = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('depthart_ros'),
+                FindPackageShare('leroy_depthart'),
                 'launch',
                 'depthart.launch.py',
             ])
@@ -172,7 +172,7 @@ def generate_launch_description():
         DeclareLaunchArgument('xrslam_image_topic', default_value=''),
         DeclareLaunchArgument('xrslam_camera_info_topic', default_value=''),
         DeclareLaunchArgument('xrslam_imu_topic', default_value='/imu/data_raw'),
-        # Managed by the standalone XRSLAM repository, not by Leroy.
+        # Managed as calibration assets by the Leroy deployment.
         DeclareLaunchArgument('xrslam_slam_yaml', default_value=''),
         DeclareLaunchArgument('xrslam_device_template_yaml', default_value=''),
         DeclareLaunchArgument('xrslam_camera_imu_offset_sec', default_value=''),

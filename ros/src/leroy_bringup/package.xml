@@ -15,7 +15,7 @@
   <exec_depend>usb_cam</exec_depend>
   <exec_depend>image_proc</exec_depend>
   <exec_depend>rclcpp_components</exec_depend>
-  <exec_depend>depthart_ros</exec_depend>
+  <exec_depend>leroy_depthart</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

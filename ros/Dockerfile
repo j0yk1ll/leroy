@@ -5,10 +5,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Pin upstream DepthART for reproducible builds.
 ARG DEPTHART_REF=0384521b3bcb4c64adf03eeb5d55ebdb1cbdd84c
 
-# depthart_ros can stay on main while it is under active development.
-# Pin this to a commit or release tag once the interface stabilizes.
-ARG DEPTHART_ROS_REF=main
-
 # CPU-only PyTorch runtime for the development image.
 # DepthART was validated locally with torch 2.1 / Python 3.9; Jazzy uses
 # Python 3.12, so use the closest PyTorch line with Python 3.12 wheels.
@@ -108,7 +104,7 @@ from network import tvimblock
 print("DepthART metric imports OK")
 PY
 
-# Verify that the checkpoint expected by depthart_ros exists.
+# Verify that the checkpoint expected by leroy_depthart exists.
 RUN test -f /opt/DepthART/checkpoints/metric/depthart_metric_indoor_s_448.pth
 
 # ------------------------------------------------------------
@@ -116,12 +112,6 @@ RUN test -f /opt/DepthART/checkpoints/metric/depthart_metric_indoor_s_448.pth
 # ------------------------------------------------------------
 
 RUN mkdir -p /leroy_ws/src
-
-# DepthART ROS adapter.
-RUN git clone https://github.com/j0yk1ll/depthart_ros.git \
-      /leroy_ws/src/depthart_ros \
-    && cd /leroy_ws/src/depthart_ros \
-    && git checkout "${DEPTHART_ROS_REF}"
 
 # Leroy robot-specific packages.
 #
@@ -134,12 +124,17 @@ RUN git clone https://github.com/j0yk1ll/depthart_ros.git \
 #       ├── leroy_bridge/
 #       ├── leroy_bringup/
 #       ├── leroy_description/
-#       └── leroy_msgs/
+#       ├── leroy_msgs/
+#       ├── leroy_depthart/
+#       └── xrslam_ros2/
 #
 COPY src/leroy_bridge /leroy_ws/src/leroy_bridge
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_description /leroy_ws/src/leroy_description
 COPY src/leroy_msgs /leroy_ws/src/leroy_msgs
+COPY src/leroy_depthart /leroy_ws/src/leroy_depthart
+# xrslam_ros2 is source-controlled here but must be built separately after libxrslam.so is available.
+
 COPY config /config
 
 # Build through the top-level runtime packages so colcon includes transitive
@@ -150,7 +145,7 @@ RUN . /opt/ros/jazzy/setup.sh \
          --symlink-install \
          --packages-up-to \
            leroy_bringup \
-           depthart_ros
+           leroy_depthart
 
 # Basic build-time validation.
 RUN . /opt/ros/jazzy/setup.sh \
