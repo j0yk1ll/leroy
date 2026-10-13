@@ -1,0 +1,10 @@
+{
+  "name": "robot-controller-tscircuit-modular",
+  "version": "0.2.0",
+  "private": true,
+  "dependencies": {
+    "@tsci/tscircuit.ti": "latest",
+    "@tscircuit/core": "latest",
+    "react": "latest"
+  }
+}

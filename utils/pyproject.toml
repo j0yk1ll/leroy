@@ -1,0 +1,17 @@
+[project]
+name = "utils"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "j0yk1ll", email = "" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+utils = "utils:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"

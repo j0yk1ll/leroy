@@ -1,0 +1,14 @@
+{
+  "format_version": 1,
+  "board_type": "charuco",
+  "dictionary": "DICT_5X5_100",
+  "squares_x": 5,
+  "squares_y": 7,
+  "square_length_m": 0.035,
+  "marker_length_m": 0.026,
+  "board_width_mm": 175.0,
+  "board_height_mm": 245.0,
+  "page": "DIN_A4",
+  "page_width_mm": 210.0,
+  "page_height_mm": 297.0
+}

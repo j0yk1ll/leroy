@@ -1,0 +1,35 @@
+leroy_bridge:
+  ros__parameters:
+    serial_port: /dev/ttyACM0
+    baudrate: 115200
+
+    imu_stream_hz: 100
+    encoder_stream_hz: 50
+    watchdog_ms: 500
+    keepalive_period_s: 0.10
+    cmd_vel_timeout_s: 0.25
+
+    imu_frame_id: imu_link
+
+    wheel_radius_m: 0.020
+    half_wheelbase_m: 0.180
+    half_track_m: 0.275
+
+    # Motor output remains disabled until this is calibrated.
+    max_wheel_angular_velocity_rad_s: 0.0
+    max_pwm: 255
+
+    # Encoder calibration.
+    encoder_counts_per_rev: 2464
+    front_left_encoder_sign: -1
+    rear_left_encoder_sign: -1
+    front_right_encoder_sign: 0
+    rear_right_encoder_sign: 0
+
+    # Temporary odometry mode:
+    # use the two working left encoders plus IMU yaw rate.
+    degraded_odometry_enabled: false
+
+    odom_frame_id: odom
+    base_frame_id: base_link
+    publish_odom_tf: false

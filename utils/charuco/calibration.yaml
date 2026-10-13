@@ -1,0 +1,376 @@
+image_width: 640
+image_height: 480
+camera_name: camera
+camera_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 806.0956729529557
+  - 0.0
+  - 302.42081287864903
+  - 0.0
+  - 804.0648868145979
+  - 234.43015822396086
+  - 0.0
+  - 0.0
+  - 1.0
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data:
+  - 0.14011515949192294
+  - -0.43970317192322544
+  - -0.003389192591770862
+  - -0.006254055186788656
+  - 1.2071193294214773
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+projection_matrix:
+  rows: 3
+  cols: 4
+  data:
+  - 826.2765384124522
+  - 0.0
+  - 300.49695956470794
+  - 0.0
+  - 0.0
+  - 825.3266743769725
+  - 233.50945271495823
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  - 0.0
+fx: 806.0956729529557
+fy: 804.0648868145979
+cx: 302.42081287864903
+cy: 234.43015822396086
+suggested_rectified_camera_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 826.2765384124522
+  - 0.0
+  - 300.49695956470794
+  - 0.0
+  - 825.3266743769725
+  - 233.50945271495823
+  - 0.0
+  - 0.0
+  - 1.0
+suggested_rectified_roi:
+- 0
+- 0
+- 639
+- 479
+rectification_alpha: 0.0
+rms_reprojection_error_px: 0.3184434819682379
+mean_per_view_reprojection_error_px: 0.2904412509954494
+median_per_view_reprojection_error_px: 0.24381859600543976
+max_per_view_reprojection_error_px: 0.7255313396453857
+views_used: 92
+views_rejected: 0
+board_config:
+  format_version: 1
+  board_type: charuco
+  dictionary: DICT_5X5_100
+  squares_x: 5
+  squares_y: 7
+  square_length_m: 0.035
+  marker_length_m: 0.026
+  board_width_mm: 175.0
+  board_height_mm: 245.0
+  page: DIN_A4
+  page_width_mm: 210.0
+  page_height_mm: 297.0
+used_images:
+- calibration_images/calib_001.png
+- calibration_images/calib_002.png
+- calibration_images/calib_003.png
+- calibration_images/calib_004.png
+- calibration_images/calib_005.png
+- calibration_images/calib_006.png
+- calibration_images/calib_007.png
+- calibration_images/calib_008.png
+- calibration_images/calib_009.png
+- calibration_images/calib_010.png
+- calibration_images/calib_011.png
+- calibration_images/calib_012.png
+- calibration_images/calib_013.png
+- calibration_images/calib_014.png
+- calibration_images/calib_015.png
+- calibration_images/calib_016.png
+- calibration_images/calib_017.png
+- calibration_images/calib_018.png
+- calibration_images/calib_019.png
+- calibration_images/calib_020.png
+- calibration_images/calib_021.png
+- calibration_images/calib_022.png
+- calibration_images/calib_023.png
+- calibration_images/calib_024.png
+- calibration_images/calib_025.png
+- calibration_images/calib_026.png
+- calibration_images/calib_027.png
+- calibration_images/calib_028.png
+- calibration_images/calib_029.png
+- calibration_images/calib_030.png
+- calibration_images/calib_031.png
+- calibration_images/calib_032.png
+- calibration_images/calib_033.png
+- calibration_images/calib_034.png
+- calibration_images/calib_035.png
+- calibration_images/calib_036.png
+- calibration_images/calib_037.png
+- calibration_images/calib_038.png
+- calibration_images/calib_039.png
+- calibration_images/calib_040.png
+- calibration_images/calib_041.png
+- calibration_images/calib_042.png
+- calibration_images/calib_043.png
+- calibration_images/calib_044.png
+- calibration_images/calib_045.png
+- calibration_images/calib_046.png
+- calibration_images/calib_047.png
+- calibration_images/calib_048.png
+- calibration_images/calib_049.png
+- calibration_images/calib_050.png
+- calibration_images/calib_051.png
+- calibration_images/calib_052.png
+- calibration_images/calib_053.png
+- calibration_images/calib_054.png
+- calibration_images/calib_055.png
+- calibration_images/calib_056.png
+- calibration_images/calib_057.png
+- calibration_images/calib_058.png
+- calibration_images/calib_059.png
+- calibration_images/calib_060.png
+- calibration_images/calib_061.png
+- calibration_images/calib_062.png
+- calibration_images/calib_063.png
+- calibration_images/calib_064.png
+- calibration_images/calib_065.png
+- calibration_images/calib_066.png
+- calibration_images/calib_067.png
+- calibration_images/calib_068.png
+- calibration_images/calib_069.png
+- calibration_images/calib_070.png
+- calibration_images/calib_071.png
+- calibration_images/calib_072.png
+- calibration_images/calib_073.png
+- calibration_images/calib_074.png
+- calibration_images/calib_075.png
+- calibration_images/calib_076.png
+- calibration_images/calib_077.png
+- calibration_images/calib_078.png
+- calibration_images/calib_079.png
+- calibration_images/calib_080.png
+- calibration_images/calib_081.png
+- calibration_images/calib_082.png
+- calibration_images/calib_083.png
+- calibration_images/calib_084.png
+- calibration_images/calib_085.png
+- calibration_images/calib_086.png
+- calibration_images/calib_087.png
+- calibration_images/calib_088.png
+- calibration_images/calib_089.png
+- calibration_images/calib_090.png
+- calibration_images/calib_091.png
+- calibration_images/calib_092.png
+per_view_reprojection_error_px:
+- image: calibration_images/calib_001.png
+  error_px: 0.24449987709522247
+- image: calibration_images/calib_002.png
+  error_px: 0.4893726706504822
+- image: calibration_images/calib_003.png
+  error_px: 0.38723427057266235
+- image: calibration_images/calib_004.png
+  error_px: 0.2768738865852356
+- image: calibration_images/calib_005.png
+  error_px: 0.2283901572227478
+- image: calibration_images/calib_006.png
+  error_px: 0.1681142896413803
+- image: calibration_images/calib_007.png
+  error_px: 0.24272015690803528
+- image: calibration_images/calib_008.png
+  error_px: 0.3530520498752594
+- image: calibration_images/calib_009.png
+  error_px: 0.24863161146640778
+- image: calibration_images/calib_010.png
+  error_px: 0.1620693951845169
+- image: calibration_images/calib_011.png
+  error_px: 0.18353500962257385
+- image: calibration_images/calib_012.png
+  error_px: 0.40627521276474
+- image: calibration_images/calib_013.png
+  error_px: 0.1881593018770218
+- image: calibration_images/calib_014.png
+  error_px: 0.4554145336151123
+- image: calibration_images/calib_015.png
+  error_px: 0.21222691237926483
+- image: calibration_images/calib_016.png
+  error_px: 0.2001676857471466
+- image: calibration_images/calib_017.png
+  error_px: 0.19873298704624176
+- image: calibration_images/calib_018.png
+  error_px: 0.17052346467971802
+- image: calibration_images/calib_019.png
+  error_px: 0.3670123219490051
+- image: calibration_images/calib_020.png
+  error_px: 0.2041560411453247
+- image: calibration_images/calib_021.png
+  error_px: 0.18400032818317413
+- image: calibration_images/calib_022.png
+  error_px: 0.7255313396453857
+- image: calibration_images/calib_023.png
+  error_px: 0.3026067614555359
+- image: calibration_images/calib_024.png
+  error_px: 0.6080327033996582
+- image: calibration_images/calib_025.png
+  error_px: 0.25541242957115173
+- image: calibration_images/calib_026.png
+  error_px: 0.21291367709636688
+- image: calibration_images/calib_027.png
+  error_px: 0.31946268677711487
+- image: calibration_images/calib_028.png
+  error_px: 0.36224114894866943
+- image: calibration_images/calib_029.png
+  error_px: 0.5933699011802673
+- image: calibration_images/calib_030.png
+  error_px: 0.562309205532074
+- image: calibration_images/calib_031.png
+  error_px: 0.6295844316482544
+- image: calibration_images/calib_032.png
+  error_px: 0.3347475528717041
+- image: calibration_images/calib_033.png
+  error_px: 0.32519760727882385
+- image: calibration_images/calib_034.png
+  error_px: 0.31860601902008057
+- image: calibration_images/calib_035.png
+  error_px: 0.35849088430404663
+- image: calibration_images/calib_036.png
+  error_px: 0.4537704885005951
+- image: calibration_images/calib_037.png
+  error_px: 0.28579404950141907
+- image: calibration_images/calib_038.png
+  error_px: 0.42985084652900696
+- image: calibration_images/calib_039.png
+  error_px: 0.18482066690921783
+- image: calibration_images/calib_040.png
+  error_px: 0.29014724493026733
+- image: calibration_images/calib_041.png
+  error_px: 0.21059979498386383
+- image: calibration_images/calib_042.png
+  error_px: 0.20845508575439453
+- image: calibration_images/calib_043.png
+  error_px: 0.23236516118049622
+- image: calibration_images/calib_044.png
+  error_px: 0.30232641100883484
+- image: calibration_images/calib_045.png
+  error_px: 0.273257851600647
+- image: calibration_images/calib_046.png
+  error_px: 0.34291231632232666
+- image: calibration_images/calib_047.png
+  error_px: 0.21377238631248474
+- image: calibration_images/calib_048.png
+  error_px: 0.19030871987342834
+- image: calibration_images/calib_049.png
+  error_px: 0.5602025985717773
+- image: calibration_images/calib_050.png
+  error_px: 0.46140092611312866
+- image: calibration_images/calib_051.png
+  error_px: 0.4488981068134308
+- image: calibration_images/calib_052.png
+  error_px: 0.4164319634437561
+- image: calibration_images/calib_053.png
+  error_px: 0.4296361804008484
+- image: calibration_images/calib_054.png
+  error_px: 0.28440237045288086
+- image: calibration_images/calib_055.png
+  error_px: 0.46145638823509216
+- image: calibration_images/calib_056.png
+  error_px: 0.5219720005989075
+- image: calibration_images/calib_057.png
+  error_px: 0.2313472330570221
+- image: calibration_images/calib_058.png
+  error_px: 0.13676699995994568
+- image: calibration_images/calib_059.png
+  error_px: 0.1935236006975174
+- image: calibration_images/calib_060.png
+  error_px: 0.36867496371269226
+- image: calibration_images/calib_061.png
+  error_px: 0.2910939157009125
+- image: calibration_images/calib_062.png
+  error_px: 0.44531670212745667
+- image: calibration_images/calib_063.png
+  error_px: 0.2525573968887329
+- image: calibration_images/calib_064.png
+  error_px: 0.31218576431274414
+- image: calibration_images/calib_065.png
+  error_px: 0.1354019045829773
+- image: calibration_images/calib_066.png
+  error_px: 0.15491516888141632
+- image: calibration_images/calib_067.png
+  error_px: 0.21055686473846436
+- image: calibration_images/calib_068.png
+  error_px: 0.21209900081157684
+- image: calibration_images/calib_069.png
+  error_px: 0.23117850720882416
+- image: calibration_images/calib_070.png
+  error_px: 0.19242514669895172
+- image: calibration_images/calib_071.png
+  error_px: 0.19043013453483582
+- image: calibration_images/calib_072.png
+  error_px: 0.17479252815246582
+- image: calibration_images/calib_073.png
+  error_px: 0.20895327627658844
+- image: calibration_images/calib_074.png
+  error_px: 0.20686812698841095
+- image: calibration_images/calib_075.png
+  error_px: 0.18402664363384247
+- image: calibration_images/calib_076.png
+  error_px: 0.1811136156320572
+- image: calibration_images/calib_077.png
+  error_px: 0.24313731491565704
+- image: calibration_images/calib_078.png
+  error_px: 0.18409068882465363
+- image: calibration_images/calib_079.png
+  error_px: 0.2909127175807953
+- image: calibration_images/calib_080.png
+  error_px: 0.31049248576164246
+- image: calibration_images/calib_081.png
+  error_px: 0.13692067563533783
+- image: calibration_images/calib_082.png
+  error_px: 0.1619555801153183
+- image: calibration_images/calib_083.png
+  error_px: 0.15216246247291565
+- image: calibration_images/calib_084.png
+  error_px: 0.2746739089488983
+- image: calibration_images/calib_085.png
+  error_px: 0.16116982698440552
+- image: calibration_images/calib_086.png
+  error_px: 0.19924257695674896
+- image: calibration_images/calib_087.png
+  error_px: 0.23640884459018707
+- image: calibration_images/calib_088.png
+  error_px: 0.204533189535141
+- image: calibration_images/calib_089.png
+  error_px: 0.3544725179672241
+- image: calibration_images/calib_090.png
+  error_px: 0.16774551570415497
+- image: calibration_images/calib_091.png
+  error_px: 0.2226269394159317
+- image: calibration_images/calib_092.png
+  error_px: 0.22337228059768677
+rejected_images: []

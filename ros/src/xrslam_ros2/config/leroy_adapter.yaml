@@ -1,0 +1,27 @@
+xrslam_ros2:
+  ros__parameters:
+    # Check live Jazzy topic graph before enabling.
+    image_topic: /camera/image_rect
+    camera_info_topic: /camera/camera_info
+    imu_topic: /imu/data_raw
+    odom_topic: /odom
+    base_frame: base_link
+    odom_frame: odom
+    camera_frame: camera_optical_frame
+    imu_frame: imu_link
+    stale_camera_timeout_s: 0.7
+    maximum_plausible_linear_speed_mps: 4.0
+    maximum_plausible_angular_speed_rps: 8.0
+    camera_time_offset_s: 0.0
+    pixel_variance: 0.5
+    # PROVISIONAL EXAMPLE copied from EuRoC -- NOT CALIBRATED FOR LEROY.
+    # Replace these with real camera/IMU noise estimates before navigation.
+    imu_cov_g_diag: [2.87913024e-8, 2.87913024e-8, 2.87913024e-8]
+    imu_cov_a_diag: [4.0e-6, 4.0e-6, 4.0e-6]
+    imu_cov_bg_diag: [3.76088449e-10, 3.76088449e-10, 3.76088449e-10]
+    imu_cov_ba_diag: [9.0e-6, 9.0e-6, 9.0e-6]
+    # Heuristic odometry covariances, NOT estimator-provided uncertainties.
+    illustrative_pose_stddev_xy_m: 0.20
+    illustrative_pose_stddev_z_m: 0.35
+    illustrative_pose_stddev_yaw_rad: 0.25
+    illustrative_twist_stddev: 0.5
