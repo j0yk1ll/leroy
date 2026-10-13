@@ -5,9 +5,12 @@ Leroy-owned **ROS 2** / `ament_cmake` package, maintained in `leroy/ros/src/lero
 mapping. Only the XRSLAM C API is linked; do not add this package to the
 XRSLAM superbuild.
 
-**Status: source implementation only. Not yet compiled on ROS 2 Jazzy or tested
-with Leroy. Motors must remain disabled until calibration, pose conventions,
-timestamp alignment and loss/recovery behavior pass hardware validation.**
+**Status: compiled and linked successfully in a ROS 2 Jazzy Podman test on
+2026-10-13. Robot-specific tracking, calibration, pose-direction and
+loss/recovery behavior are not validated. Keep motors disabled.**
+
+For a repeatable image build and safe smoke tests, see
+[`ros/XRSLAM_CONTAINER.md`](../../XRSLAM_CONTAINER.md).
 
 ## Prerequisites
 
@@ -79,7 +82,7 @@ continuity-preserving recovery. No `map -> odom` is published.
 
 ## Acceptance work still required
 
-- Jazzy `colcon build` and replay test with synchronized camera/IMU
+- Jazzy replay test with synchronized camera/IMU
 - Nonidentity quaternion and translation fixture verifying body pose and TF
   directions (`q_bc`, `p_bc`, `q_bi`, `p_bi`)
 - Hardware-measured timestamp offsets, time-domain/clock reset handling
