@@ -198,11 +198,14 @@ RUN . /opt/ros/jazzy/setup.sh \
     && colcon build --symlink-install --packages-select usb_cam \
        --cmake-args -DBUILD_TESTING=OFF \
     && . /leroy_ws/install/setup.sh \
+    && echo "usb_cam prefix: $(ros2 pkg prefix usb_cam)" \
     && test "$(ros2 pkg prefix usb_cam)" = "/leroy_ws/install/usb_cam" \
+    && test -x /leroy_ws/install/usb_cam/lib/usb_cam/usb_cam_node_exe \
     && ldd /leroy_ws/install/usb_cam/lib/usb_cam/usb_cam_node_exe | \
-       grep -F '/leroy_ws/install/usb_cam/lib/libusb_cam.so' \
-    && ! ldd /leroy_ws/install/usb_cam/lib/usb_cam/usb_cam_node_exe | \
-       grep -q 'not found'
+       tee /tmp/usb_cam_ldd.txt \
+    && ! grep -q 'not found' /tmp/usb_cam_ldd.txt \
+    && grep -E 'libusb_cam[.]so => /leroy_ws/(build/usb_cam/|install/usb_cam/lib/)' \
+       /tmp/usb_cam_ldd.txt
 
 # Make both ROS and Leroy workspace available in interactive shells.
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc \
