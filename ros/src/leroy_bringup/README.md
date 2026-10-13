@@ -1,27 +1,31 @@
 # leroy_bringup
 
-Top-level ROS 2 bringup package for Leroy.
-
-## Launch
-
-```bash
-ros2 launch leroy_bringup robot.launch.py
-```
-
-Optional:
+Top-level ROS 2 Jazzy orchestration for Leroy hardware, robot description,
+USB camera, rectification and optional DepthART. All existing camera settings
+remain configurable; `use_camera` and `use_depthart` still default to true.
 
 ```bash
 ros2 launch leroy_bringup robot.launch.py use_depthart:=false
-ros2 launch leroy_bringup robot.launch.py video_device:=/dev/video2
 ```
 
-This launch starts:
-- `leroy_description` / robot_state_publisher
-- `leroy_bridge`
-- front USB camera
-- image rectification
-- DepthART through the `depthart_ros` package launch file
+## Optional XRSLAM
 
-The existing `exec.sh` should remain responsible for entering/starting the container and
-sourcing `/opt/ros/jazzy/setup.bash` and `/leroy_ws/install/setup.bash`. This package is
-responsible for ROS graph bringup.
+`use_xrslam` defaults to **false**. When enabled it starts the independent
+`xrslam_ros2` node from [j0yk1ll/xrslam](https://github.com/j0yk1ll/xrslam),
+not a duplicated adapter under Leroy's source tree. Its separately built
+XRSLAM library, ROS package, and external estimator and calibrated sensor
+YAML files must be available in the *same* sourced runtime/container.
+
+`use_xrslam:=true` requires explicit
+`xrslam_slam_yaml`, `xrslam_device_template_yaml`,
+`xrslam_image_topic`, `xrslam_camera_info_topic`, and a **measured**
+`xrslam_camera_imu_offset_sec`. The IMU topic defaults to
+`/imu/data_raw`; the camera optical frame follows `camera_frame`.
+Static transforms come from the URDF via `robot_state_publisher`.
+
+The adapter stays gated with
+`xrslam_pose_convention_validated:=false` by default and no `map -> odom`
+publication. No launch sleep or guessed calibration values are injected.
+`use_camera:=false` permits externally provided camera images for replay.
+
+See `ros/XRSLAM_INTEGRATION.md` for setup and staged acceptance checks.

@@ -1,44 +1,46 @@
 # leroy_bridge
 
-ROS 2 Jazzy hardware bridge for the Leroy MCU serial protocol.
+ROS 2 Jazzy serial bridge for Leroy's MCU. It owns **hardware telemetry and
+motor commands**, not the robot's normal odometry or sensor TF.
 
-## ROS interfaces
+Publishes `/imu/data_raw` (`sensor_msgs/msg/Imu`, best effort, depth 10,
+`imu_link`, nominal 100 Hz) and `/wheel/encoder_counts`
+(`leroy_msgs/msg/EncoderCounts`, best effort, depth 10). Subscribes to
+`/cmd_vel` (`geometry_msgs/msg/Twist`, reliable, depth 10). The MCU
+timestamp/sequence fields are preserved; right-encoder values are never
+fabricated. Raw IMU measurements use +X forward, +Y left, +Z up, rad/s and
+m/s², with unavailable quaternion orientation
+(`orientation_covariance[0] = -1`).
 
-Publishes:
+## Odometry ownership
 
-- `/imu/data_raw` (`sensor_msgs/msg/Imu`)
-- `/wheel/encoder_counts` (`leroy_msgs/msg/EncoderCounts`)
+The default configuration sets `degraded_odometry_enabled: false` and
+`publish_odom_tf: false`. The node defaults match. When degraded odometry is
+disabled, the bridge **does not create a /odom publisher or a dynamic TF
+broadcaster**. The separate `xrslam_ros2` adapter owns `/odom` and dynamic
+`odom -> base_link`.
 
-Subscribes:
+The historical FL/RL-encoder plus IMU-yaw estimator remains source-available
+only as a deliberately enabled diagnostic fallback. Never run it alongside
+XRSLAM; enabling it does **not** happen automatically after tracking loss.
 
-- `/cmd_vel` (`geometry_msgs/msg/Twist`)
+## Motor interlock
 
-The MCU is configured for timestamped IMU and encoder streaming at startup. The
-bridge also sends keepalives for the MCU watchdog and stops the wheels if
-`/cmd_vel` times out.
+`max_wheel_angular_velocity_rad_s: 0.0` keeps motor output disabled. Do not
+change this without an independent physical robot safety review. The bridge
+still retains `watchdog_ms: 500`, `keepalive_period_s: 0.10`,
+`cmd_vel_timeout_s: 0.25`, periodic command timeout checks and a stop on
+shutdown. Wheel radius (0.020 m), half-wheelbase (0.180 m), and half-track
+(0.275 m) remain necessary for the motor-control kinematics even with odometry
+disabled.
 
-`/cmd_vel` motor output remains disabled until the mecanum geometry and maximum
-wheel angular velocity are configured in `config/leroy_bridge.yaml`.
+## Timestamp validation
 
-The encoder message preserves the MCU acquisition timestamp and sequence number.
-Once encoder ticks/revolution and wheel geometry are calibrated, the next step is
-to publish `sensor_msgs/msg/JointState` and `nav_msgs/msg/Odometry`.
+The MCU clock mapper unwraps uint32 microseconds and maps them into the ROS
+clock domain. The actual live camera/IMU clock offset, timestamp monotonicity,
+MCU wrap/reconnect behavior, scheduling latency and `use_sim_time` alignment
+**remain to be measured** before XRSLAM pose output is enabled. Keep the
+existing sequence-gap diagnostics. A rebooted MCU must not be mistaken for a
+continuous VIO session.
 
-
-## Temporary degraded odometry
-
-While the front-right and rear-right encoders are unavailable, the bridge can
-publish `/odom` using the two working left encoders plus IMU yaw rate. Raw
-`/wheel/encoder_counts` is never mirrored or synthesized.
-
-Current calibration:
-
-- wheel radius: 0.020 m
-- half wheelbase: 0.180 m
-- half track: 0.275 m
-- encoder counts/revolution: 2464
-- front-left/rear-left encoder sign: -1
-
-The estimator is intentionally temporary and uses conservative covariance.
-Replace it with normal four-wheel mecanum forward kinematics once the right
-encoders are repaired.
+See `ros/XRSLAM_INTEGRATION.md` for the staged live checks.

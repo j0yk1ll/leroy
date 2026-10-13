@@ -6,7 +6,8 @@
 
   <link name="base_link"/>
 
-  <!-- IMU: 95 mm forward, 95 mm right; aligned with base axes. -->
+  <!-- PROVISIONAL: 95 mm forward, 95 mm right; IMU height and alignment
+       must be measured/verified before XRSLAM pose output is enabled. -->
   <link name="imu_link"/>
   <joint name="base_to_imu" type="fixed">
     <parent link="base_link"/>
@@ -14,7 +15,8 @@
     <origin xyz="0.095 -0.095 0.0" rpy="0 0 0"/>
   </joint>
 
-  <!-- Front camera: 60 deg from downward = 30 deg downward from forward. -->
+  <!-- PROVISIONAL: front camera 30 deg below forward, zero translation.
+       Replace xyz/rpy with measured extrinsics in this canonical Xacro. -->
   <link name="front_camera_link"/>
   <joint name="base_to_front_camera" type="fixed">
     <parent link="base_link"/>
@@ -41,7 +43,8 @@
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
-  <!-- Workspace camera: 30 deg from downward = 60 deg downward from forward. -->
+  <!-- PROVISIONAL: workspace camera 60 deg below forward, zero translation.
+       Replace xyz/rpy only after measurement. -->
   <link name="workspace_camera_link"/>
   <joint name="base_to_workspace_camera" type="fixed">
     <parent link="base_link"/>

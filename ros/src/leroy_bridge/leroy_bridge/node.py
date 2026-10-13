@@ -81,10 +81,10 @@ class LeroyBridgeNode(Node):
         self.declare_parameter('encoder_counts_per_rev', 2464)
         self.declare_parameter('front_left_encoder_sign', -1)
         self.declare_parameter('rear_left_encoder_sign', -1)
-        self.declare_parameter('degraded_odometry_enabled', True)
+        self.declare_parameter('degraded_odometry_enabled', False)
         self.declare_parameter('odom_frame_id', 'odom')
         self.declare_parameter('base_frame_id', 'base_link')
-        self.declare_parameter('publish_odom_tf', True)
+        self.declare_parameter('publish_odom_tf', False)
 
         self._serial_port = str(self.get_parameter('serial_port').value)
         self._baudrate = int(self.get_parameter('baudrate').value)
@@ -129,8 +129,16 @@ class LeroyBridgeNode(Node):
         self._encoder_pub = self.create_publisher(
             EncoderCounts, '/wheel/encoder_counts', sensor_qos
         )
-        self._odom_pub = self.create_publisher(Odometry, '/odom', 10)
-        self._tf_broadcaster = TransformBroadcaster(self)
+        # Opt-in diagnostic fallback only. With XRSLAM providing odometry, do
+        # not even advertise a competing /odom publisher or TF broadcaster.
+        self._odom_pub = (
+            self.create_publisher(Odometry, '/odom', 10)
+            if self._degraded_odometry_enabled else None
+        )
+        self._tf_broadcaster = (
+            TransformBroadcaster(self)
+            if self._degraded_odometry_enabled and self._publish_odom_tf else None
+        )
         self._cmd_sub = self.create_subscription(
             Twist, '/cmd_vel', self._on_cmd_vel, 10
         )
@@ -181,6 +189,11 @@ class LeroyBridgeNode(Node):
             self._keepalive_period_s, self._send_keepalive
         )
         self._cmd_timeout_timer = self.create_timer(0.05, self._check_cmd_timeout)
+
+        if self._publish_odom_tf and not self._degraded_odometry_enabled:
+            self.get_logger().warning(
+                'publish_odom_tf is ignored while degraded odometry is disabled.'
+            )
 
         if self._degraded_odometry_enabled and not self._odometry_configured():
             self.get_logger().warning(
@@ -476,9 +489,10 @@ class LeroyBridgeNode(Node):
         odom.twist.covariance[28] = 1e6
         odom.twist.covariance[35] = 0.10 ** 2
 
-        self._odom_pub.publish(odom)
+        if self._odom_pub is not None:
+            self._odom_pub.publish(odom)
 
-        if self._publish_odom_tf:
+        if self._tf_broadcaster is not None:
             transform = TransformStamped()
             transform.header.stamp = stamp
             transform.header.frame_id = self._odom_frame_id
