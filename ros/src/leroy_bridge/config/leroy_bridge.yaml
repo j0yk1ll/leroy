@@ -26,8 +26,8 @@ leroy_bridge:
     front_right_encoder_sign: 0
     rear_right_encoder_sign: 0
 
-    # Temporary odometry mode:
-    # use the two working left encoders plus IMU yaw rate.
+    # Diagnostic fallback only; never enable alongside XRSLAM.
+    # With this disabled the bridge does not advertise /odom or dynamic odom TF.
     degraded_odometry_enabled: false
 
     odom_frame_id: odom

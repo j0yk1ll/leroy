@@ -1,5 +1,7 @@
+import math
+
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -8,9 +10,63 @@ from launch_ros.descriptions import ComposableNode
 from launch_ros.substitutions import FindPackageShare
 
 
+def _launch_xrslam(context, *args, **kwargs):
+    """Start the separately installed XRSLAM adapter, never an in-tree copy."""
+    def arg(name):
+        return LaunchConfiguration(name).perform(context).strip()
+
+    required = (
+        'xrslam_slam_yaml',
+        'xrslam_device_template_yaml',
+        'xrslam_image_topic',
+        'xrslam_camera_info_topic',
+        'xrslam_camera_imu_offset_sec',
+    )
+    missing = [name for name in required if not arg(name)]
+    if missing:
+        raise RuntimeError(
+            'use_xrslam:=true requires explicit calibrated inputs: '
+            + ', '.join(missing)
+        )
+
+    try:
+        offset = float(arg('xrslam_camera_imu_offset_sec'))
+    except ValueError as exc:
+        raise RuntimeError('xrslam_camera_imu_offset_sec must be a measured number') from exc
+    if not math.isfinite(offset):
+        raise RuntimeError('xrslam_camera_imu_offset_sec must be finite')
+
+    pose_validated = arg('xrslam_pose_convention_validated').lower()
+    if pose_validated not in ('true', 'false'):
+        raise RuntimeError('xrslam_pose_convention_validated must be true or false')
+
+    return [Node(
+        package='xrslam_ros2',
+        executable='xrslam_ros2_node',
+        name='xrslam_ros2',
+        output='screen',
+        parameters=[{
+            'slam_yaml': arg('xrslam_slam_yaml'),
+            'device_template_yaml': arg('xrslam_device_template_yaml'),
+            'image_topic': arg('xrslam_image_topic'),
+            'camera_info_topic': arg('xrslam_camera_info_topic'),
+            'imu_topic': arg('xrslam_imu_topic'),
+            'base_frame': 'base_link',
+            'imu_frame': 'imu_link',
+            'camera_optical_frame': arg('camera_frame'),
+            'odom_frame': 'odom',
+            'camera_imu_offset_sec': offset,
+            'pose_convention_validated': pose_validated == 'true',
+            # No map->odom until persistent map alignment is verified.
+            'enable_map_tf': False,
+        }],
+    )]
+
+
 def generate_launch_description():
     use_camera = LaunchConfiguration('use_camera')
     use_depthart = LaunchConfiguration('use_depthart')
+    use_xrslam = LaunchConfiguration('use_xrslam')
 
     video_device = LaunchConfiguration('video_device')
     camera_name = LaunchConfiguration('camera_name')
@@ -83,8 +139,8 @@ def generate_launch_description():
         ],
     )
 
-    # DepthART's exact executable/parameter names are installation-specific.
-    # We invoke the package's own launch file so its existing tested config remains authoritative.
+    # DepthART stays independent: no depth data is fed into localization or
+    # safety-critical collision avoidance by this launch.
     depthart = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -111,9 +167,22 @@ def generate_launch_description():
         DeclareLaunchArgument('pixel_format', default_value='mjpeg2rgb'),
         DeclareLaunchArgument('use_camera', default_value='true'),
         DeclareLaunchArgument('use_depthart', default_value='true'),
+        DeclareLaunchArgument('use_xrslam', default_value='false'),
+        # No guesswork: find actual rectified topic + matching CameraInfo.
+        DeclareLaunchArgument('xrslam_image_topic', default_value=''),
+        DeclareLaunchArgument('xrslam_camera_info_topic', default_value=''),
+        DeclareLaunchArgument('xrslam_imu_topic', default_value='/imu/data_raw'),
+        # Managed by the standalone XRSLAM repository, not by Leroy.
+        DeclareLaunchArgument('xrslam_slam_yaml', default_value=''),
+        DeclareLaunchArgument('xrslam_device_template_yaml', default_value=''),
+        DeclareLaunchArgument('xrslam_camera_imu_offset_sec', default_value=''),
+        DeclareLaunchArgument(
+            'xrslam_pose_convention_validated', default_value='false',
+        ),
         description,
         bridge,
         camera,
         image_proc_container,
         depthart,
+        OpaqueFunction(function=_launch_xrslam, condition=IfCondition(use_xrslam)),
     ])
