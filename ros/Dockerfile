@@ -158,6 +158,52 @@ print("pyserial:", serial.VERSION)
 print("leroy_msgs import OK:", EncoderCounts)
 PY
 
+# ------------------------------------------------------------
+# usb_cam 0.8.1 timestamp correction
+# ------------------------------------------------------------
+#
+# Jazzy's binary usb_cam 0.8.1 treats timeval.tv_usec as milliseconds
+# when converting V4L2 CLOCK_MONOTONIC buffer timestamps to ROS time.
+# This produces session-dependent image header ages of up to ~1 second.
+# Keep the packaged driver installed as an underlay and overlay a patched
+# build from its pinned upstream source. See CAMERA_TIMESTAMP_FIX.md.
+ARG USB_CAM_REF=cb2ae6bc0a312de629f84fef933fb3e07dac1ef8
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libopencv-dev \
+    libavcodec-dev \
+    libavutil-dev \
+    libswscale-dev \
+    ros-jazzy-ament-cmake-auto \
+    ros-jazzy-camera-info-manager \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch 0.8.1 \
+      https://github.com/ros-drivers/usb_cam.git /leroy_ws/src/usb_cam \
+    && test "$(git -C /leroy_ws/src/usb_cam rev-parse HEAD)" = "${USB_CAM_REF}"
+
+# Fail if the upstream source changes; do not silently apply a different fix.
+RUN python3 - <<'PY'
+from pathlib import Path
+path = Path('/leroy_ws/src/usb_cam/include/usb_cam/utils.hpp')
+source = path.read_text()
+old = 'epoch_time.tv_usec / 1000.0'
+assert source.count(old) == 1, 'Expected usb_cam 0.8.1 timestamp expression exactly once'
+path.write_text(source.replace(old, 'epoch_time.tv_usec'))
+PY
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && cd /leroy_ws \
+    && colcon build --symlink-install --packages-select usb_cam \
+       --allow-overriding usb_cam --cmake-args -DBUILD_TESTING=OFF \
+    && . /leroy_ws/install/setup.sh \
+    && test "$(ros2 pkg prefix usb_cam)" = "/leroy_ws/install/usb_cam" \
+    && ldd /leroy_ws/install/usb_cam/lib/usb_cam/usb_cam_node_exe | \
+       grep -F '/leroy_ws/install/usb_cam/lib/libusb_cam.so' \
+    && ! ldd /leroy_ws/install/usb_cam/lib/usb_cam/usb_cam_node_exe | \
+       grep -q 'not found'
+
 # Make both ROS and Leroy workspace available in interactive shells.
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc \
     && echo "source /leroy_ws/install/setup.bash" >> /root/.bashrc
