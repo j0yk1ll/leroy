@@ -47,3 +47,12 @@ def test_motor_and_watchdog_interlocks_unchanged():
     assert _yaml_value('wheel_radius_m') == '0.020'
     assert _yaml_value('half_wheelbase_m') == '0.180'
     assert _yaml_value('half_track_m') == '0.275'
+
+
+def test_clock_discontinuity_latches_and_withholds_keepalives():
+    assert "except ClockSyncError as exc:" in SOURCE
+    assert "self._clock_fault = True" in SOURCE
+    assert "if self._clock_fault:" in SOURCE
+    assert "self._send_command('set_wheels 0 0 0 0')" in SOURCE
+    assert "def _send_keepalive(self)" in SOURCE
+    assert "if self._clock_fault:\n            return\n        self._send_command('keepalive')" in SOURCE

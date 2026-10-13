@@ -13,47 +13,41 @@ from sensor_msgs.msg import Imu
 from tf2_ros import TransformBroadcaster
 from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
+from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
 
 import serial
 
 
 _KEY_VALUE_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=(-?\d+)')
-_UINT32_MODULUS = 1 << 32
-_UINT32_HALF = 1 << 31
-
-
 class McuClock:
-    """Map wrapped MCU microsecond timestamps into the ROS clock domain."""
+    """Wrap the hardware-clock estimator with the ROS clock and message type."""
 
     def __init__(self, node: Node) -> None:
         self._node = node
-        self._last_raw: Optional[int] = None
-        self._wraps = 0
-        self._offset_ns: Optional[int] = None
+        self._sync = McuClockSync()
+        self._last_diagnostic_ns: Optional[int] = None
 
     def stamp(self, raw_us: int):
-        raw_us &= 0xFFFFFFFF
+        # Sample both clocks together for step detection. One-way USB serial
+        # latency still prevents verification of absolute acquisition time.
+        steady_ns = time.monotonic_ns()
+        ros_ns = self._node.get_clock().now().nanoseconds
+        stamp_ns = self._sync.observe(raw_us, ros_ns, steady_ns)
 
-        if self._last_raw is not None:
-            # A large backwards jump is the normal uint32 micros() wrap.
-            if raw_us < self._last_raw and (self._last_raw - raw_us) > _UINT32_HALF:
-                self._wraps += 1
-
-        self._last_raw = raw_us
-        unwrapped_us = raw_us + self._wraps * _UINT32_MODULUS
-        sample_ns = unwrapped_us * 1000
-
-        if self._offset_ns is None:
-            self._offset_ns = self._node.get_clock().now().nanoseconds - sample_ns
-
-        stamp_ns = self._offset_ns + sample_ns
-        sec, nsec = divmod(stamp_ns, 1_000_000_000)
+        if self._sync.ready and (
+            self._last_diagnostic_ns is None
+            or steady_ns - self._last_diagnostic_ns >= 60_000_000_000
+        ):
+            self._last_diagnostic_ns = steady_ns
+            self._node.get_logger().info(
+                f'MCU clock-rate estimate: {self._sync.rate_ppm:+.1f} ppm '
+                '(host relative to MCU; absolute USB delay not calibrated)'
+            )
 
         from builtin_interfaces.msg import Time
 
         msg = Time()
-        msg.sec = int(sec)
-        msg.nanosec = int(nsec)
+        msg.sec, msg.nanosec = divmod(stamp_ns, 1_000_000_000)
         return msg
 
 
@@ -145,6 +139,7 @@ class LeroyBridgeNode(Node):
 
         self._serial_lock = threading.Lock()
         self._clock_mapper = McuClock(self)
+        self._clock_fault = False
         self._stop_event = threading.Event()
         self._last_cmd_vel_monotonic: Optional[float] = None
         self._motion_commanded = False
@@ -279,6 +274,10 @@ class LeroyBridgeNode(Node):
             self.get_logger().error(f'Serial write failed: {exc}')
 
     def _send_keepalive(self) -> None:
+        # On a clock fault, withhold keepalives so the MCU's independent
+        # watchdog stops motion even if the immediate stop packet is lost.
+        if self._clock_fault:
+            return
         self._send_command('keepalive')
 
     def _reader_loop(self) -> None:
@@ -290,6 +289,8 @@ class LeroyBridgeNode(Node):
                     self.get_logger().error(f'Serial read failed: {exc}')
                 return
 
+            if self._stop_event.is_set() or not rclpy.ok():
+                return
             if not raw:
                 continue
 
@@ -304,8 +305,21 @@ class LeroyBridgeNode(Node):
 
             try:
                 self._handle_line(line)
+            except ClockSyncError as exc:
+                # Fail closed. Never silently re-anchor a rebooted/stepped
+                # sensor clock into the same VIO or odometry session.
+                self._clock_fault = True
+                self._motion_commanded = False
+                self._stop_event.set()
+                self._send_command('set_wheels 0 0 0 0')
+                self.get_logger().error(
+                    f'MCU clock synchronization fault: {exc}; '
+                    'telemetry inhibited until supervised bridge restart'
+                )
+                return
             except Exception as exc:  # Keep one malformed line from killing telemetry.
-                self.get_logger().warning(f'Failed to parse serial line {line!r}: {exc}')
+                if rclpy.ok() and not self._stop_event.is_set():
+                    self.get_logger().warning(f'Failed to parse serial line {line!r}: {exc}')
 
     @staticmethod
     def _fields(line: str) -> Dict[str, int]:
@@ -535,6 +549,9 @@ class LeroyBridgeNode(Node):
         ]
 
     def _on_cmd_vel(self, msg: Twist) -> None:
+        if self._clock_fault:
+            # An invalid timebase cannot drive a session with active motion.
+            return
         pwm = self._twist_to_pwm(msg)
         if pwm is None:
             self.get_logger().warning(
@@ -560,6 +577,8 @@ class LeroyBridgeNode(Node):
         self.get_logger().warning('cmd_vel timeout; commanded wheel stop')
 
     def destroy_node(self):
+        # Stop asynchronous telemetry before ROS context teardown.
+        self._stop_event.set()
         try:
             self._send_command('set_wheels 0 0 0 0')
             self._send_command('set_imu_stream_hz 0')
