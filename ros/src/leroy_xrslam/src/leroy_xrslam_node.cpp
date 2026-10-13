@@ -55,10 +55,10 @@ geometry_msgs::msg::Quaternion inverse_quat(const geometry_msgs::msg::Quaternion
 }
 } // namespace
 
-class XrslamRos2 final : public rclcpp::Node {
+class LeroyXrslam final : public rclcpp::Node {
 public:
-  XrslamRos2()
-  : Node("xrslam_ros2"),
+  LeroyXrslam()
+  : Node("leroy_xrslam"),
     tf_buffer_(this->get_clock()), tf_listener_(tf_buffer_),
     tf_broadcaster_(*this) {
     slam_yaml_=declare_parameter<std::string>("slam_yaml","");
@@ -109,7 +109,7 @@ public:
     announce("waiting_calibration",false);
     map_announce(enable_map_tf_ ? "waiting_calibration" : "disabled",false);
   }
-  ~XrslamRos2() override {
+  ~LeroyXrslam() override {
     std::lock_guard<std::mutex> lock(mutex_);
     if(initialized_) XRSLAMDestroy();
     if(!generated_yaml_.empty()) {
@@ -194,7 +194,7 @@ private:
     dev["cam0"]["distortion"]=zeros;
     dev["cam0"]["time_offset"]=offset_;
     auto tmp=std::filesystem::temp_directory_path()/
-      ("xrslam_ros2_"+std::to_string(reinterpret_cast<std::uintptr_t>(this))+".yaml");
+      ("leroy_xrslam_"+std::to_string(reinterpret_cast<std::uintptr_t>(this))+".yaml");
     generated_yaml_=tmp.string();
     {
       std::ofstream out(generated_yaml_);
@@ -202,7 +202,7 @@ private:
       out<<dev;
     }
     void * config=nullptr;
-    if(!XRSLAMCreate(slam_yaml_.c_str(),generated_yaml_.c_str(),"","xrslam_ros2",&config))
+    if(!XRSLAMCreate(slam_yaml_.c_str(),generated_yaml_.c_str(),"","leroy_xrslam",&config))
       throw std::runtime_error("XRSLAMCreate failed");
     initialized_=true;
     if(!XRSLAMRequiresIMU(config)) throw std::runtime_error("XRSLAM configuration unexpectedly has no IMU");
@@ -467,10 +467,10 @@ private:
 int main(int argc,char ** argv) {
   rclcpp::init(argc,argv);
   try {
-    auto node=std::make_shared<XrslamRos2>();
+    auto node=std::make_shared<LeroyXrslam>();
     rclcpp::spin(node);
   }catch(const std::exception & e) {
-    std::fprintf(stderr,"xrslam_ros2 fatal: %s\n",e.what());
+    std::fprintf(stderr,"leroy_xrslam fatal: %s\n",e.what());
     rclcpp::shutdown();return 1;
   }
   rclcpp::shutdown();return 0;

@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>xrslam_ros2</name>
+  <name>leroy_xrslam</name>
   <version>0.1.0</version>
   <description>Fail-closed ROS 2 Jazzy adapter for XRSLAM visual-inertial odometry.</description>
   <maintainer email="maintainer@example.invalid">XRSLAM contributors</maintainer>

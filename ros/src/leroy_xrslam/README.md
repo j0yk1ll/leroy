@@ -1,6 +1,6 @@
-# xrslam_ros2 — Jazzy bootstrap adapter
+# leroy_xrslam — Jazzy bootstrap adapter
 
-Leroy-owned **ROS 2** / `ament_cmake` package. It intentionally does not use
+Leroy-owned **ROS 2** / `ament_cmake` package, maintained in `leroy/ros/src/leroy_xrslam`. The standard Leroy Docker image does not build this optional adapter until the independent `libxrslam.so` has been built. It intentionally does not use
 `xrslam-ros` (ROS 1), RTAB-Map, Nav2 libraries, wheel encoders, or occupancy
 mapping. Only the XRSLAM C API is linked; do not add this package to the
 XRSLAM superbuild.
@@ -27,9 +27,9 @@ Example workspace (adjust paths):
 ```sh
 source /opt/ros/jazzy/setup.bash
 mkdir -p ~/xrslam_ws/src
-ln -s /path/to/leroy/ros/src/xrslam_ros2 ~/xrslam_ws/src/xrslam_ros2
+ln -s /path/to/leroy/ros/src/leroy_xrslam ~/xrslam_ws/src/leroy_xrslam
 cd ~/xrslam_ws
-colcon build --packages-select xrslam_ros2 --cmake-args \
+colcon build --packages-select leroy_xrslam --cmake-args \
   -DXRSLAM_ROOT=/home/kevin/Code/xrslam \
   -DXRSLAM_LIBRARY=/home/kevin/Code/xrslam/lib/libxrslam.so
 source install/setup.bash
@@ -39,7 +39,7 @@ export LD_LIBRARY_PATH=/home/kevin/Code/xrslam/lib:"${LD_LIBRARY_PATH}"
 Choose parameters explicitly; no placeholder transforms or guessed time offsets:
 
 ```sh
-ros2 run xrslam_ros2 xrslam_ros2_node --ros-args \
+ros2 run leroy_xrslam leroy_xrslam_node --ros-args \
   -p slam_yaml:=/absolute/path/leroy_slam.yaml \
   -p device_template_yaml:=/absolute/path/leroy_sensor_calibrated.yaml \
   -p camera_imu_offset_sec:=0.0 \

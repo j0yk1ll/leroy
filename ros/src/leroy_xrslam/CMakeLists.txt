@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrslam_ros2 LANGUAGES CXX)
+project(leroy_xrslam LANGUAGES CXX)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -33,13 +33,13 @@ if(NOT EXISTS "${XRSLAM_ROOT}/xrslam-interface/include/XRSLAM.h")
   message(FATAL_ERROR "XRSLAM_ROOT must point to the XRSLAM fork")
 endif()
 
-add_executable(xrslam_ros2_node src/xrslam_ros2_node.cpp)
-target_include_directories(xrslam_ros2_node PRIVATE
+add_executable(leroy_xrslam_node src/leroy_xrslam_node.cpp)
+target_include_directories(leroy_xrslam_node PRIVATE
   "${XRSLAM_ROOT}/xrslam-interface/include")
-target_link_libraries(xrslam_ros2_node "${XRSLAM_LIBRARY}" yaml-cpp)
-ament_target_dependencies(xrslam_ros2_node
+target_link_libraries(leroy_xrslam_node "${XRSLAM_LIBRARY}" yaml-cpp)
+ament_target_dependencies(leroy_xrslam_node
   rclcpp sensor_msgs nav_msgs geometry_msgs std_msgs tf2 tf2_ros tf2_geometry_msgs)
-target_compile_options(xrslam_ros2_node PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(leroy_xrslam_node PRIVATE -Wall -Wextra -Wpedantic)
 
-install(TARGETS xrslam_ros2_node DESTINATION lib/${PROJECT_NAME})
+install(TARGETS leroy_xrslam_node DESTINATION lib/${PROJECT_NAME})
 ament_package()

@@ -41,9 +41,9 @@ def _launch_xrslam(context, *args, **kwargs):
         raise RuntimeError('xrslam_pose_convention_validated must be true or false')
 
     return [Node(
-        package='xrslam_ros2',
-        executable='xrslam_ros2_node',
-        name='xrslam_ros2',
+        package='leroy_xrslam',
+        executable='leroy_xrslam_node',
+        name='leroy_xrslam',
         output='screen',
         parameters=[{
             'slam_yaml': arg('xrslam_slam_yaml'),
