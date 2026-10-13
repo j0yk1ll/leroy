@@ -126,14 +126,14 @@ RUN mkdir -p /leroy_ws/src
 #       ├── leroy_description/
 #       ├── leroy_msgs/
 #       ├── leroy_depthart/
-#       └── xrslam_ros2/
+#       └── leroy_xrslam/
 #
 COPY src/leroy_bridge /leroy_ws/src/leroy_bridge
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_description /leroy_ws/src/leroy_description
 COPY src/leroy_msgs /leroy_ws/src/leroy_msgs
 COPY src/leroy_depthart /leroy_ws/src/leroy_depthart
-# xrslam_ros2 is source-controlled here but must be built separately after libxrslam.so is available.
+# leroy_xrslam is source-controlled here but must be built separately after libxrslam.so is available.
 
 COPY config /config
 

@@ -10,7 +10,7 @@ ros2 launch leroy_bringup robot.launch.py use_depthart:=false
 
 ## Optional XRSLAM
 
-`use_xrslam` defaults to **false**. When enabled it starts Leroy's in-tree `xrslam_ros2` adapter, linked against the separately built, ROS-free [XRSLAM](https://github.com/j0yk1ll/xrslam) library. Its separately built
+`use_xrslam` defaults to **false**. When enabled it starts Leroy's in-tree `leroy_xrslam` adapter, linked against the separately built, ROS-free [XRSLAM](https://github.com/j0yk1ll/xrslam) library. Its separately built
 XRSLAM library and calibrated sensor
 YAML files must be available in the *same* sourced runtime/container.
 

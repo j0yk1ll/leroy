@@ -17,7 +17,7 @@ m/s², with unavailable quaternion orientation
 The default configuration sets `degraded_odometry_enabled: false` and
 `publish_odom_tf: false`. The node defaults match. When degraded odometry is
 disabled, the bridge **does not create a /odom publisher or a dynamic TF
-broadcaster**. The separate `xrslam_ros2` adapter owns `/odom` and dynamic
+broadcaster**. The separate `leroy_xrslam` adapter owns `/odom` and dynamic
 `odom -> base_link`.
 
 The historical FL/RL-encoder plus IMU-yaw estimator remains source-available
