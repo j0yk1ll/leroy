@@ -28,7 +28,6 @@ class McuClockSync:
     _MIN_SPAN_US = 45_000_000
     _MAX_GAP_US = 2_000_000
     _MAX_PPM = 200.0
-    _SLEW_PPM = 1000.0
     _MAX_HOST_STEP_NS = 100_000_000
     _INITIAL_TRANSPORT_GUARD_NS = 5_000_000
 
@@ -37,7 +36,6 @@ class McuClockSync:
         self._elapsed_us = 0
         self._previous_ros_ns = None
         self._previous_steady_ns = None
-        self._start_ros_ns = None
         self._last_stamp_ns = None
         self._rate = 1.0
         self._windows = deque()
@@ -104,8 +102,8 @@ class McuClockSync:
             return
 
         self._bad_rates = 0
-        # Update gradually; correcting the accumulated phase is separately
-        # slew-limited in observe() to avoid discontinuities.
+        # Smooth rate estimates; apply them to future intervals only so
+        # estimator changes cannot retroactively shift timestamp phase.
         self._rate += 0.25 * (slope - self._rate)
 
     def _sample_window(self, received_ros_ns):
@@ -142,8 +140,7 @@ class McuClockSync:
             self._previous_raw = raw_us
             self._previous_ros_ns = received_ros_ns
             self._previous_steady_ns = received_steady_ns
-            self._start_ros_ns = received_ros_ns - self._INITIAL_TRANSPORT_GUARD_NS
-            self._last_stamp_ns = self._start_ros_ns
+            self._last_stamp_ns = received_ros_ns - self._INITIAL_TRANSPORT_GUARD_NS
             self._minimum = (0, received_ros_ns)
             return self._last_stamp_ns
 
@@ -161,13 +158,9 @@ class McuClockSync:
         self._elapsed_us += delta_us
         self._sample_window(received_ros_ns)
 
-        # Integrate the estimated rate, then approach the corresponding
-        # affine timeline with at most 1000 ppm additional correction.
-        predicted = self._last_stamp_ns + round(delta_us * 1000 * self._rate)
-        desired = self._start_ros_ns + round(self._elapsed_us * 1000 * self._rate)
-        max_slew = round(delta_us * 1000 * self._SLEW_PPM / 1e6)
-        correction = max(-max_slew, min(max_slew, desired - predicted))
-        mapped = predicted + correction
+        # Integrate only the current MCU interval. Applying an updated rate
+        # to total elapsed uptime would introduce a false timestamp phase shift.
+        mapped = self._last_stamp_ns + round(delta_us * 1000 * self._rate)
         if mapped < self._last_stamp_ns or mapped > received_ros_ns + 100_000_000:
             self._fail('mapped timestamp is non-monotonic or far in the future')
 

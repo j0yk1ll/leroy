@@ -51,8 +51,9 @@ ROS-independent clock mapper:
   affine *rate* using up to four minutes of receipt timestamps, and update
   the estimated host/MCU rate gradually. Rate estimates exceeding ±200 ppm
   repeatedly result in an explicit clock fault instead of an unbounded fit.
-- Slew-limit corrections to avoid discontinuities in published IMU and
-  encoder timestamps. Preserve identical timestamps for a shared MCU tick.
+- Integrate the estimated rate over each new MCU interval rather than
+  retroactively reprojecting the entire uptime when the estimate changes.
+  Preserve monotonic timestamps and identical stamps for a shared MCU tick.
 - Detect host ROS-clock steps relative to the system monotonic clock.
   Discontinuities stop sensor publication, command zero wheel speed,
   withhold keepalives so the MCU's 500 ms watchdog can stop motion if the
@@ -67,7 +68,8 @@ ROS-independent clock mapper:
 Its unknown/variable delivery delay prevents inferring a verified *absolute*
 MCU-to-camera offset. The first receipt is anchored with a conservative
 5 ms transport guard; this does **not** prove that samples were acquired
-exactly 5 ms before receipt. Crystal drift and host-clock discipline remain
+exactly 5 ms before receipt. Rate integration does not subsequently correct
+this initial phase offset. Crystal drift and host-clock discipline remain
 distinct from physical sensor time offset.
 
 Do **not** use the rate correction to bypass XRSLAM's camera–IMU
@@ -87,9 +89,10 @@ source /leroy_ws/install/setup.bash
 python3 -m pytest src/leroy_bridge/test/test_clock_sync.py -q
 ```
 
-The tests simulate 360 seconds of a 42 ppm mismatch, timer rollover, serial
-jitter, out-of-order timestamps, a firmware reboot, large gaps and a host
-wall-clock step. They do **not** replace a fresh six-minute real STM32 clock
+The tests simulate 360 seconds of a 42 ppm mismatch, a 90-minute run with
+an estimated rate change and uint32 timer rollover, serial jitter, out-of-order
+timestamps, a firmware reboot, large gaps and a host wall-clock step. They do
+**not** replace a fresh six-minute real STM32 clock
 audit, especially with a concurrent camera capture.
 
 After rebuilding the bridge, check `ros2 topic delay /imu/data_raw -w 30`

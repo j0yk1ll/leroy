@@ -89,3 +89,37 @@ def test_long_serial_delays_are_filtered_from_rate_estimator():
         sync.observe(t_us, received, received - EPOCH_NS)
 
     assert 25 < sync.rate_ppm < 40
+
+def test_rate_change_does_not_rewrite_elapsed_timestamp_phase():
+    """Changing the estimated rate must not retimestamp earlier MCU time."""
+    sync = McuClockSync()
+    # Isolate the mapper from estimator convergence. The physical MCU/host
+    # rate changes after one hour and the estimate tracks it immediately.
+    sync._estimate_rate = lambda: None
+    rate_before = 1.0 - 40e-6
+    rate_after = 1.0 - 10e-6
+    sync._rate = rate_before
+
+    offsets_ms = []
+    host_elapsed_ns = 0
+    last_stamp_ns = None
+    for second in range(5401):
+        if second == 3601:
+            sync._rate = rate_after
+        if second:
+            rate = rate_before if second <= 3600 else rate_after
+            host_elapsed_ns += round(1_000_000_000 * rate)
+        received_ns = EPOCH_NS + host_elapsed_ns + 8_000_000
+        # Cross the natural uint32 microsecond rollover at ~71.6 minutes.
+        raw = (second * 1_000_000) & MASK
+        stamp_ns = sync.observe(raw, received_ns, host_elapsed_ns)
+        offsets_ms.append((received_ns - stamp_ns) / 1e6)
+        if last_stamp_ns is not None:
+            assert stamp_ns > last_stamp_ns
+        last_stamp_ns = stamp_ns
+
+    # The mapper initially anchors 5 ms before receipt. When frequency changes
+    # but the mapping is integrated, this phase offset must remain unchanged.
+    assert max(offsets_ms) - min(offsets_ms) < 0.01
+    assert abs(offsets_ms[3601] - offsets_ms[3600]) < 0.01
+    assert abs(offsets_ms[-1] - offsets_ms[0]) < 0.01
