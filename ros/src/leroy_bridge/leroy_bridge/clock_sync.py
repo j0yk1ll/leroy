@@ -28,7 +28,6 @@ class McuClockSync:
     _MIN_SPAN_US = 45_000_000
     _MAX_GAP_US = 2_000_000
     _MAX_PPM = 200.0
-    _SLEW_PPM = 1000.0
     _MAX_HOST_STEP_NS = 100_000_000
     _INITIAL_TRANSPORT_GUARD_NS = 5_000_000
 
@@ -104,8 +103,8 @@ class McuClockSync:
             return
 
         self._bad_rates = 0
-        # Update gradually; correcting the accumulated phase is separately
-        # slew-limited in observe() to avoid discontinuities.
+        # Update gradually; the phase already accumulated by earlier rates
+        # must not be recomputed when the estimate changes.
         self._rate += 0.25 * (slope - self._rate)
 
     def _sample_window(self, received_ros_ns):
@@ -161,13 +160,9 @@ class McuClockSync:
         self._elapsed_us += delta_us
         self._sample_window(received_ros_ns)
 
-        # Integrate the estimated rate, then approach the corresponding
-        # affine timeline with at most 1000 ppm additional correction.
-        predicted = self._last_stamp_ns + round(delta_us * 1000 * self._rate)
-        desired = self._start_ros_ns + round(self._elapsed_us * 1000 * self._rate)
-        max_slew = round(delta_us * 1000 * self._SLEW_PPM / 1e6)
-        correction = max(-max_slew, min(max_slew, desired - predicted))
-        mapped = predicted + correction
+        # Integrate the latest rate only over this MCU interval. Applying it
+        # to total uptime would retroactively shift the accumulated phase.
+        mapped = self._last_stamp_ns + round(delta_us * 1000 * self._rate)
         if mapped < self._last_stamp_ns or mapped > received_ros_ns + 100_000_000:
             self._fail('mapped timestamp is non-monotonic or far in the future')
 
