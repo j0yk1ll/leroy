@@ -196,7 +196,7 @@ RUN . /opt/ros/jazzy/setup.sh \
     && . /leroy_ws/install/setup.sh \
     && cd /leroy_ws \
     && colcon build --symlink-install --packages-select usb_cam \
-       --allow-overriding usb_cam --cmake-args -DBUILD_TESTING=OFF \
+       --cmake-args -DBUILD_TESTING=OFF \
     && . /leroy_ws/install/setup.sh \
     && test "$(ros2 pkg prefix usb_cam)" = "/leroy_ws/install/usb_cam" \
     && ldd /leroy_ws/install/usb_cam/lib/usb_cam/usb_cam_node_exe | \
