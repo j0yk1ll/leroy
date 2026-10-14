@@ -15,12 +15,11 @@ leroy_bridge:
     half_wheelbase_m: 0.180
     half_track_m: 0.275
 
-    # Provisional OPEN-LOOP scaling: nominal wheel rad/s corresponding to
-    # hardware PWM 255, NOT a measured physical speed limit. Smaller values
-    # result in MORE PWM for the same /cmd_vel command.
+    # Provisional open-loop gain: PWM counts per wheel rad/s, not a
+    # measured speed limit. Equivalent to 255 / 20 from the earlier scale.
     # Supervised low-duty test only; keep the hardware E-stop accessible.
-    pwm_full_scale_wheel_velocity_rad_s: 20.0
-    # Independent motor duty ceiling (25% of 255).
+    wheel_velocity_to_pwm_gain: 12.75
+    # Independent 25%-of-full-scale motor duty ceiling.
     max_pwm: 64
 
     # Encoder calibration.
