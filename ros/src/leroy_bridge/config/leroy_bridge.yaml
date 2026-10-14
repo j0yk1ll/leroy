@@ -15,9 +15,12 @@ leroy_bridge:
     half_wheelbase_m: 0.180
     half_track_m: 0.275
 
-    # Motor output remains disabled until this is calibrated.
-    max_wheel_angular_velocity_rad_s: 0.0
-    max_pwm: 255
+    # Provisional open-loop gain: PWM counts per wheel rad/s, not a
+    # measured speed limit. Equivalent to 255 / 20 from the earlier scale.
+    # Supervised low-duty test only; keep the hardware E-stop accessible.
+    wheel_velocity_to_pwm_gain: 12.75
+    # Independent 25%-of-full-scale motor duty ceiling.
+    max_pwm: 64
 
     # Encoder calibration.
     encoder_counts_per_rev: 2464

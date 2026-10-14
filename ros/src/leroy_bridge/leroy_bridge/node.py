@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import rclpy
 from geometry_msgs.msg import TransformStamped, Twist
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from nav_msgs.msg import Odometry
@@ -14,6 +15,7 @@ from tf2_ros import TransformBroadcaster
 from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
+from leroy_bridge.motor_pwm import mecanum_twist_to_pwm
 
 import serial
 
@@ -59,15 +61,23 @@ class LeroyBridgeNode(Node):
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('imu_stream_hz', 100)
         self.declare_parameter('encoder_stream_hz', 50)
-        self.declare_parameter('watchdog_ms', 500)
-        self.declare_parameter('keepalive_period_s', 0.10)
-        self.declare_parameter('cmd_vel_timeout_s', 0.25)
+        self.declare_parameter('watchdog_ms', 500,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('keepalive_period_s', 0.10,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('cmd_vel_timeout_s', 0.25,
+                               descriptor=ParameterDescriptor(read_only=True))
         self.declare_parameter('imu_frame_id', 'imu_link')
-        self.declare_parameter('wheel_radius_m', 0.0)
-        self.declare_parameter('half_wheelbase_m', 0.0)
-        self.declare_parameter('half_track_m', 0.0)
-        self.declare_parameter('max_wheel_angular_velocity_rad_s', 0.0)
-        self.declare_parameter('max_pwm', 255)
+        self.declare_parameter('wheel_radius_m', 0.0,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('half_wheelbase_m', 0.0,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('half_track_m', 0.0,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('wheel_velocity_to_pwm_gain', 0.0,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('max_pwm', 255,
+                               descriptor=ParameterDescriptor(read_only=True))
 
         # Encoder/odometry calibration. The right-side encoders are currently
         # unavailable, so odometry can explicitly run in a degraded mode using
@@ -91,8 +101,8 @@ class LeroyBridgeNode(Node):
         self._wheel_radius_m = float(self.get_parameter('wheel_radius_m').value)
         self._half_wheelbase_m = float(self.get_parameter('half_wheelbase_m').value)
         self._half_track_m = float(self.get_parameter('half_track_m').value)
-        self._max_wheel_rad_s = float(
-            self.get_parameter('max_wheel_angular_velocity_rad_s').value
+        self._wheel_velocity_to_pwm_gain = float(
+            self.get_parameter('wheel_velocity_to_pwm_gain').value
         )
         self._max_pwm = int(self.get_parameter('max_pwm').value)
         self._encoder_counts_per_rev = int(
@@ -205,7 +215,7 @@ class LeroyBridgeNode(Node):
             self.get_logger().warning(
                 'cmd_vel motor output is disabled until wheel_radius_m, '
                 'half_wheelbase_m, half_track_m, and '
-                'max_wheel_angular_velocity_rad_s are configured.'
+                'wheel_velocity_to_pwm_gain are configured.'
             )
 
         self.get_logger().info(
@@ -227,6 +237,8 @@ class LeroyBridgeNode(Node):
             raise ValueError('cmd_vel_timeout_s must be > 0')
         if self._max_pwm < 1 or self._max_pwm > 255:
             raise ValueError('max_pwm must be in 1..255')
+        if not math.isfinite(self._wheel_velocity_to_pwm_gain) or self._wheel_velocity_to_pwm_gain < 0.0:
+            raise ValueError('wheel_velocity_to_pwm_gain must be finite and >= 0')
         if self._encoder_counts_per_rev <= 0:
             raise ValueError('encoder_counts_per_rev must be > 0')
         if self._front_left_encoder_sign not in (-1, 1):
@@ -239,7 +251,7 @@ class LeroyBridgeNode(Node):
             self._wheel_radius_m > 0.0
             and self._half_wheelbase_m > 0.0
             and self._half_track_m > 0.0
-            and self._max_wheel_rad_s > 0.0
+            and self._wheel_velocity_to_pwm_gain > 0.0
         )
 
     def _odometry_configured(self) -> bool:
@@ -523,30 +535,18 @@ class LeroyBridgeNode(Node):
         if not self._kinematics_configured():
             return None
 
-        vx = float(msg.linear.x)
-        vy = float(msg.linear.y)
-        wz = float(msg.angular.z)
-        radius = self._wheel_radius_m
-        lever = self._half_wheelbase_m + self._half_track_m
-
-        # Mecanum inverse kinematics. Signs correspond to FL, FR, RL, RR.
-        wheel = [
-            (vx - vy - lever * wz) / radius,
-            (vx + vy + lever * wz) / radius,
-            (vx + vy - lever * wz) / radius,
-            (vx - vy + lever * wz) / radius,
-        ]
-
-        peak = max(abs(value) for value in wheel)
-        if peak > self._max_wheel_rad_s:
-            scale = self._max_wheel_rad_s / peak
-            wheel = [value * scale for value in wheel]
-
-        return [
-            max(-self._max_pwm, min(self._max_pwm,
-                int(round(value / self._max_wheel_rad_s * self._max_pwm))))
-            for value in wheel
-        ]
+        # Open-loop wheel rad/s -> PWM via a direct PWM/(rad/s) gain.
+        # max_pwm remains an independent absolute command ceiling.
+        return mecanum_twist_to_pwm(
+            vx=float(msg.linear.x),
+            vy=float(msg.linear.y),
+            wz=float(msg.angular.z),
+            wheel_radius_m=self._wheel_radius_m,
+            half_wheelbase_m=self._half_wheelbase_m,
+            half_track_m=self._half_track_m,
+            wheel_velocity_to_pwm_gain=self._wheel_velocity_to_pwm_gain,
+            max_pwm=self._max_pwm,
+        )
 
     def _on_cmd_vel(self, msg: Twist) -> None:
         if self._clock_fault:

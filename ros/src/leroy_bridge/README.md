@@ -24,15 +24,55 @@ The historical FL/RL-encoder plus IMU-yaw estimator remains source-available
 only as a deliberately enabled diagnostic fallback. Never run it alongside
 XRSLAM; enabling it does **not** happen automatically after tracking loss.
 
-## Motor interlock
+## Supervised low-duty motor testing and motor interlock
 
-`max_wheel_angular_velocity_rad_s: 0.0` keeps motor output disabled. Do not
-change this without an independent physical robot safety review. The bridge
-still retains `watchdog_ms: 500`, `keepalive_period_s: 0.10`,
-`cmd_vel_timeout_s: 0.25`, periodic command timeout checks and a stop on
-shutdown. Wheel radius (0.020 m), half-wheelbase (0.180 m), and half-track
-(0.275 m) remain necessary for the motor-control kinematics even with odometry
-disabled.
+The bridge code defaults to `wheel_velocity_to_pwm_gain: 0.0`, which
+**disables motor output** unless explicit configuration enables it.
+The checked-in Leroy robot YAML opts into a **provisional**, supervised
+low-duty trial:
+
+```yaml
+wheel_velocity_to_pwm_gain: 12.75  # PWM counts per requested wheel rad/s
+max_pwm: 64                       # independent 25%-of-full-scale duty cap
+```
+
+The gain is an open-loop conversion coefficient (**PWM / (rad/s)**), not a
+measured physical wheel-speed limit. Its value `12.75` is equivalent to the
+previous provisional `255 / 20.0` conversion. At 0.16 rad/s commanded
+chassis yaw, the existing wheel geometry demands about 3.64 rad/s per wheel
+and produces roughly +/-46 PWM; the absolute command is capped at +/-64.
+A higher gain commands **more** duty for the same `/cmd_vel`; reducing the
+gain commands less duty. The cap is not a guaranteed chassis-speed limit.
+
+The bridge scales all four wheel commands together if the requested output
+exceeds `max_pwm`, preserving mecanum wheel ratios. NaN and infinite
+velocity commands are rejected. Low PWM may stall the motors; loaded speed
+cannot be predicted from the gain. Use a verified physical E-stop, a
+cleared area, and a supervising operator; verify wheel directions and the
+actual response before permitting automatic motion.
+
+The bridge retains `watchdog_ms: 500`, `keepalive_period_s: 0.10`,
+`cmd_vel_timeout_s: 0.25`, periodic command timeout checks, and a stop
+on shutdown. Automatic temporal calibration refuses to arm unless
+`0 < wheel_velocity_to_pwm_gain`, `max_pwm <= 64`, a valid command timeout
+`<= 0.30`, and a valid MCU watchdog `<= 500` ms. Its `--arm` mode
+still requires explicit operator and E-stop confirmations, and visual
+tracking; the camera is **not** a collision-avoidance system.
+
+For safety, the parameters used by the bridge's cached motor conversion,
+timeout, and watchdog logic are **read-only after node startup**.
+`ros2 param set` cannot change them in flight. If motion must be disabled,
+set `wheel_velocity_to_pwm_gain: 0.0` in the YAML and restart the rebuilt
+bridge. Changes to source or configuration do not affect the currently
+running container until built and deployed.
+
+ROS-independent regression tests, from the repository root:
+
+```bash
+PYTHONPATH=ros/src/leroy_bridge python3 -m pytest \
+  ros/src/leroy_bridge/test/test_motor_pwm.py \
+  ros/src/leroy_bridge/test/test_xrslam_contract.py -q
+```
 
 ## MCU-to-ROS timestamp mapping
 
