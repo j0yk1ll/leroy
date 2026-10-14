@@ -187,11 +187,12 @@ def detect_charuco(gray: np.ndarray, board, dictionary):
         detector = cv2.aruco.CharucoDetector(board)
         charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(gray)
     else:
-        params = (cv2.aruco.DetectorParameters()
-                  if hasattr(cv2.aruco, 'DetectorParameters')
-                  else cv2.aruco.DetectorParameters_create())
+        # On OpenCV 4.6, cv2.aruco.DetectorParameters() can return an invalid
+        # native object and detectMarkers(..., parameters=params) may SIGSEGV.
+        # Leaving parameters unspecified uses the library defaults; this
+        # exact detectMarkers(image, dictionary) form was verified on Leroy.
         marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(
-            gray, dictionary, parameters=params
+            gray, dictionary
         )
         charuco_corners, charuco_ids = None, None
         if marker_ids is not None and len(marker_ids) > 0:
