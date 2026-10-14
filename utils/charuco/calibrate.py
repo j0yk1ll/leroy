@@ -128,6 +128,24 @@ def load_board(config_path: Path):
     return cfg, dictionary, board
 
 
+def board_chessboard_corners(board) -> np.ndarray:
+    """Return board corners with either OpenCV Python ChArUco API.
+
+    Some cv2.aruco builds expose getChessboardCorners() while others expose
+    the chessboardCorners property. The array order is indexed by ChArUco ID.
+    """
+    getter = getattr(board, "getChessboardCorners", None)
+    if callable(getter):
+        corners = getter()
+    else:
+        corners = getattr(board, "chessboardCorners", None)
+    if corners is None:
+        raise RuntimeError(
+            "Unsupported OpenCV ChArUco board: no chessboard corner accessor."
+        )
+    return np.asarray(corners, dtype=np.float32)
+
+
 def detect_charuco(gray: np.ndarray, board, dictionary):
     """
     Return (charuco_corners, charuco_ids, marker_corners, marker_ids).
@@ -139,7 +157,9 @@ def detect_charuco(gray: np.ndarray, board, dictionary):
         detector = cv2.aruco.CharucoDetector(board)
         charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(gray)
     else:
-        params = cv2.aruco.DetectorParameters()
+        params = (cv2.aruco.DetectorParameters()
+                  if hasattr(cv2.aruco, 'DetectorParameters')
+                  else cv2.aruco.DetectorParameters_create())
         marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(
             gray, dictionary, parameters=params
         )
@@ -209,7 +229,7 @@ def main() -> None:
     if args.save_detections is not None:
         args.save_detections.mkdir(parents=True, exist_ok=True)
 
-    chessboard_corners = np.asarray(board.getChessboardCorners(), dtype=np.float32)
+    chessboard_corners = board_chessboard_corners(board)
 
     object_points: list[np.ndarray] = []
     image_points: list[np.ndarray] = []
