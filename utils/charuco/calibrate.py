@@ -98,6 +98,29 @@ def expand_paths(patterns: Iterable[str]) -> list[Path]:
     return sorted(found)
 
 
+def create_charuco_board(squares_x, squares_y, square_length, marker_length, dictionary):
+    """Create a valid board on both legacy and modern OpenCV Python bindings.
+
+    OpenCV 4.6.0 uses CharucoBoard_create(int, int, float, float, dict).
+    Starting in 4.7 the constructor accepts a (width, height) tuple.
+    Calling the new constructor with 4.6 can leave a native object that
+    crashes on .draw() or .chessboardCorners instead of raising in Python.
+    """
+    aruco = cv2.aruco
+    legacy_factory = getattr(aruco, "CharucoBoard_create", None)
+    if callable(legacy_factory):
+        return legacy_factory(
+            squares_x, squares_y, square_length, marker_length, dictionary
+        )
+    klass = aruco.CharucoBoard
+    klass_factory = getattr(klass, "create", None)
+    if callable(klass_factory):
+        return klass_factory(
+            squares_x, squares_y, square_length, marker_length, dictionary
+        )
+    return klass((squares_x, squares_y), square_length, marker_length, dictionary)
+
+
 def load_board(config_path: Path):
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -119,8 +142,9 @@ def load_board(config_path: Path):
         raise ValueError(f"OpenCV does not know dictionary {dictionary_name!r}")
 
     dictionary = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, dictionary_name))
-    board = cv2.aruco.CharucoBoard(
-        (int(cfg["squares_x"]), int(cfg["squares_y"])),
+    board = create_charuco_board(
+        int(cfg["squares_x"]),
+        int(cfg["squares_y"]),
         float(cfg["square_length_m"]),
         float(cfg["marker_length_m"]),
         dictionary,
