@@ -64,7 +64,8 @@ the bridge's cached motor conversion fields.
 Run the ROS-independent regression tests before hardware trials:
 
 ```bash
-python3 -m pytest ros/src/leroy_bridge/test/test_motor_pwm.py \
+PYTHONPATH=ros/src/leroy_bridge python3 -m pytest \
+  ros/src/leroy_bridge/test/test_motor_pwm.py \
   ros/src/leroy_bridge/test/test_xrslam_contract.py -q
 ```
 
