@@ -1,3 +1,0 @@
-# Isolated Python OpenCV for ChArUco calibration only; do not install into the
-# system ROS Python environment. System ROS retains apt OpenCV and NumPy.
-opencv-contrib-python-headless==4.10.0.84
