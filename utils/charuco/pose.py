@@ -2,12 +2,12 @@
 from pathlib import Path
 import cv2
 import numpy as np
-from calibrate import load_board, detect_charuco
+from calibrate import load_board, detect_charuco, board_chessboard_corners
 
 class CharucoPoseEstimator:
     def __init__(self,config,min_corners=8,max_rmse_px=2.0):
         self.config,self.dictionary,self.board=load_board(Path(config))
-        self.xyz=np.asarray(self.board.getChessboardCorners(),dtype=np.float64)
+        self.xyz=np.asarray(board_chessboard_corners(self.board),dtype=np.float64)
         self.center=self.xyz.mean(axis=0)
         self.min_corners=min_corners
         self.max_rmse_px=max_rmse_px
