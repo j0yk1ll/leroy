@@ -128,22 +128,28 @@ def load_board(config_path: Path):
     return cfg, dictionary, board
 
 
-def board_chessboard_corners(board) -> np.ndarray:
-    """Return board corners with either OpenCV Python ChArUco API.
+def charuco_object_points(config: dict) -> np.ndarray:
+    """Compute 3D ChArUco corners from the printed board geometry.
 
-    Some cv2.aruco builds expose getChessboardCorners() while others expose
-    the chessboardCorners property. The array order is indexed by ChArUco ID.
+    Do not access CharucoBoard.chessboardCorners: OpenCV 4.6.0 has been
+    observed to segfault when that Python property is read. Both 4.6
+    and current OpenCV number internal chessboard corners row-major:
+    ID = row * (squares_x - 1) + col, with XY one square in from each
+    top/left board boundary. The board's origin is its top-left corner.
     """
-    getter = getattr(board, "getChessboardCorners", None)
-    if callable(getter):
-        corners = getter()
-    else:
-        corners = getattr(board, "chessboardCorners", None)
-    if corners is None:
-        raise RuntimeError(
-            "Unsupported OpenCV ChArUco board: no chessboard corner accessor."
-        )
-    return np.asarray(corners, dtype=np.float32)
+    sx = int(config["squares_x"])
+    sy = int(config["squares_y"])
+    square = float(config["square_length_m"])
+    if sx < 2 or sy < 2 or not np.isfinite(square) or square <= 0:
+        raise ValueError("Invalid ChArUco board dimensions")
+    return np.asarray(
+        [
+            ((col + 1) * square, (row + 1) * square, 0.0)
+            for row in range(sy - 1)
+            for col in range(sx - 1)
+        ],
+        dtype=np.float32,
+    )
 
 
 def detect_charuco(gray: np.ndarray, board, dictionary):
@@ -229,7 +235,7 @@ def main() -> None:
     if args.save_detections is not None:
         args.save_detections.mkdir(parents=True, exist_ok=True)
 
-    chessboard_corners = board_chessboard_corners(board)
+    chessboard_corners = charuco_object_points(cfg)
 
     object_points: list[np.ndarray] = []
     image_points: list[np.ndarray] = []
