@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import rclpy
 from geometry_msgs.msg import TransformStamped, Twist
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from nav_msgs.msg import Odometry
@@ -60,15 +61,23 @@ class LeroyBridgeNode(Node):
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('imu_stream_hz', 100)
         self.declare_parameter('encoder_stream_hz', 50)
-        self.declare_parameter('watchdog_ms', 500)
-        self.declare_parameter('keepalive_period_s', 0.10)
-        self.declare_parameter('cmd_vel_timeout_s', 0.25)
+        self.declare_parameter('watchdog_ms', 500,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('keepalive_period_s', 0.10,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('cmd_vel_timeout_s', 0.25,
+                               descriptor=ParameterDescriptor(read_only=True))
         self.declare_parameter('imu_frame_id', 'imu_link')
-        self.declare_parameter('wheel_radius_m', 0.0)
-        self.declare_parameter('half_wheelbase_m', 0.0)
-        self.declare_parameter('half_track_m', 0.0)
-        self.declare_parameter('pwm_full_scale_wheel_velocity_rad_s', 0.0)
-        self.declare_parameter('max_pwm', 255)
+        self.declare_parameter('wheel_radius_m', 0.0,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('half_wheelbase_m', 0.0,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('half_track_m', 0.0,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('wheel_velocity_to_pwm_gain', 0.0,
+                               descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter('max_pwm', 255,
+                               descriptor=ParameterDescriptor(read_only=True))
 
         # Encoder/odometry calibration. The right-side encoders are currently
         # unavailable, so odometry can explicitly run in a degraded mode using
@@ -92,8 +101,8 @@ class LeroyBridgeNode(Node):
         self._wheel_radius_m = float(self.get_parameter('wheel_radius_m').value)
         self._half_wheelbase_m = float(self.get_parameter('half_wheelbase_m').value)
         self._half_track_m = float(self.get_parameter('half_track_m').value)
-        self._pwm_full_scale_wheel_rad_s = float(
-            self.get_parameter('pwm_full_scale_wheel_velocity_rad_s').value
+        self._wheel_velocity_to_pwm_gain = float(
+            self.get_parameter('wheel_velocity_to_pwm_gain').value
         )
         self._max_pwm = int(self.get_parameter('max_pwm').value)
         self._encoder_counts_per_rev = int(
@@ -206,7 +215,7 @@ class LeroyBridgeNode(Node):
             self.get_logger().warning(
                 'cmd_vel motor output is disabled until wheel_radius_m, '
                 'half_wheelbase_m, half_track_m, and '
-                'pwm_full_scale_wheel_velocity_rad_s are configured.'
+                'wheel_velocity_to_pwm_gain are configured.'
             )
 
         self.get_logger().info(
@@ -228,8 +237,8 @@ class LeroyBridgeNode(Node):
             raise ValueError('cmd_vel_timeout_s must be > 0')
         if self._max_pwm < 1 or self._max_pwm > 255:
             raise ValueError('max_pwm must be in 1..255')
-        if not math.isfinite(self._pwm_full_scale_wheel_rad_s) or self._pwm_full_scale_wheel_rad_s < 0.0:
-            raise ValueError('pwm_full_scale_wheel_velocity_rad_s must be finite and >= 0')
+        if not math.isfinite(self._wheel_velocity_to_pwm_gain) or self._wheel_velocity_to_pwm_gain < 0.0:
+            raise ValueError('wheel_velocity_to_pwm_gain must be finite and >= 0')
         if self._encoder_counts_per_rev <= 0:
             raise ValueError('encoder_counts_per_rev must be > 0')
         if self._front_left_encoder_sign not in (-1, 1):
@@ -242,7 +251,7 @@ class LeroyBridgeNode(Node):
             self._wheel_radius_m > 0.0
             and self._half_wheelbase_m > 0.0
             and self._half_track_m > 0.0
-            and self._pwm_full_scale_wheel_rad_s > 0.0
+            and self._wheel_velocity_to_pwm_gain > 0.0
         )
 
     def _odometry_configured(self) -> bool:
@@ -526,9 +535,8 @@ class LeroyBridgeNode(Node):
         if not self._kinematics_configured():
             return None
 
-        # Open-loop wheel rad/s -> PWM conversion. The scale describes the
-        # nominal wheel velocity at PWM 255, NOT a measured speed limit.
-        # max_pwm is an independent hard command ceiling.
+        # Open-loop wheel rad/s -> PWM via a direct PWM/(rad/s) gain.
+        # max_pwm remains an independent absolute command ceiling.
         return mecanum_twist_to_pwm(
             vx=float(msg.linear.x),
             vy=float(msg.linear.y),
@@ -536,7 +544,7 @@ class LeroyBridgeNode(Node):
             wheel_radius_m=self._wheel_radius_m,
             half_wheelbase_m=self._half_wheelbase_m,
             half_track_m=self._half_track_m,
-            pwm_full_scale_wheel_velocity_rad_s=self._pwm_full_scale_wheel_rad_s,
+            wheel_velocity_to_pwm_gain=self._wheel_velocity_to_pwm_gain,
             max_pwm=self._max_pwm,
         )
 
