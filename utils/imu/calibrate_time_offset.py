@@ -9,7 +9,7 @@ This is NOT a navigation or collision avoidance system. Use only in a physically
 cleared, supervised test area with an independent E-stop, after independently
 commissioning the motor controller. It does not override the motor interlock.
 
-Reads camera<-ChArUco pose using Kalibr ChArUco tag36h11 (row-major IDs),
+Reads the existing printed ChArUco board via subpixel corners,
 then transforms visual angular velocity into the measured IMU frame using TF.
 Fits only the time offset; camera/IMU spatial extrinsics remain unchanged.
 """
@@ -171,8 +171,28 @@ def args_parser():
 def main():
     args=args_parser()
     if args.self_test:
-        p=CharucoPoseEstimator(Path(args.target) if args.target else Path(__file__).resolve().parents[1]/'charuco'/'calibration_board'/'board_config.json')
-        print('ChArUco configuration loaded:',len(p.xyz),'corners')
+        config = (Path(args.target) if args.target else
+                  Path(__file__).resolve().parents[1] /
+                  'charuco' / 'calibration_board' / 'board_config.json')
+        detector = CharucoPoseEstimator(config)
+        # Exercise the full marker/corner detector, not only board construction.
+        board = detector.board
+        if hasattr(board, 'generateImage'):
+            test_image = board.generateImage((700, 980), marginSize=35)
+        else:
+            test_image = board.draw((700, 980), marginSize=35)
+        from calibrate import detect_charuco
+        corners, ids, _, _ = detect_charuco(
+            test_image, detector.board, detector.dictionary
+        )
+        found = len(ids) if ids is not None else 0
+        if found < detector.min_corners:
+            raise RuntimeError(
+                f'ChArUco synthetic detection failed: {found} corners; '
+                f'expected at least {detector.min_corners}'
+            )
+        print(f'ChArUco SELF-TEST PASSED: {found}/{len(detector.xyz)} '
+              'internal corners detected')
         return 0
 
     detector=CharucoPoseEstimator(Path(args.target),args.min_corners,args.max_rmse)
@@ -442,7 +462,7 @@ def main():
         def status(self):
             p=self.last_pose
             desc=('tags=%d rmse=%.2f center=(%.2f,%.2f) range=%.2fm' %
-                  (p['tags'],p['rmse'],p['cx'],p['cy'],p['range_m'])) if p else 'NO APRILGRID'
+                  (p['tags'],p['rmse'],p['cx'],p['cy'],p['range_m'])) if p else 'NO CHARUCO'
             mode=('REC' if self.recording_started is not None else 'SEARCH')
             print(f'{mode}: images={self.counts["images"]} imu={self.counts["imu"]} '
                   f'poses={self.counts["good_poses"]} {desc}',flush=True)
