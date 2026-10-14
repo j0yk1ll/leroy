@@ -176,7 +176,7 @@ def charuco_object_points(config: dict) -> np.ndarray:
     )
 
 
-def detect_charuco(gray: np.ndarray, board, dictionary):
+def detect_charuco(gray: np.ndarray, board, dictionary, *, diagnostics: bool = False):
     """
     Return (charuco_corners, charuco_ids, marker_corners, marker_ids).
 
@@ -184,6 +184,8 @@ def detect_charuco(gray: np.ndarray, board, dictionary):
     detectMarkers + interpolateCornersCharuco API.
     """
     if hasattr(cv2.aruco, "CharucoDetector"):
+        if diagnostics:
+            print("Using modern CharucoDetector.detectBoard", flush=True)
         detector = cv2.aruco.CharucoDetector(board)
         charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(gray)
     else:
@@ -191,11 +193,17 @@ def detect_charuco(gray: np.ndarray, board, dictionary):
         # native object and detectMarkers(..., parameters=params) may SIGSEGV.
         # Leaving parameters unspecified uses the library defaults; this
         # exact detectMarkers(image, dictionary) form was verified on Leroy.
+        if diagnostics:
+            print("Using legacy detectMarkers without explicit parameters", flush=True)
         marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(
             gray, dictionary
         )
+        if diagnostics:
+            print(f"Detected {0 if marker_ids is None else len(marker_ids)} ArUco markers", flush=True)
         charuco_corners, charuco_ids = None, None
         if marker_ids is not None and len(marker_ids) > 0:
+            if diagnostics:
+                print("Interpolating ChArUco chessboard corners", flush=True)
             _, charuco_corners, charuco_ids = cv2.aruco.interpolateCornersCharuco(
                 marker_corners,
                 marker_ids,
@@ -203,6 +211,8 @@ def detect_charuco(gray: np.ndarray, board, dictionary):
                 board,
             )
 
+    if diagnostics:
+        print(f"Detected {0 if charuco_ids is None else len(charuco_ids)} ChArUco corners", flush=True)
     if charuco_corners is not None and len(charuco_corners) >= 4:
         # Refine ChArUco corner locations to sub-pixel precision.
         corners = np.asarray(charuco_corners, dtype=np.float32).reshape(-1, 1, 2)
