@@ -38,15 +38,20 @@ def test_odom_endpoints_are_created_only_in_diagnostic_mode():
     assert 'if self._degraded_odometry_enabled and self._publish_odom_tf else None' in SOURCE
 
 
-def test_motor_and_watchdog_interlocks_unchanged():
-    assert _default('max_wheel_angular_velocity_rad_s') == 0.0
-    assert _yaml_value('max_wheel_angular_velocity_rad_s') == '0.0'
+def test_supervised_low_pwm_and_watchdog_interlocks():
+    # No YAML supplied => motor commands remain disabled by default.
+    assert _default('pwm_full_scale_wheel_velocity_rad_s') == 0.0
+    # Explicit robot YAML enables only provisional, bounded low-duty output.
+    assert _yaml_value('pwm_full_scale_wheel_velocity_rad_s') == '20.0'
+    assert _yaml_value('max_pwm') == '64'
     assert _yaml_value('watchdog_ms') == '500'
     assert _yaml_value('keepalive_period_s') == '0.10'
     assert _yaml_value('cmd_vel_timeout_s') == '0.25'
     assert _yaml_value('wheel_radius_m') == '0.020'
     assert _yaml_value('half_wheelbase_m') == '0.180'
     assert _yaml_value('half_track_m') == '0.275'
+    assert 'max_wheel_angular_velocity_rad_s' not in SOURCE
+    assert 'max_wheel_angular_velocity_rad_s' not in CONFIG
 
 
 def test_clock_discontinuity_latches_and_withholds_keepalives():
