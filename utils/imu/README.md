@@ -84,7 +84,7 @@ Keep the printed board fixed and move the rigid camera/IMU assembly in varied mo
 
 ### Optional supervised automatic planar motion
 
-**Not a navigation or collision-avoidance system.** The repository currently disables motors through `max_wheel_angular_velocity_rad_s: 0.0`. The script never bypasses that interlock. Only commission motors and independently verify wheel directions, stop behavior, a genuine hardware emergency stop, a physically clear bounded space, and a supervising operator before using `--arm`.
+**Not a navigation or collision-avoidance system.** The bridge code defaults to disabled motor output (`pwm_full_scale_wheel_velocity_rad_s: 0.0`); the checked-in robot YAML explicitly enables only a **provisional supervised low-duty trial**, using `pwm_full_scale_wheel_velocity_rad_s: 20.0` and an independent `max_pwm: 64` (25% of full PWM). The scaling value is NOT a physical speed limit: lowering it increases PWM at a given command. The automatic script refuses to arm unless this parameter is positive, `max_pwm <= 64`, `cmd_vel_timeout_s <= 0.30`, and `1 <= watchdog_ms <= 500`. These checks do not replace independently verified wheel directions, stop behavior, a physical emergency stop, a cleared bounded area, and a supervising operator. Source changes require rebuilding/restarting the bridge; do not assume an edited YAML changes the running robot.
 
 The optional mode publishes short randomized, bounded lateral/longitudinal/yaw `/cmd_vel` movements. It uses target pose to keep the board visible and latches a stop on missing/stale camera or IMU, lost target, range/displacement limit, high yaw rate, or competing motor publisher. ROS bridge and MCU watchdogs remain essential. When those prerequisites are established:
 
