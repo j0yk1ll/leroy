@@ -24,15 +24,49 @@ The historical FL/RL-encoder plus IMU-yaw estimator remains source-available
 only as a deliberately enabled diagnostic fallback. Never run it alongside
 XRSLAM; enabling it does **not** happen automatically after tracking loss.
 
-## Motor interlock
+## Supervised low-duty motor testing and motor interlock
 
-`max_wheel_angular_velocity_rad_s: 0.0` keeps motor output disabled. Do not
-change this without an independent physical robot safety review. The bridge
-still retains `watchdog_ms: 500`, `keepalive_period_s: 0.10`,
+The ROS node's default `pwm_full_scale_wheel_velocity_rad_s: 0.0`
+**disables motor output** when no explicit configuration is supplied.
+The robot YAML now opts into a **provisional**, supervised low-duty motor
+test with `pwm_full_scale_wheel_velocity_rad_s: 20.0` and `max_pwm: 64`.
+The value `20.0` is an *unmeasured conversion reference*: wheel rad/s
+corresponding to PWM 255, **not a measured physical speed limit**. At
+0.16 rad/s commanded chassis yaw, it produces approximately +/-46 PWM
+at the wheels with Leroy's configured geometry. The 64/255 PWM cap is an
+independent duty limit, not a guaranteed chassis-speed limit. A
+**smaller** full-scale wheel velocity makes a given `/cmd_vel` produce
+**more** duty; it is not a safer/lower speed setting.
+
+The bridge scales all four wheel commands together if they would exceed
+`max_pwm`, retaining mecanum velocity ratios. NaN/inf velocity commands
+are rejected. Do not operate without a verified hardware E-stop, a cleared
+supervised area, and first checking wheel direction and actual motion at
+low duty. Low PWM can stall the motors, and loaded speed can differ from
+the conversion reference. Observe the chassis, adjust only based on
+measurements, and immediately stop on anomalous behavior.
+
+The bridge retains `watchdog_ms: 500`, `keepalive_period_s: 0.10`,
 `cmd_vel_timeout_s: 0.25`, periodic command timeout checks and a stop on
-shutdown. Wheel radius (0.020 m), half-wheelbase (0.180 m), and half-track
-(0.275 m) remain necessary for the motor-control kinematics even with odometry
-disabled.
+shutdown. The automatic temporal calibration script additionally refuses
+to arm if `max_pwm > 64` or if its watchdog/timeout checks fail. Its
+`--arm` mode still requires both explicit physical safety confirmations
+and supervises visual tracking; a working camera does **not** replace
+collision avoidance. Wheel radius (0.020 m), half-wheelbase (0.180 m),
+and half-track (0.275 m) remain necessary for the motor-control kinematics
+even with odometry disabled.
+
+This is a **source configuration change**, not a live ROS parameter update:
+rebuild and restart the bridge before the new mapping takes effect.
+Merely changing the YAML or running `ros2 param set` will not update
+the bridge's cached motor conversion fields.
+
+Run the ROS-independent regression tests before hardware trials:
+
+```bash
+python3 -m pytest ros/src/leroy_bridge/test/test_motor_pwm.py \
+  ros/src/leroy_bridge/test/test_xrslam_contract.py -q
+```
 
 ## MCU-to-ROS timestamp mapping
 
