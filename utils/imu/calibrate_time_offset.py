@@ -350,8 +350,10 @@ def main():
             for name,msg_type in [('/camera/image_raw/compressed','sensor_msgs/msg/CompressedImage'),
                                   ('/camera/camera_info','sensor_msgs/msg/CameraInfo'),
                                   ('/imu/data_raw','sensor_msgs/msg/Imu')]:
+                # Jazzy's rosbag2_py pybind constructor requires id even
+                # though rosbag2 assigns the persisted topic IDs itself.
                 self.writer.create_topic(rosbag2_py.TopicMetadata(
-                    name=name,type=msg_type,serialization_format='cdr'))
+                    id=0,name=name,type=msg_type,serialization_format='cdr'))
             self.recording_started=time.monotonic()
             print('ChArUco acquired; synchronized recording begun. '+
                   ('AUTONOMOUS BOUNDED MOTION STARTED.' if args.arm else 'MANUAL MOTION MODE.'),flush=True)

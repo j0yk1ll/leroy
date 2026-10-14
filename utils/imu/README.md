@@ -40,6 +40,34 @@ podman exec -it leroy-ros bash -lc '
 
 These tests also exercise `interpolateCornersCharuco` on the synthetic image; successful marker detection alone is not sufficient. Do not change the camera configuration or printed board.
 
+### Jazzy bag writer smoke test
+
+Leroy's ROS 2 Jazzy `rosbag2_py.TopicMetadata` Python constructor
+requires `id=0` even though rosbag2 assigns topic IDs to its SQLite
+storage internally. An older utility revision omitted `id` and failed
+immediately after successfully acquiring the printed ChArUco board.
+The fixed utility passes `id=0` when registering each topic.
+
+Before repeating a live recording, smoke-test the exact installed bag API.
+The test writes and reads three synthetic messages in an automatically
+deleted temporary SQLite bag. It does **not** subscribe to sensors or move
+the robot.
+
+```bash
+podman cp utils/imu/test_rosbag_writer.py leroy-ros:/tmp/leroy_utils/imu/test_rosbag_writer.py
+podman exec -it leroy-ros bash -lc '
+ source /opt/ros/jazzy/setup.bash
+ source /leroy_ws/install/setup.bash
+ python3 -m unittest discover -s /tmp/leroy_utils/imu -p test_rosbag_writer.py -v
+'
+```
+
+Use a new `--output` for each run: rosbag creates the output directory
+as soon as acquisition succeeds, even if topic registration later fails.
+For example, after `/tmp/leroy_charuco_manual_02`, use
+`/tmp/leroy_charuco_manual_03`. Never delete a bag unless you've
+confirmed it contains no useful data.
+
 ### Manual first (default, sends no motor commands)
 
 ```bash
