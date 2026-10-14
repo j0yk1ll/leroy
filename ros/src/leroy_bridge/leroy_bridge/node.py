@@ -14,6 +14,7 @@ from tf2_ros import TransformBroadcaster
 from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
+from leroy_bridge.motor_pwm import mecanum_twist_to_pwm
 
 import serial
 
@@ -66,7 +67,7 @@ class LeroyBridgeNode(Node):
         self.declare_parameter('wheel_radius_m', 0.0)
         self.declare_parameter('half_wheelbase_m', 0.0)
         self.declare_parameter('half_track_m', 0.0)
-        self.declare_parameter('max_wheel_angular_velocity_rad_s', 0.0)
+        self.declare_parameter('pwm_full_scale_wheel_velocity_rad_s', 0.0)
         self.declare_parameter('max_pwm', 255)
 
         # Encoder/odometry calibration. The right-side encoders are currently
@@ -91,8 +92,8 @@ class LeroyBridgeNode(Node):
         self._wheel_radius_m = float(self.get_parameter('wheel_radius_m').value)
         self._half_wheelbase_m = float(self.get_parameter('half_wheelbase_m').value)
         self._half_track_m = float(self.get_parameter('half_track_m').value)
-        self._max_wheel_rad_s = float(
-            self.get_parameter('max_wheel_angular_velocity_rad_s').value
+        self._pwm_full_scale_wheel_rad_s = float(
+            self.get_parameter('pwm_full_scale_wheel_velocity_rad_s').value
         )
         self._max_pwm = int(self.get_parameter('max_pwm').value)
         self._encoder_counts_per_rev = int(
@@ -205,7 +206,7 @@ class LeroyBridgeNode(Node):
             self.get_logger().warning(
                 'cmd_vel motor output is disabled until wheel_radius_m, '
                 'half_wheelbase_m, half_track_m, and '
-                'max_wheel_angular_velocity_rad_s are configured.'
+                'pwm_full_scale_wheel_velocity_rad_s are configured.'
             )
 
         self.get_logger().info(
@@ -227,6 +228,8 @@ class LeroyBridgeNode(Node):
             raise ValueError('cmd_vel_timeout_s must be > 0')
         if self._max_pwm < 1 or self._max_pwm > 255:
             raise ValueError('max_pwm must be in 1..255')
+        if not math.isfinite(self._pwm_full_scale_wheel_rad_s) or self._pwm_full_scale_wheel_rad_s < 0.0:
+            raise ValueError('pwm_full_scale_wheel_velocity_rad_s must be finite and >= 0')
         if self._encoder_counts_per_rev <= 0:
             raise ValueError('encoder_counts_per_rev must be > 0')
         if self._front_left_encoder_sign not in (-1, 1):
@@ -239,7 +242,7 @@ class LeroyBridgeNode(Node):
             self._wheel_radius_m > 0.0
             and self._half_wheelbase_m > 0.0
             and self._half_track_m > 0.0
-            and self._max_wheel_rad_s > 0.0
+            and self._pwm_full_scale_wheel_rad_s > 0.0
         )
 
     def _odometry_configured(self) -> bool:
@@ -523,30 +526,19 @@ class LeroyBridgeNode(Node):
         if not self._kinematics_configured():
             return None
 
-        vx = float(msg.linear.x)
-        vy = float(msg.linear.y)
-        wz = float(msg.angular.z)
-        radius = self._wheel_radius_m
-        lever = self._half_wheelbase_m + self._half_track_m
-
-        # Mecanum inverse kinematics. Signs correspond to FL, FR, RL, RR.
-        wheel = [
-            (vx - vy - lever * wz) / radius,
-            (vx + vy + lever * wz) / radius,
-            (vx + vy - lever * wz) / radius,
-            (vx - vy + lever * wz) / radius,
-        ]
-
-        peak = max(abs(value) for value in wheel)
-        if peak > self._max_wheel_rad_s:
-            scale = self._max_wheel_rad_s / peak
-            wheel = [value * scale for value in wheel]
-
-        return [
-            max(-self._max_pwm, min(self._max_pwm,
-                int(round(value / self._max_wheel_rad_s * self._max_pwm))))
-            for value in wheel
-        ]
+        # Open-loop wheel rad/s -> PWM conversion. The scale describes the
+        # nominal wheel velocity at PWM 255, NOT a measured speed limit.
+        # max_pwm is an independent hard command ceiling.
+        return mecanum_twist_to_pwm(
+            vx=float(msg.linear.x),
+            vy=float(msg.linear.y),
+            wz=float(msg.angular.z),
+            wheel_radius_m=self._wheel_radius_m,
+            half_wheelbase_m=self._half_wheelbase_m,
+            half_track_m=self._half_track_m,
+            pwm_full_scale_wheel_velocity_rad_s=self._pwm_full_scale_wheel_rad_s,
+            max_pwm=self._max_pwm,
+        )
 
     def _on_cmd_vel(self, msg: Twist) -> None:
         if self._clock_fault:
