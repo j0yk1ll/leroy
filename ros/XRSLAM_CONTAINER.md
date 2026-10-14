@@ -88,7 +88,7 @@ synchronization, odometry correctness, loss-of-tracking behavior, or mapping.
 - Do **not** enable pose publication or `odom -> base_link` TF until
   camera–IMU timing, physical extrinsics, pose direction, and tracking-loss
   behavior have been measured and verified on the robot.
-- Keep `max_wheel_angular_velocity_rad_s: 0.0` and degraded odometry disabled.
+- When motor output must be disabled (for normal XRSLAM bringup), set `wheel_velocity_to_pwm_gain: 0.0` in the bridge YAML **before building and restarting the bridge**; the checked-in robot YAML instead opts into a supervised low-duty motor trial (`wheel_velocity_to_pwm_gain: 12.75`, `max_pwm: 64`). Verify the **running** bridge parameters, and keep degraded odometry disabled.
 - The ROS adapter does not implement a persistent-map Nav2 pipeline.
 - Production builds should additionally pin the ROS base image by digest
   and archive third-party source artifacts, if full supply-chain repeatability
