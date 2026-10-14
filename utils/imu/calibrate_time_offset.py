@@ -174,13 +174,16 @@ def main():
         config = (Path(args.target) if args.target else
                   Path(__file__).resolve().parents[1] /
                   'charuco' / 'calibration_board' / 'board_config.json')
+        print(f'OpenCV {cv2.__version__}: loading ChArUco board', flush=True)
         detector = CharucoPoseEstimator(config)
+        print('ChArUco board created; rendering synthetic target', flush=True)
         # Exercise the full marker/corner detector, not only board construction.
         board = detector.board
         if hasattr(board, 'generateImage'):
             test_image = board.generateImage((700, 980), marginSize=35)
         else:
             test_image = board.draw((700, 980), marginSize=35)
+        print('Synthetic target generated; detecting ChArUco corners', flush=True)
         from calibrate import detect_charuco
         corners, ids, _, _ = detect_charuco(
             test_image, detector.board, detector.dictionary
