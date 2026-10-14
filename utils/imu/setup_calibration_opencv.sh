@@ -4,7 +4,7 @@
 set -euo pipefail
 
 TARGET="/tmp/leroy-calibration-opencv"
-PACKAGE="opencv-contrib-python-headless==4.10.0.84"
+REQUIREMENTS="$(dirname "$0")/requirements-calibration.txt"
 
 python3 - <<'PY'
 import numpy
@@ -18,7 +18,7 @@ if major != 1:
 PY
 
 python3 -m pip install --break-system-packages --no-deps --only-binary=:all: \
-  --target "$TARGET" "$PACKAGE"
+  --upgrade --target "$TARGET" -r "$REQUIREMENTS"
 
 PYTHONPATH="$TARGET${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
 import cv2
