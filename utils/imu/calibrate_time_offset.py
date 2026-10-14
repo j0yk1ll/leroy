@@ -186,7 +186,7 @@ def main():
         print('Synthetic target generated; detecting ChArUco corners', flush=True)
         from calibrate import detect_charuco
         corners, ids, _, _ = detect_charuco(
-            test_image, detector.board, detector.dictionary
+            test_image, detector.board, detector.dictionary, diagnostics=True
         )
         found = len(ids) if ids is not None else 0
         if found < detector.min_corners:
