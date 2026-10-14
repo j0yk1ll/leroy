@@ -3,17 +3,31 @@
 Run: python3 -m unittest discover -s utils/charuco -p 'test_*.py'
 """
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import numpy as np
 
-from calibrate import charuco_object_points, load_board, detect_charuco
+from calibrate import charuco_object_points, load_board, detect_charuco, create_charuco_board
+import cv2
 
 
 CONFIG = Path(__file__).resolve().parent / "calibration_board" / "board_config.json"
 
 
 class TestCharucoCompatibility(unittest.TestCase):
+    def test_legacy_factory_selected(self):
+        calls = []
+        def fake_factory(*args):
+            calls.append(args)
+            return "factory-result"
+        with patch.object(cv2.aruco, "CharucoBoard_create", fake_factory, create=True):
+            result = create_charuco_board(5, 7, 0.035, 0.026, object())
+        self.assertEqual(result, "factory-result")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][:4], (5, 7, 0.035, 0.026))
+
+
     def test_grid_geometry_and_corner_ids(self):
         cfg, _, _ = load_board(CONFIG)
         corners = charuco_object_points(cfg)
