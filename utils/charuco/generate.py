@@ -13,7 +13,7 @@ Default board:
   - centered on DIN A4 (210 x 297 mm)
 
 Install:
-    python -m pip install opencv-contrib-python numpy pillow reportlab
+    python -m pip install opencv-contrib-python numpy pillow reportlab pyyaml
 
 Usage:
     python generate.py
