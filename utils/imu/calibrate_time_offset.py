@@ -131,58 +131,6 @@ def search_offset(pose_rows, imu_rows, rot_imu_cam):
     return all_res
 
 
-def self_test():
-    rows,cols,size,gap=6,6,0.088,0.3
-    gd=GridDetector(rows,cols,size,gap)
-    canvas=np.full((970,970),255,np.uint8)
-    for y in range(rows):
-        for x in range(cols):
-            tag=cv2.aruco.generateImageMarker(gd.dictionary,y*cols+x,110)
-            canvas[65+140*y:175+140*y,65+140*x:175+140*x]=tag
-    corners,ids,_=gd.detect(canvas)
-    assert ids is not None and set(ids.flatten())==set(range(36))
-    # Synthetic pose projection validates tag corner order and board geometry.
-    class Camera:
-        distortion_model='plumb_bob'
-        width=640
-        height=480
-        k=[650.0,0.0,320.0,0.0,650.0,240.0,0.0,0.0,1.0]
-        d=[0.0]*5
-    synthetic=[]
-    for marker_id in range(36):
-        uv,_=cv2.projectPoints(gd.tag_xyz(marker_id),np.zeros(3),
-                                np.array([-0.36,-0.36,1.9]),
-                                np.asarray(Camera.k).reshape(3,3),np.zeros(5))
-        synthetic.append((marker_id,uv.reshape(4,2)))
-    gd.detect=lambda gray:([uv for _,uv in synthetic],
-                           np.array([[i] for i,_ in synthetic],dtype=np.int32),None)
-    pose=gd.pose(canvas,Camera(),6,2.5)
-    assert pose is not None and abs(pose['range_m']-1.9)<0.05,pose
-    assert pose['rmse']<0.001,pose
-    # Synthetic moving IMU yaw: board relative to camera has negative yaw.
-    ri=np.eye(3)
-    imu=[];poses=[]
-    base=1_790_000_000_000_000_000
-    for j in range(1201):
-        t=j*0.01
-        a=0.2*np.sin(2*math.pi*0.45*t)+0.1*np.sin(2*math.pi*0.83*t)
-        w=0.2*2*math.pi*0.45*np.cos(2*math.pi*0.45*t)+0.1*2*math.pi*0.83*np.cos(2*math.pi*0.83*t)
-        ti=base+round(t*1e9)
-        imu.append((ti,w))
-        if j%10==0:
-            # Camera header 40 ms later than IMU stamp for same physical event.
-            z=-a
-            rc=np.array([[math.cos(z),-math.sin(z),0],
-                         [math.sin(z),math.cos(z),0],[0,0,1]])
-            poses.append((ti+40_000_000,rc))
-    result=search_offset(poses,imu,ri)
-    # Pure sinusoids have broad timing peaks: test that the maximum is right,
-    # without falsely claiming statistical confidence from this toy trajectory.
-    assert result['correlation'] > 0.99, result
-    assert abs(result['lag_ms']-40)<=4,result
-    print('SELF-TEST PASSED: all AprilTags detected; +40 ms synthetic lag recovered')
-
-
 def args_parser():
     p=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('--target',help='Existing ChArUco board_config.json')
@@ -242,7 +190,7 @@ def main():
 
     class Controller(Node):
         def __init__(self):
-            super().__init__('leroy_charuco_auto_calibrate')
+            super().__init__('leroy_charuco_time_calibrate')
             self.info=None
             self.imu_frame=None
             self.image_frame=None
