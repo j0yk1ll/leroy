@@ -13,7 +13,7 @@ Default board:
   - centered on DIN A4 (210 x 297 mm)
 
 Install:
-    python -m pip install opencv-contrib-python numpy pillow reportlab pyyaml
+    python -m pip install opencv-contrib-python numpy pillow reportlab
 
 Usage:
     python generate.py
@@ -36,8 +36,6 @@ from PIL import Image
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
-
-from calibrate import create_charuco_board
 
 
 A4_WIDTH_MM = 210.0
@@ -98,8 +96,8 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     dictionary = get_aruco_dictionary(args.dictionary)
-    board = create_charuco_board(
-        args.squares_x, args.squares_y,
+    board = cv2.aruco.CharucoBoard(
+        (args.squares_x, args.squares_y),
         args.square_mm / 1000.0,
         args.marker_mm / 1000.0,
         dictionary,
@@ -108,10 +106,10 @@ def main() -> None:
     board_w_px = mm_to_px(board_w_mm, args.dpi)
     board_h_px = mm_to_px(board_h_mm, args.dpi)
 
-    board_img = (
-        board.generateImage((board_w_px, board_h_px), marginSize=0, borderBits=1)
-        if hasattr(board, "generateImage")
-        else board.draw((board_w_px, board_h_px), marginSize=0, borderBits=1)
+    board_img = board.generateImage(
+        (board_w_px, board_h_px),
+        marginSize=0,
+        borderBits=1,
     )
 
     # A4 PNG preview at the same nominal DPI.
