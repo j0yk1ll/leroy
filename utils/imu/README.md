@@ -2,25 +2,76 @@
 
 The existing `utils/charuco/generate.py`, `calibrate.py`, and printed board are reused. The new `utils/charuco/pose.py` imports the existing `load_board` and `detect_charuco` helpers. `calibrate_time_offset.py` estimates only timestamp phase; measured extrinsics in TF and calibrated camera intrinsics remain unchanged. The old `test_cam_sync.py` is a timestamp-spacing diagnostic, **not** physical-event calibration.
 
-## Container setup
+## Use your existing printed ChArUco board
 
-From the repository root on the host, with Leroy's camera/bridge container already running:
+**No new board or camera calibration is needed.** Use the A4 ChArUco print
+already matched to `utils/charuco/calibration_board/board_config.json`.
+The `--self-test` command renders a synthetic board image **in memory** only
+to validate the installed detector; it does not create another physical target.
+
+## Container setup: isolated OpenCV 4.10
+
+The robot's ROS Jazzy image currently supplies Ubuntu's OpenCV 4.6.0. Its
+ChArUco Python bindings have caused native segfaults on the robot. Pin
+`opencv-contrib-python-headless==4.10.0.84` **only for this calibration
+process**. The overlay is installed to `/tmp/leroy-calibration-opencv`,
+rather than overwriting ROS's system OpenCV or NumPy. Other robot processes
+continue using their normal system libraries.
+
+From the repository root on the host, with the `leroy-ros` container running:
 
 ```bash
 podman exec leroy-ros mkdir -p /tmp/leroy_utils/charuco/calibration_board /tmp/leroy_utils/imu
+
 podman cp utils/charuco/calibrate.py leroy-ros:/tmp/leroy_utils/charuco/calibrate.py
 podman cp utils/charuco/pose.py leroy-ros:/tmp/leroy_utils/charuco/pose.py
 podman cp utils/charuco/calibration_board/board_config.json leroy-ros:/tmp/leroy_utils/charuco/calibration_board/board_config.json
 podman cp utils/imu/calibrate_time_offset.py leroy-ros:/tmp/leroy_utils/imu/calibrate_time_offset.py
+podman cp utils/imu/test_temporal_calibration.py leroy-ros:/tmp/leroy_utils/imu/test_temporal_calibration.py
+podman cp utils/charuco/test_cv_compat.py leroy-ros:/tmp/leroy_utils/charuco/test_cv_compat.py
+podman cp utils/imu/requirements-calibration.txt leroy-ros:/tmp/leroy_utils/imu/requirements-calibration.txt
+podman cp utils/imu/setup_calibration_opencv.sh leroy-ros:/tmp/leroy_utils/imu/setup_calibration_opencv.sh
 
 podman exec -it leroy-ros bash -lc '
- source /opt/ros/jazzy/setup.bash
- source /leroy_ws/install/setup.bash
- python3 /tmp/leroy_utils/imu/calibrate_time_offset.py --self-test
+ bash /tmp/leroy_utils/imu/setup_calibration_opencv.sh
 '
 ```
 
-Requires `cv2.aruco` (OpenCV-contrib), `rclpy`, `tf2_ros`, `rosbag2_py`, and numpy in the running environment; do not change the camera configuration. Verify the physical ChArUco print matches `board_config.json`.
+**Important:** For each subsequent calibration command, explicitly set
+`PYTHONPATH=/tmp/leroy-calibration-opencv:$PYTHONPATH` inside the
+`podman exec` shell. This ensures only that one Python process imports the
+new wheel; do not export it in the robot launch/container entrypoint. The
+setup helper checks that the overlay is imported, that OpenCV is 4.10, and
+that the ChArUco detector API exists.
+
+Check synthetic target detection (no ROS topic subscribers or motor commands
+are created during self-test):
+
+```bash
+podman exec -it leroy-ros bash -lc '
+ source /opt/ros/jazzy/setup.bash
+ source /leroy_ws/install/setup.bash
+ export PYTHONPATH="/tmp/leroy-calibration-opencv:${PYTHONPATH:-}"
+ PYTHONFAULTHANDLER=1 python3 -u /tmp/leroy_utils/imu/calibrate_time_offset.py --self-test
+'
+```
+
+Run non-actuating regression tests:
+
+```bash
+podman exec -it leroy-ros bash -lc '
+ source /opt/ros/jazzy/setup.bash
+ source /leroy_ws/install/setup.bash
+ export PYTHONPATH="/tmp/leroy-calibration-opencv:${PYTHONPATH:-}"
+ PYTHONFAULTHANDLER=1 python3 -u -m unittest discover -s /tmp/leroy_utils/charuco -p test_cv_compat.py -v
+ PYTHONFAULTHANDLER=1 python3 -u -m unittest discover -s /tmp/leroy_utils/imu -p test_temporal_calibration.py -v
+'
+```
+
+Requires working `rclpy`, `tf2_ros`, `rosbag2_py`, and the ROS
+NumPy version in the container. Stop if the dependency or self-tests fail.
+No hardware motion should be enabled before a passing real-time detection
+and manual recording test.
 
 ### Manual first (default, sends no motor commands)
 
@@ -28,6 +79,7 @@ Requires `cv2.aruco` (OpenCV-contrib), `rclpy`, `tf2_ros`, `rosbag2_py`, and num
 podman exec -it leroy-ros bash -lc '
  source /opt/ros/jazzy/setup.bash
  source /leroy_ws/install/setup.bash
+ export PYTHONPATH="/tmp/leroy-calibration-opencv:${PYTHONPATH:-}"
  python3 /tmp/leroy_utils/imu/calibrate_time_offset.py \
   --target /tmp/leroy_utils/charuco/calibration_board/board_config.json \
   --output /tmp/leroy_charuco_time_01 --seconds 75
@@ -46,6 +98,7 @@ The optional mode publishes short randomized, bounded lateral/longitudinal/yaw `
 podman exec -it leroy-ros bash -lc '
  source /opt/ros/jazzy/setup.bash
  source /leroy_ws/install/setup.bash
+ export PYTHONPATH="/tmp/leroy-calibration-opencv:${PYTHONPATH:-}"
  python3 /tmp/leroy_utils/imu/calibrate_time_offset.py \
   --target /tmp/leroy_utils/charuco/calibration_board/board_config.json \
   --output /tmp/leroy_charuco_time_02 --seconds 75 \
