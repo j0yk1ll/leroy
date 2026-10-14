@@ -274,22 +274,33 @@ def main():
                 raise RuntimeError(f'Camera frame {self.image_frame!r} does not match expected {args.camera_frame!r}')
             print('Loaded actual TF camera -> IMU rotation:\n'+str(self.r_imu_cam),flush=True)
             if args.arm:
-                fut=self.param_client.get_parameters(['max_wheel_angular_velocity_rad_s','cmd_vel_timeout_s'])
+                required=['pwm_full_scale_wheel_velocity_rad_s',
+                          'max_pwm','cmd_vel_timeout_s','watchdog_ms']
+                fut=self.param_client.get_parameters(required)
                 deadline=time.monotonic()+5
                 while not fut.done() and time.monotonic()<deadline:
                     rclpy.spin_once(self,timeout_sec=0.05)
                 if not fut.done():
                     raise RuntimeError('Cannot confirm Leroy bridge motor interlock; refusing to arm')
                 vals=fut.result().values
-                max_w=float(vals[0].double_value)
-                cmd_timeout=float(vals[1].double_value)
-                if max_w<=0 or cmd_timeout<=0 or cmd_timeout>0.30:
-                    raise RuntimeError('Motor interlock disabled or unsafe cmd_vel timeout; refusing to arm. '
-                                       f'max_wheel_angular_velocity_rad_s={max_w}, timeout={cmd_timeout}')
+                pwm_scale=float(vals[0].double_value)
+                max_pwm=int(vals[1].integer_value)
+                cmd_timeout=float(vals[2].double_value)
+                watchdog_ms=int(vals[3].integer_value)
+                if (not math.isfinite(pwm_scale) or pwm_scale<=0
+                        or not 1<=max_pwm<=64 or not 0<cmd_timeout<=0.30
+                        or not 1<=watchdog_ms<=500):
+                    raise RuntimeError(
+                        'Motor interlock or safety limits invalid; refusing to arm. '
+                        f'pwm_full_scale_wheel_velocity_rad_s={pwm_scale}, '
+                        f'max_pwm={max_pwm}, cmd_vel_timeout_s={cmd_timeout}, '
+                        f'watchdog_ms={watchdog_ms}')
                 if self.count_publishers('/cmd_vel')!=1:
                     raise RuntimeError('Another /cmd_vel publisher exists; refusing competing motor commands')
-                print(f'ARMED FOR SUPERVISED BOUNDED MOTION: bridge wheel limit {max_w:.2f} rad/s; '
-                      f'cmd timeout {cmd_timeout:.2f}s. Stop with Ctrl+C.',flush=True)
+                print(f'ARMED FOR SUPERVISED BOUNDED MOTION: PWM scale {pwm_scale:.2f} rad/s '
+                      f'at duty 255; actual PWM capped at {max_pwm}/255; '
+                      f'cmd timeout {cmd_timeout:.2f}s; MCU watchdog {watchdog_ms}ms. '
+                      'Stop with Ctrl+C or physical E-stop.',flush=True)
             self.preflight_ok=True
 
         def on_info(self,msg):
