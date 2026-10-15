@@ -238,6 +238,9 @@ private:
     // Both channels, exactly one ROS IMU stamp.
     XRSLAMPushSensorData(XRSLAM_SENSOR_GYROSCOPE,&gyro);
     XRSLAMPushSensorData(XRSLAM_SENSOR_ACCELERATION,&accel);
+    // No camera frame should precede the first IMU sample that was actually
+    // handed to XRSLAM. Samples received before XRSLAMCreate are not forwarded.
+    if(first_forwarded_imu_time_<0)first_forwarded_imu_time_=t;
     drain();
   }
   void image(sensor_msgs::msg::Image::ConstSharedPtr m) {
@@ -245,6 +248,12 @@ private:
     if(failed_)return;
     const double t=seconds(m->header.stamp);
     if(m->header.frame_id!=camera_frame_ || t<=0)return;
+    // Camera frames can arrive before the TF graph is discovered and
+    // XRSLAMCreate succeeds. They cannot be consumed at that point: do NOT
+    // fill the runtime overflow-protected queue while waiting for startup.
+    // Also reject images predating our first *forwarded* IMU sample.
+    if(!initialized_ || first_forwarded_imu_time_<0 ||
+       t<=first_forwarded_imu_time_)return;
     if(!pending_.empty() && t<=seconds(pending_.back()->header.stamp))return;
     if(t<=last_image_time_)return;
     if(pending_.size()>=8){ fail("camera_queue_overflow");return; }
@@ -461,6 +470,7 @@ private:
   std::uint64_t prior_map_epoch_=0;
   double offset_=0,max_jump_=1,max_angular_jump_=1;
   double last_imu_time_=-1,last_image_time_=-1,last_pose_time_=-1;
+  double first_forwarded_imu_time_=-1;
   geometry_msgs::msg::Pose last_pose_;
 };
 
