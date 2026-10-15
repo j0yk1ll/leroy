@@ -35,11 +35,30 @@ endif()
 
 add_executable(leroy_xrslam_node src/leroy_xrslam_node.cpp)
 target_include_directories(leroy_xrslam_node PRIVATE
-  "${XRSLAM_ROOT}/xrslam-interface/include")
+  "${XRSLAM_ROOT}/xrslam-interface/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(leroy_xrslam_node "${XRSLAM_LIBRARY}" yaml-cpp)
 ament_target_dependencies(leroy_xrslam_node
   rclcpp sensor_msgs nav_msgs geometry_msgs std_msgs tf2 tf2_ros tf2_geometry_msgs)
 target_compile_options(leroy_xrslam_node PRIVATE -Wall -Wextra -Wpedantic)
 
 install(TARGETS leroy_xrslam_node DESTINATION lib/${PROJECT_NAME})
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+
+  # Source-contract checks run as part of standard colcon test / CTest.
+  ament_add_pytest_test(
+    test_startup_queue_contract
+    test/test_startup_queue_contract.py
+  )
+
+  # Exercise the very same ROS-free time predicate compiled into the adapter,
+  # including negative, zero and positive camera-IMU offset cases.
+  add_executable(test_startup_timing test/test_startup_timing.cpp)
+  target_include_directories(test_startup_timing PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  add_test(NAME test_startup_timing COMMAND test_startup_timing)
+endif()
+
 ament_package()
