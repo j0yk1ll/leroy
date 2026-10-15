@@ -345,6 +345,13 @@ private:
       camera.channel=channels;camera.stride=static_cast<int>(m->step);
       XRSLAMPushSensorData(XRSLAM_SENSOR_CAMERA,&camera);
       XRSLAMRunOneFrame();
+      ++submitted_camera_frames_;
+      // A stationary scene can remain in 'initializing' even when images
+      // are arriving. Log actual XRSLAM submissions, not just DDS endpoints.
+      if(submitted_camera_frames_==1 || submitted_camera_frames_%300==0)
+        RCLCPP_INFO(get_logger(),"Submitted %llu camera frames to XRSLAM (%s)",
+          static_cast<unsigned long long>(submitted_camera_frames_),
+          use_imu_?"monocular_imu":"monocular");
       last_image_time_=t;
       pending_.pop_front();
     }
@@ -509,6 +516,7 @@ private:
   double offset_=0,max_jump_=1,max_angular_jump_=1;
   double last_imu_time_=-1,last_image_time_=-1,last_pose_time_=-1;
   double first_forwarded_imu_time_=-1;
+  std::uint64_t submitted_camera_frames_=0;
   geometry_msgs::msg::Pose last_pose_;
 };
 
