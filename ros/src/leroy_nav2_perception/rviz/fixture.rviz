@@ -1,0 +1,38 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Alpha: 0.5
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Synthetic optical depth
+      Enabled: true
+      Topic:
+        Value: /leroy_nav2/diagnostics/raw_depth_points
+      Size (Pixels): 3
+      Style: Points
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Selected synthetic obstacles
+      Enabled: true
+      Topic:
+        Value: /leroy_nav2/diagnostics/obstacle_points
+      Size (Pixels): 5
+      Style: Points
+    - Class: rviz_default_plugins/Map
+      Name: Local synthetic costmap
+      Enabled: true
+      Topic:
+        Value: /costmap/costmap
+  Global Options:
+    Fixed Frame: base_link
+    Frame Rate: 10
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+  Value: true
