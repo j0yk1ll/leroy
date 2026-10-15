@@ -61,7 +61,7 @@ class OrientationTimingTests(unittest.TestCase):
         t = 1.0 / 30.0
         expected = sum(a * math.sin(2 * math.pi * f * t)
                        for a, f in [(0.11, 0.39), (0.045, 0.82),
-                                    (0.031, 1.23)]])
+                                    (0.031, 1.23)])
         self.assertAlmostEqual(angles[1][1], expected, places=8)
 
     def test_weak_real_imu_yaw_is_not_reported_as_lag(self):
