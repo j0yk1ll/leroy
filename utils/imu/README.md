@@ -257,3 +257,52 @@ result; noisy visual yaw can vary strongly even when the robot barely turns.
 The effective estimated offset is defined as **camera header time minus IMU header time for the same physical yaw event**. Do **not** copy it blindly to XRSLAM's `cam0.time_offset`; the downstream sign convention must be independently verified. A camera exposure/readout offset may remain even with strong motion correlation.
 
 This code has offline synthetic checks only. It has not been validated with actual wheel movement on Leroy; `--arm` remains strictly opt-in.
+
+
+#### Independent raw ChArUco corner bearing comparison (offline)
+
+The original 20-second, completed 75-second, and interrupted ~38-second
+recordings show **estimator-dependent** lag estimates from the *same*
+reconstructed PnP poses. Adjacent-frame yaw yields approximately -42,
+-58 and -66 ms, while comparing PnP orientation against integrated gyro
+yields -52, -90 and -114 ms respectively. Requiring more detected corners
+shifts the long-recording orientation estimates towards zero; allowing the
+integrated gyro angle a free scale changes these lag results by at most
+2 ms. **These are not validated sensor offsets.**
+
+`analyze_charuco_bearings.py` provides a deliberately independent,
+read-only observation. For each identified ChArUco chessboard corner
+it uses **raw detected pixel positions**, the calibrated CameraInfo
+intrinsics/distortion, and the **existing** camera-to-IMU TF to calculate
+the camera ray's azimuth in IMU XY. It does **not use solvePnP**
+or calculate board orientation. A planar homography is used **only for
+rejecting inconsistent corner IDs**, never as a pose measurement.
+
+Each well-observed corner is fitted separately against the integrated
+raw IMU yaw trace over -250..+250 ms, with nuisance intercept, time
+drift and angular gain. Each candidate lag uses an identical subset of
+frames. Results include per-corner full/half lags, gain, bearing residual
+RMS, and timing-cost sharpness:
+
+```bash
+python3 -m unittest discover -s utils/imu -p test_corner_bearing_timing.py -v
+
+python3 utils/imu/analyze_charuco_bearings.py \
+  --bag /tmp/leroy_charuco_auto_yaw_75s_03 \
+  --target utils/charuco/calibration_board/board_config.json
+```
+
+In Leroy's running ROS container, source both ROS Jazzy and
+`/leroy_ws/install/setup.bash` first and use the container's existing
+`/tmp/leroy_utils/imu/` copies of the scripts.
+
+A physical fixed corner observed from an off-center camera undergoing
+yaw can exhibit parallax; fitted bearing gain is diagnostic and cannot
+be interpreted as a calibration correction. Correlated common-mode
+pixel timing errors are not ruled out merely by consistent corner
+results. The tests use synthetic IMU and pixel-bearing trajectories;
+the exact recordings have **not** yet been analyzed with this method.
+This utility creates **no** motor publisher, does not write bags, and
+does not change intrinsics, extrinsics, controller limits or any
+XRSLAM parameter. All output is **diagnostic only**, with no
+`valid:true` designation.
