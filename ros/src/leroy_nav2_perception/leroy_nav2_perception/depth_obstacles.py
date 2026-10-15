@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+import math
+
+import numpy as np
 
 import rclpy
 from geometry_msgs.msg import TransformStamped
@@ -10,10 +13,10 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2
 from sensor_msgs_py.point_cloud2 import create_cloud_xyz32
 from std_msgs.msg import Header
-from tf2_ros import Buffer, TransformException, TransformListener
+from tf2_ros import Buffer, TransformListener
 
 from .geometry import (
     Projection, StampGate, decode_depth_32fc1, depth_to_optical_points,
@@ -72,23 +75,26 @@ class DepthObstacles(Node):
             raise RuntimeError(
                 'Obstacle output requires validated TF extrinsics and floor datum'
             )
-        # Verify numeric geometry settings at startup, including diagnostic mode.
-        Projection.from_rectified_p([1.0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 1.0, 0])
-        depth_to_optical_points(
-            __import__('numpy').ones((1, 1), dtype='float32'),
-            Projection(1, 1, 0, 0),
-            stride=int(self.p['stride']),
-            min_depth_m=float(self.p['min_depth_m']),
-            max_depth_m=float(self.p['max_depth_m']),
+        # Validate numeric bounds independently of any sensor calibration.
+        near = float(self.p['min_depth_m'])
+        far = float(self.p['max_depth_m'])
+        if not all(math.isfinite(x) for x in (near, far)) or near <= 0 or far <= near:
+            raise ValueError('Invalid depth range')
+        select_obstacles(
+            np.empty((0, 3), dtype=np.float32),
+            ground_z_m=float(self.p['ground_z_in_base_m']),
+            min_clearance_m=float(self.p['min_clearance_above_ground_m']),
+            max_height_m=float(self.p['max_height_above_ground_m']),
+            max_xy_range_m=float(self.p['max_xy_range_m']),
         )
         self._infos = OrderedDict()
         self._tf_buffer = Buffer(cache_time=Duration(seconds=15))
         self._tf_listener = TransformListener(self._tf_buffer, self)
         self._raw_pub = self.create_publisher(
-            __import__('sensor_msgs.msg', fromlist=['PointCloud2']).PointCloud2,
+            PointCloud2,
             self.p['raw_cloud_topic'], qos_profile_sensor_data)
         self._obstacle_pub = self.create_publisher(
-            __import__('sensor_msgs.msg', fromlist=['PointCloud2']).PointCloud2,
+            PointCloud2,
             self.p['obstacle_cloud_topic'], qos_profile_sensor_data)
         self._info_sub = self.create_subscription(
             CameraInfo, self.p['camera_info_topic'],
@@ -98,6 +104,8 @@ class DepthObstacles(Node):
             self._on_depth, qos_profile_sensor_data)
         self._stats = {'accepted': 0, 'obstacle_frames': 0, 'rejected': 0}
         self._last_depth_arrival_ns = None
+        self._last_valid_arrival_ns = None
+        self._observed_hz = None
         self._last_age_ms = None
         self.create_timer(5.0, self._report)
         self.get_logger().warning(
@@ -158,6 +166,11 @@ class DepthObstacles(Node):
             # Deliberately preserve optical frame and ORIGINAL acquisition stamp.
             header = Header(stamp=msg.header.stamp, frame_id=msg.header.frame_id)
             self._raw_pub.publish(create_cloud_xyz32(header, optical))
+            if self._last_valid_arrival_ns is not None:
+                elapsed_ns = now_ns - self._last_valid_arrival_ns
+                if elapsed_ns > 0:
+                    self._observed_hz = 1e9 / elapsed_ns
+            self._last_valid_arrival_ns = now_ns
             self._stats['accepted'] += 1
 
             if not self.p['publish_obstacles']:
@@ -183,16 +196,19 @@ class DepthObstacles(Node):
                 Header(stamp=msg.header.stamp, frame_id='base_link'),
                 obstacles))
             self._stats['obstacle_frames'] += 1
-        except (ValueError, TransformException) as exc:
+        except Exception as exc:
+            # An unexpected bad message/TF cannot crash the diagnostics node
+            # into publishing a replacement empty/clearing observation.
             self._reject(f'{type(exc).__name__}: {exc}')
 
     def _report(self):
         now_ns = self.get_clock().now().nanoseconds
-        stale = (self._last_depth_arrival_ns is None
-                 or (now_ns - self._last_depth_arrival_ns)
+        stale = (self._last_valid_arrival_ns is None
+                 or (now_ns - self._last_valid_arrival_ns)
                  > round(float(self.p['max_acquisition_age_s']) * 1e9))
         self.get_logger().info(
-            f'depth input_stale={stale} '
+            f'valid_depth_stale={stale} '
+            f'last_observed_hz={self._observed_hz} '
             f'acquisition_age_ms={self._last_age_ms} '
             f'accepted={self._stats["accepted"]} '
             f'obstacle_frames={self._stats["obstacle_frames"]} '
