@@ -306,3 +306,42 @@ This utility creates **no** motor publisher, does not write bags, and
 does not change intrinsics, extrinsics, controller limits or any
 XRSLAM parameter. All output is **diagnostic only**, with no
 `valid:true` designation.
+
+
+#### Cross-check raw-corner timing without long gyro integration
+
+The passive six-minute stationary audit found camera header age p05
+almost unchanged (34.84 to 34.77 ms) and IMU p05 increasing only
+1.94 to 2.30 ms. It did not show a rapidly drifting sensor clock.
+That audit cannot establish true sensor exposure/measurement time.
+
+The optional `--interval-baselines 0.12 0.20` flag in
+`analyze_charuco_bearings.py` compares the **angular change of the
+same raw ChArUco corner** across disjoint 120 ms / 200 ms visual
+intervals directly against gyro integrated across those *same
+shifted intervals*. Unlike the original raw-corner position fit,
+it does not compare visual angles against the MCU's full-recording
+integrated angle. Unlike the PnP yaw estimator, it does not use
+solvePnP. A constant angular gain and intercept are fitted only
+as nuisance variables at each candidate lag.
+
+The intervals **do not overlap** to reduce spurious certainty.
+The estimated lag, correlation, loss gap, and split-half estimates
+are diagnostic. Short intervals may have insufficient samples,
+or produce a broad lag minimum.
+
+Run the ROS-free tests and existing-bag comparison:
+
+```bash
+python3 -m unittest discover -s utils/imu -p test_corner_bearing_timing.py -v
+
+python3 utils/imu/analyze_charuco_bearings.py \
+  --bag /tmp/leroy_charuco_auto_yaw_75s_03 \
+  --target utils/charuco/calibration_board/board_config.json \
+  --max-tracks 3 --interval-baselines 0.12 0.20
+```
+
+Use appropriate in-container paths and source Jazzy plus the
+`/leroy_ws` overlay first. This is strictly a read-only
+cross-check of previously recorded bags. No motor commands and
+no changes to existing intrinsics, spatial TF, IMU scale, or XRSLAM.
