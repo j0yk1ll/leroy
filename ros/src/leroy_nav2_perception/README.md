@@ -110,6 +110,8 @@ podman exec leroy-nav2-m2 bash -lc '
   ros2 lifecycle get /costmap
   ros2 topic list
   ros2 topic info /costmap/costmap --verbose
+  echo "--- assert costmap marking and unknown occupancy ---"
+  ros2 run leroy_nav2_perception fixture_probe
   echo "--- prohibited topic ---"
   if ros2 topic list | grep -qx /cmd_vel; then
     echo "FAIL: prohibited /cmd_vel topic exists"
