@@ -37,8 +37,9 @@ def generate_launch_description():
             output='screen',
         ),
         Node(
-            package='nav2_costmap_2d',
-            executable='nav2_costmap_2d',
+            # Experimental synthetic-only lifetime-order runner.
+            package='leroy_nav2_costmap_fixture',
+            executable='costmap_fixture',
             name='costmap',
             parameters=[os.path.join(share, 'config', 'fixture_costmap.yaml')],
             output='screen',

@@ -23,20 +23,22 @@ WORKDIR /leroy_ws
 # Deliberately exclude bridge, sensors, XRSLAM, motor drivers and robot bringup.
 COPY src/leroy_nav2 /leroy_ws/src/leroy_nav2
 COPY src/leroy_nav2_perception /leroy_ws/src/leroy_nav2_perception
+COPY src/leroy_nav2_costmap_fixture /leroy_ws/src/leroy_nav2_costmap_fixture
 # Copy the build recipe only so the static safety/quoting regression test can inspect it.
 COPY Dockerfile.nav2 /leroy_ws/Dockerfile.nav2
 
 RUN . /opt/ros/jazzy/setup.sh \
-    && colcon build --packages-select leroy_nav2 leroy_nav2_perception --cmake-args -DBUILD_TESTING=ON \
+    && colcon build --packages-select leroy_nav2 leroy_nav2_perception leroy_nav2_costmap_fixture --cmake-args -DBUILD_TESTING=ON \
     && . /leroy_ws/install/setup.sh \
     && colcon test --python-testing pytest --return-code-on-test-failure \
-         --packages-select leroy_nav2 leroy_nav2_perception --event-handlers console_direct+ \
+         --packages-select leroy_nav2 leroy_nav2_perception leroy_nav2_costmap_fixture --event-handlers console_direct+ \
     && colcon test-result --verbose \
     && ros2 pkg executables nav2_controller | grep -Fx 'nav2_controller controller_server' \
     && ros2 pkg executables nav2_lifecycle_manager | grep -Fx 'nav2_lifecycle_manager lifecycle_manager' \
     && ros2 pkg prefix nav2_mppi_controller \
     && ros2 pkg executables nav2_costmap_2d | grep -Fx 'nav2_costmap_2d nav2_costmap_2d' \
-    && ros2 pkg executables leroy_nav2_perception | grep -Fx 'leroy_nav2_perception depth_obstacles'
+    && ros2 pkg executables leroy_nav2_perception | grep -Fx 'leroy_nav2_perception depth_obstacles' \
+    && ros2 pkg executables leroy_nav2_costmap_fixture | grep -Fx 'leroy_nav2_costmap_fixture costmap_fixture'
 
 # A non-running shell is the default: starting any Nav2 node is deliberate.
 CMD ["/bin/bash"]

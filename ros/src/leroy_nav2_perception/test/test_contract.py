@@ -79,6 +79,7 @@ def test_image_contains_no_hardware_bridge():
     assert 'COPY src/leroy_bringup' not in recipe
     assert 'COPY src/leroy_depthart' not in recipe
     assert 'COPY src/leroy_nav2_perception' in recipe
+    assert 'COPY src/leroy_nav2_costmap_fixture' in recipe
     assert 'COPY Dockerfile.nav2 /leroy_ws/Dockerfile.nav2' in recipe
     assert recipe.count('CMD ["/bin/bash"]') == 1
 
@@ -114,3 +115,19 @@ def test_costmap_probe_matches_jazzy_topic_and_qos():
     rviz = (ROOT / 'rviz/fixture.rviz').read_text()
     assert 'Value: /costmap' in rviz
     assert 'Value: /costmap/costmap' not in rviz
+
+def test_synthetic_costmap_runner_releases_callback_group_at_cleanup():
+    launch = (ROOT / 'launch/depth_fixture.launch.py').read_text()
+    assert "package='leroy_nav2_costmap_fixture'" in launch
+    assert "executable='costmap_fixture'" in launch
+    assert "package='nav2_costmap_2d'" not in launch
+    source = (
+        ROOT.parent / 'leroy_nav2_costmap_fixture'
+        / 'src/costmap_fixture.cpp'
+    ).read_text()
+    assert 'Costmap2DROS::on_cleanup(state)' in source
+    assert 'executor_->remove_callback_group(callback_group_)' in source
+    assert source.index('executor_.reset()') < source.index('callback_group_.reset()')
+    assert 'cmd_vel' not in source
+    recipe = (ROOT.parents[1] / 'Dockerfile.nav2').read_text()
+    assert 'leroy_nav2_costmap_fixture costmap_fixture' in recipe
