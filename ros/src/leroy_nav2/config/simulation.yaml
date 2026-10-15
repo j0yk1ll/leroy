@@ -94,8 +94,8 @@ local_costmap:
       publish_frequency: 1.0
       rolling_window: true
       track_unknown_space: true
-      width: 5.0
-      height: 5.0
+      width: 5
+      height: 5
       resolution: 0.05
       # Arbitrary 1 m square for isolated visualization, NOT Leroy's footprint.
       # Replace ONLY after physical outer dimensions have been measured.
