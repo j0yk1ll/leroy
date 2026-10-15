@@ -35,6 +35,8 @@ costmap:
         expected_update_rate: 0.0
     inflation_layer:
       plugin: "nav2_costmap_2d::InflationLayer"
-      inflation_radius: 0.3
+      # Synthetic ONLY: 0.65 m exceeds the observed 0.510 m inscribed
+      # radius of the arbitrary fixture footprint; NOT a robot safety margin.
+      inflation_radius: 0.65
       cost_scaling_factor: 3.0
     always_send_full_costmap: true

@@ -64,7 +64,7 @@ From your Arch Linux checkout, with no changes to the running container:
 
 ```bash
 git fetch origin
-git switch feature/nav2-m2-depthart-diagnostic-obstacles
+git switch fix/nav2-m2-fixture-costmap-topic-and-shutdown
 cd ros
 podman build -f Dockerfile.nav2 -t leroy-nav2:jazzy .
 ```
@@ -102,14 +102,26 @@ podman exec leroy-nav2-m2 bash -lc '
   echo "--- synthetic diagnostics ---"
   ros2 topic echo /leroy_nav2/diagnostics/raw_depth_points --field header --once
   ros2 topic echo /leroy_nav2/diagnostics/obstacle_points --field header --once
-  echo "--- activate isolated costmap ONLY ---"
-  ros2 lifecycle get /costmap
-  ros2 lifecycle set /costmap configure
-  ros2 lifecycle set /costmap activate
+  set -e
+  echo "--- activate isolated costmap ONLY (once) ---"
+  state="$(ros2 lifecycle get /costmap)"
+  echo "$state"
+  case "$state" in
+    "unconfigured [1]")
+      ros2 lifecycle set /costmap configure
+      ros2 lifecycle set /costmap activate ;;
+    "inactive [2]")
+      ros2 lifecycle set /costmap activate ;;
+    "active [3]")
+      echo "costmap already active; not repeating transitions" ;;
+    *)
+      echo "FAIL: unexpected costmap lifecycle state: $state" >&2
+      exit 1 ;;
+  esac
   echo "--- inspect costmap ---"
   ros2 lifecycle get /costmap
   ros2 topic list
-  ros2 topic info /costmap/costmap --verbose
+  ros2 topic info /costmap --verbose
   echo "--- assert costmap marking and unknown occupancy ---"
   ros2 run leroy_nav2_perception fixture_probe
   echo "--- prohibited topic ---"
@@ -146,9 +158,41 @@ podman run --rm --network none --ipc private --pid private \
 ```
 
 To stop fixture: Ctrl-C in terminal 1. Preserve real `leroy-ros`.
-Record launch logs, TF topics, point cloud field/width, `/costmap/costmap`
-availability and sample lethal/inflated cells; screenshot RViz only if
-running entirely within a safe isolated display environment.
+Record launch logs, TF topics, point cloud field/width, `/costmap`
+(`nav_msgs/msg/OccupancyGrid`) availability and sampled lethal/unknown cells.
+The probe joins with RELIABLE/TRANSIENT_LOCAL QoS to receive Nav2's
+latched visualization costmap. Screenshot RViz only in a safe isolated
+display environment.
+
+## Investigate the observed isolated costmap shutdown segfault
+
+The operator's previous fixture log showed exit code -11 after SIGINT,
+during the standalone `nav2_costmap_2d` shutdown. This is **unresolved**
+and is not fixed by changing the topic or inflation setting.
+With the fixture still active, collect a controlled lifecycle transition
+in a second Arch host terminal:
+
+```bash
+podman exec leroy-nav2-m2 bash -lc '
+  set -e
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  echo "before:"
+  ros2 lifecycle get /costmap
+  ros2 lifecycle set /costmap deactivate
+  echo "after deactivate:"
+  ros2 lifecycle get /costmap
+  ros2 lifecycle set /costmap cleanup
+  echo "after cleanup:"
+  ros2 lifecycle get /costmap
+'
+```
+
+Run only after the fixture probe. Then press Ctrl+C in the launch terminal
+and record whether each node exits cleanly or code -11 recurs. If shutdown
+crashes, preserve the console log and avoid declaring M2 complete;
+a backtrace may be required. This is strictly isolated diagnostics with
+no motion path.
 
 ## Milestone 2 limits / pending acceptance
 

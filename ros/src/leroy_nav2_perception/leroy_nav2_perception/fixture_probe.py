@@ -5,7 +5,8 @@ import time
 import rclpy
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import (DurabilityPolicy, QoSProfile, ReliabilityPolicy,
+                       qos_profile_sensor_data)
 from sensor_msgs.msg import PointCloud2
 
 
@@ -23,8 +24,16 @@ class FixtureProbe(Node):
         self.create_subscription(
             PointCloud2, '/leroy_nav2/diagnostics/obstacle_points',
             self._on_obstacle, qos_profile_sensor_data)
+        # Nav2's standalone Jazzy costmap publisher uses the node name as
+        # the topic (/costmap), with RELIABLE + TRANSIENT_LOCAL QoS.
+        # Late-joining the fixture probe must still see the last full grid.
+        grid_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self.create_subscription(
-            OccupancyGrid, '/costmap/costmap', self._on_costmap, 10)
+            OccupancyGrid, '/costmap', self._on_costmap, grid_qos)
 
     def _on_raw(self, msg):
         if msg.width > 0 and msg.header.frame_id == 'sim_camera_optical_frame':
@@ -37,9 +46,12 @@ class FixtureProbe(Node):
     def _on_costmap(self, msg):
         if msg.info.width < 1 or msg.info.height < 1:
             return
+        if msg.header.frame_id != 'base_link':
+            return
         self.costmap_seen = True
-        self.lethal_seen |= 100 in msg.data
-        self.unknown_seen |= -1 in msg.data
+        # Both lethal and unknown cells must coexist in an actual full grid.
+        self.lethal_seen = 100 in msg.data
+        self.unknown_seen = -1 in msg.data
 
 
 def main(args=None):
