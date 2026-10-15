@@ -29,7 +29,8 @@ COPY Dockerfile.nav2 /leroy_ws/Dockerfile.nav2
 RUN . /opt/ros/jazzy/setup.sh \
     && colcon build --packages-select leroy_nav2 leroy_nav2_perception --cmake-args -DBUILD_TESTING=ON \
     && . /leroy_ws/install/setup.sh \
-    && colcon test --packages-select leroy_nav2 leroy_nav2_perception --event-handlers console_direct+ \
+    && colcon test --python-testing pytest --return-code-on-test-failure \
+         --packages-select leroy_nav2 leroy_nav2_perception --event-handlers console_direct+ \
     && colcon test-result --verbose \
     && ros2 pkg executables nav2_controller | grep -Fx 'nav2_controller controller_server' \
     && ros2 pkg executables nav2_lifecycle_manager | grep -Fx 'nav2_lifecycle_manager lifecycle_manager' \

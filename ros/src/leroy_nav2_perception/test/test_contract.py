@@ -92,3 +92,12 @@ def test_nav2_dockerfile_run_command_is_valid_shell():
     subprocess.run(['/bin/sh', '-n', '-c', command], check=True)
     assert "nav2_costmap_2d nav2_costmap_2d" in command
     assert "leroy_nav2_perception depth_obstacles" in command
+
+def test_ament_python_uses_pytest_in_colcon():
+    # Prevent a successful build from ever silently running zero M2 tests.
+    source = (ROOT / 'setup.py').read_text()
+    assert "tests_require=['pytest']" in source
+    docker = (ROOT.parents[1] / 'Dockerfile.nav2').read_text()
+    assert 'colcon test --python-testing pytest' in docker
+    assert '--return-code-on-test-failure' in docker
+
