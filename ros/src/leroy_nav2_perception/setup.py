@@ -19,6 +19,8 @@ setup(
         ('share/' + package_name, ['README.md']),
     ],
     install_requires=['setuptools'],
+    # Colcon uses this metadata to choose pytest rather than setup.py test.
+    tests_require=['pytest'],
     zip_safe=True,
     maintainer='Leroy contributors',
     maintainer_email='maintainer@example.com',
