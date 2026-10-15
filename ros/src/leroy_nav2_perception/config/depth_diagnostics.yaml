@@ -1,0 +1,22 @@
+# Safe by default: diagnostic optical cloud only, NO obstacle costmap authority.
+/depth_obstacles:
+  ros__parameters:
+    depth_topic: /depthart/depth
+    camera_info_topic: /camera/camera_info
+    raw_cloud_topic: /leroy_nav2/diagnostics/raw_depth_points
+    obstacle_cloud_topic: /leroy_nav2/diagnostics/obstacle_points
+    stride: 8
+    min_depth_m: 0.2
+    max_depth_m: 3.0
+    max_acquisition_age_s: 2.0
+    max_future_skew_s: 0.1
+    camera_info_cache_size: 512
+    publish_obstacles: false
+    extrinsics_validated: false
+    ground_reference_validated: false
+    # Unused until BOTH validation gates are approved with measured values.
+    ground_z_in_base_m: 0.0
+    min_clearance_above_ground_m: 0.08
+    max_height_above_ground_m: 1.2
+    max_xy_range_m: 3.0
+    minimum_obstacle_points: 1

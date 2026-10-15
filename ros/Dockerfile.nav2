@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-colcon-common-extensions \
     python3-yaml \
     python3-pytest \
+    python3-numpy \
+    ros-jazzy-sensor-msgs-py \
+    ros-jazzy-tf2-ros \
     ros-jazzy-navigation2 \
     ros-jazzy-nav2-bringup \
     ros-jazzy-ament-cmake-pytest \
@@ -19,15 +22,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /leroy_ws
 # Deliberately exclude bridge, sensors, XRSLAM, motor drivers and robot bringup.
 COPY src/leroy_nav2 /leroy_ws/src/leroy_nav2
+COPY src/leroy_nav2_perception /leroy_ws/src/leroy_nav2_perception
 
 RUN . /opt/ros/jazzy/setup.sh \
-    && colcon build --packages-select leroy_nav2 --cmake-args -DBUILD_TESTING=ON \
+    && colcon build --packages-select leroy_nav2 leroy_nav2_perception --cmake-args -DBUILD_TESTING=ON \
     && . /leroy_ws/install/setup.sh \
-    && colcon test --packages-select leroy_nav2 --event-handlers console_direct+ \
+    && colcon test --packages-select leroy_nav2 leroy_nav2_perception --event-handlers console_direct+ \
     && colcon test-result --verbose \
     && ros2 pkg executables nav2_controller | grep -E '(^| )controller_server$' \
     && ros2 pkg executables nav2_lifecycle_manager | grep -E '(^| )lifecycle_manager$' \
-    && ros2 pkg prefix nav2_mppi_controller
+    && ros2 pkg prefix nav2_mppi_controller \
+    && ros2 pkg executables nav2_costmap_2d | grep -E '(^| )nav2_costmap_2d
+
+# A non-running shell is the default: starting any Nav2 node is a deliberate action.
+CMD ["/bin/bash"]
+ \
+    && ros2 pkg executables leroy_nav2_perception | grep -E '(^| )depth_obstacles
+
+# A non-running shell is the default: starting any Nav2 node is a deliberate action.
+CMD ["/bin/bash"]
+
 
 # A non-running shell is the default: starting any Nav2 node is a deliberate action.
 CMD ["/bin/bash"]
