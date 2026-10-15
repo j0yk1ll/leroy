@@ -1,4 +1,5 @@
 #include <XRSLAM.h>
+#include "leroy_xrslam/startup_timing.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -251,9 +252,12 @@ private:
     // Camera frames can arrive before the TF graph is discovered and
     // XRSLAMCreate succeeds. They cannot be consumed at that point: do NOT
     // fill the runtime overflow-protected queue while waiting for startup.
-    // Also reject images predating our first *forwarded* IMU sample.
-    if(!initialized_ || first_forwarded_imu_time_<0 ||
-       t<=first_forwarded_imu_time_)return;
+    // Match the effective camera time used by drain(): t + offset_.
+    // The first camera frame must follow the first IMU pair actually pushed
+    // to XRSLAM, for negative, zero, and positive configured offsets alike.
+    if(!initialized_ ||
+       !leroy_xrslam::camera_after_first_forwarded_imu(
+         t, offset_, first_forwarded_imu_time_))return;
     if(!pending_.empty() && t<=seconds(pending_.back()->header.stamp))return;
     if(t<=last_image_time_)return;
     if(pending_.size()>=8){ fail("camera_queue_overflow");return; }
