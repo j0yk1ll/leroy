@@ -59,6 +59,11 @@ if(BUILD_TESTING)
   target_include_directories(test_startup_timing PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
   add_test(NAME test_startup_timing COMMAND test_startup_timing)
+
+  add_executable(test_sensor_modes test/test_sensor_modes.cpp)
+  target_include_directories(test_sensor_modes PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  add_test(NAME test_sensor_modes COMMAND test_sensor_modes)
 endif()
 
 ament_package()

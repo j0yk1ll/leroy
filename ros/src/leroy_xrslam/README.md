@@ -52,13 +52,29 @@ ros2 run leroy_xrslam leroy_xrslam_node --ros-args \
   -p imu_frame:=imu_link
 ```
 
-The `0.0` offset above is only an example: use it **only when measured and
-verified**. `camera_imu_offset_sec` has no default. XRSLAM initializes only
-after valid CameraInfo, `base_link <- imu_link` and
-`base_link <- camera_optical_frame` TF lookups. For rectified monocular input,
-the **P matrix** from CameraInfo is used and XRSLAM distortion is disabled;
-stereo/projection offsets are rejected. Input uses header timestamps, gyro and
-accelerometer at the same stamp, and a bounded camera queue gated on IMU data.
+The `0.0` offset above is an **example only** for the visual-inertial
+pipeline and must not be treated as a measured calibration. The SLAM YAML's
+`sensor.mode` is the mode selector:
+
+- **`monocular`**: camera-only diagnostic. Omit
+  `camera_imu_offset_sec` (or explicitly use 0); no IMU ROS subscription,
+  IMU TF lookup, gyro/acceleration forwarding, or wait-for-IMU camera gating.
+  The system still needs `base_link <- camera_optical_frame` TF and matched,
+  rectified image + CameraInfo messages. Because monocular trajectory scale is
+  unobservable, `pose_convention_validated=true` and `enable_map_tf=true`
+  are rejected; no metric odometry, pose or map TF is published. Use
+  `/xrslam/tracking_status` and `/xrslam/localization_valid` as diagnostics.
+- **`monocular_imu`**: visual-inertial mode. A finite,
+  independently measured `camera_imu_offset_sec` is required by the
+  deployment contract; `base_link <- imu_link` TF, gyro/acceleration stream
+  and the offset-aware first-forwarded-IMU camera gate are active. For a
+  stationary software diagnostic only, a clearly labelled provisional value
+  may be passed without claiming calibration acceptance.
+
+Both paths use the **P matrix** from CameraInfo and disable XRSLAM distortion
+for rectified input. Camera frames received before TF-dependent library
+initialization are discarded (not buffered). Once initialized, the bounded
+camera queue and latched overflow fault remain active.
 
 ROS outputs: `/xrslam/tracking_status` (String),
 `/xrslam/localization_valid` (latched Bool),
@@ -79,6 +95,29 @@ On tracking failure, clock/IMU discontinuity or a pose jump, odometry output is
 **latched off** until an externally verified session alignment or a supervised
 full node restart; this first adapter intentionally does not claim automatic
 continuity-preserving recovery. No `map -> odom` is published.
+
+## Safe two-stage integration check
+
+Keep Leroy stationary with wheel power physically inhibited. Build the
+optional XRSLAM image from the corresponding source branch.
+
+1. Start with an otherwise unchanged copy of the XRSLAM SLAM YAML containing
+   `sensor: {mode: monocular}`. Run the sidecar using
+   `/camera/image_rect` and `/camera/camera_info`, without an IMU topic or
+   temporal offset requirement. Keep
+   `pose_convention_validated=false` and `enable_map_tf=false`.
+   Confirm library startup, `initializing` status (or
+   `pose_convention_unverified` if visual tracking succeeds), and zero
+   odometry messages. Stationary scenes and pure yaw rotations might not
+   provide sufficient triangulation parallax for monocular initialization.
+2. Repeat with `sensor: {mode: monocular_imu}`, the real `/imu/data_raw`
+   topic, and a **labelled provisional temporal offset for diagnostics only**
+   until a hardware-calibrated value is available. Expect the same odometry
+   inhibition. Compare tracking/initialization state and failures, not
+   unvalidated metric trajectory accuracy.
+
+No autonomous motion, calibration override, or enabling of map/odom TF is
+part of these checks.
 
 ## Acceptance work still required
 

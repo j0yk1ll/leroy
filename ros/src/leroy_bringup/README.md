@@ -16,10 +16,19 @@ YAML files must be available in the *same* sourced runtime/container.
 
 `use_xrslam:=true` requires explicit
 `xrslam_slam_yaml`, `xrslam_device_template_yaml`,
-`xrslam_image_topic`, `xrslam_camera_info_topic`, and a **measured**
-`xrslam_camera_imu_offset_sec`. The IMU topic defaults to
-`/imu/data_raw`; the camera optical frame follows `camera_frame`.
-Static transforms come from the URDF via `robot_state_publisher`.
+`xrslam_image_topic`, and `xrslam_camera_info_topic`.
+The SLAM YAML's `sensor.mode` selects the pipeline:
+
+- `monocular`: visual-only diagnostic; `xrslam_camera_imu_offset_sec` can be
+  omitted (or set to zero), no IMU subscription or IMU TF lookup; no metric
+  odometry, pose output or map TF may be enabled because scale is unknown.
+- `monocular_imu`: visual-inertial; a measured finite
+  `xrslam_camera_imu_offset_sec` is required and the IMU topic defaults to
+  `/imu/data_raw`.
+
+The camera optical frame follows `camera_frame`; static transforms come
+from the URDF via `robot_state_publisher`. Both modes retain the
+`xrslam_pose_convention_validated:=false` default and disabled map TF.
 
 The adapter stays gated with
 `xrslam_pose_convention_validated:=false` by default and no `map -> odom`
