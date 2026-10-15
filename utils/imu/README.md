@@ -99,6 +99,42 @@ podman exec -it leroy-ros bash -lc '
 '
 ```
 
+#### Yaw-focused excitation when the IMU signal is too weak
+
+If a full supervised recording completes but the offset estimator reports
+`Insufficient varying yaw signal`, first inspect the **IMU** yaw variation,
+not only the noisier frame-to-frame visual estimate. The estimator reports
+`imu_yaw_std_rad_s`, `visual_yaw_std_rad_s`, and
+`imu_peak_abs_yaw_rad_s`; each signal must have a standard deviation of
+at least 0.035 rad/s for reliable correlation to be considered.
+
+The optional `--yaw-only` mode (requires `--arm` and both safety
+acknowledgments) alternates bounded yaw-left and yaw-right commands
+at nominal +/-0.21 rad/s, rather than randomly mixing translation with yaw.
+For the configured wheel geometry and gain, that requests approximately
++/-61 PWM before the independent +/-64 PWM cap. Actual wheel movement may
+still be insufficient under load. Tracking, center/range/displacement guards,
+gyro cutoff, startup requirements, timeout, and hardware E-stop requirements
+are **unchanged**. This flag deliberately does **not** increase `max_pwm`.
+
+First run **20 seconds**, in the same cleared supervised area as before,
+using a fresh output directory. Only after observing actual stable rotation
+and safe stops should you attempt a 75-second capture:
+
+```bash
+podman exec -it leroy-ros bash -lc '
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  python3 -u /tmp/leroy_utils/imu/calibrate_time_offset.py \
+    --target /tmp/leroy_utils/charuco/calibration_board/board_config.json \
+    --output /tmp/leroy_charuco_yaw_01 --seconds 20 --wait 120 \
+    --arm --yaw-only --confirm-clear-area --confirm-estop
+'
+```
+
+Do not lower the excitation/offset-quality thresholds to force a valid
+result; noisy visual yaw can vary strongly even when the robot barely turns.
+
 The effective estimated offset is defined as **camera header time minus IMU header time for the same physical yaw event**. Do **not** copy it blindly to XRSLAM's `cam0.time_offset`; the downstream sign convention must be independently verified. A camera exposure/readout offset may remain even with strong motion correlation.
 
 This code has offline synthetic checks only. It has not been validated with actual wheel movement on Leroy; `--arm` remains strictly opt-in.
