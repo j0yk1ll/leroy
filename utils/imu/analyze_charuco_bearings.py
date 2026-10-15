@@ -123,7 +123,7 @@ def main():
                 f"1%={fit['one_pct_loss_interval_ms']})",
                 flush=True)
 
-    print('Independent raw-pixel diagnostic only. 
+    print('Independent raw-pixel diagnostic only. '
           'DO NOT apply any lag to XRSLAM.', flush=True)
 
 
