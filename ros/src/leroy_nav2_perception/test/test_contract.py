@@ -77,3 +77,18 @@ def test_image_contains_no_hardware_bridge():
     assert 'COPY src/leroy_bringup' not in recipe
     assert 'COPY src/leroy_depthart' not in recipe
     assert 'COPY src/leroy_nav2_perception' in recipe
+    assert 'COPY Dockerfile.nav2 /leroy_ws/Dockerfile.nav2' in recipe
+    assert recipe.count('CMD ["/bin/bash"]') == 1
+
+
+def test_nav2_dockerfile_run_command_is_valid_shell():
+    import subprocess
+
+    recipe = (ROOT.parents[1] / 'Dockerfile.nav2').read_text()
+    assert recipe.count('RUN . /opt/ros/jazzy/setup.sh ') == 1
+    run_lines = recipe.split('RUN . /opt/ros/jazzy/setup.sh ', 1)[1]
+    command = '. /opt/ros/jazzy/setup.sh ' + run_lines.split('CMD ["/bin/bash"]', 1)[0]
+    command = command.replace(chr(92) + chr(10), ' ')
+    subprocess.run(['/bin/sh', '-n', '-c', command], check=True)
+    assert "nav2_costmap_2d nav2_costmap_2d" in command
+    assert "leroy_nav2_perception depth_obstacles" in command
