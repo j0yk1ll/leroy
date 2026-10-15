@@ -1,5 +1,5 @@
 #include <XRSLAM.h>
-#include "leroy_xrslam/startup_timing.hpp"
+#include "leroy_xrslam/sensor_mode.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -87,9 +87,34 @@ public:
     max_jump_=declare_parameter<double>("max_pose_step_m",1.0);
     max_angular_jump_=declare_parameter<double>("max_pose_step_rad",1.0);
     if(slam_yaml_.empty()||template_yaml_.empty()||image_topic_.empty()||
-       info_topic_.empty()||camera_frame_.empty()||!is_finite_value(offset_)) {
-      throw std::runtime_error("Configure SLAM YAML, calibrated device template, image/CameraInfo topics, camera frame and measured camera-IMU offset");
+       info_topic_.empty()||camera_frame_.empty()) {
+      throw std::runtime_error(
+        "Configure SLAM YAML, device template, image/CameraInfo topics and camera frame");
     }
+    const YAML::Node slam=YAML::LoadFile(slam_yaml_);
+    const std::string mode=(slam["sensor"] && slam["sensor"]["mode"]) ?
+        slam["sensor"]["mode"].as<std::string>() : "";
+    if(!leroy_xrslam::supported_sensor_mode(mode))
+      throw std::runtime_error(
+        "XRSLAM adapter supports sensor.mode=monocular or monocular_imu only");
+    use_imu_=leroy_xrslam::sensor_mode_requires_imu(mode);
+    if(use_imu_ && !is_finite_value(offset_))
+      throw std::runtime_error(
+        "monocular_imu requires a measured camera_imu_offset_sec");
+    if(!use_imu_) {
+      // The monocular case has no temporal camera/IMU calibration to apply.
+      // Do not silently ignore an explicit nonzero offset or allow
+      // unscaled visual-only motion to be published as metric robot odometry.
+      if(is_finite_value(offset_) && offset_!=0.0)
+        throw std::runtime_error(
+          "monocular mode requires camera_imu_offset_sec unset or zero");
+      if(pose_validated_ || enable_map_tf_)
+        throw std::runtime_error(
+          "monocular mode is scale-ambiguous: metric pose/odom and map TF must remain disabled");
+      offset_=0.0; // Device YAML requires a numeric field; unused in monocular.
+    }
+    RCLCPP_INFO(get_logger(),"XRSLAM mode=%s; IMU=%s; pose output gated=%s",
+      mode.c_str(),use_imu_?"enabled":"disabled",pose_validated_?"no":"yes");
     auto qos=rclcpp::SensorDataQoS();
     auto latched=rclcpp::QoS(1).reliable().transient_local();
     status_pub_=create_publisher<std_msgs::msg::String>("/xrslam/tracking_status",latched);
@@ -100,8 +125,10 @@ public:
       "/xrslam/map_localization_status",latched);
     odom_pub_=create_publisher<nav_msgs::msg::Odometry>("/odom",rclcpp::QoS(10));
     pose_pub_=create_publisher<geometry_msgs::msg::PoseStamped>("/xrslam/pose",rclcpp::QoS(10));
-    imu_sub_=create_subscription<sensor_msgs::msg::Imu>(imu_topic_,qos,
-      [this](sensor_msgs::msg::Imu::ConstSharedPtr p){ imu(*p); });
+    if(use_imu_) {
+      imu_sub_=create_subscription<sensor_msgs::msg::Imu>(imu_topic_,qos,
+        [this](sensor_msgs::msg::Imu::ConstSharedPtr p){ imu(*p); });
+    }
     info_sub_=create_subscription<sensor_msgs::msg::CameraInfo>(info_topic_,qos,
       [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr p){ info(*p); });
     image_sub_=create_subscription<sensor_msgs::msg::Image>(image_topic_,qos,
@@ -158,25 +185,32 @@ private:
     if(initialized_||!info_)return initialized_;
     geometry_msgs::msg::TransformStamped body_imu,body_cam;
     try {
-      body_imu=tf_buffer_.lookupTransform(base_frame_,imu_frame_,tf2::TimePointZero);
+      if(use_imu_)
+        body_imu=tf_buffer_.lookupTransform(base_frame_,imu_frame_,tf2::TimePointZero);
       body_cam=tf_buffer_.lookupTransform(base_frame_,camera_frame_,tf2::TimePointZero);
     }catch(const tf2::TransformException & e) {
       RCLCPP_WARN_THROTTLE(get_logger(),*get_clock(),5000,"Waiting for URDF static TF: %s",e.what());
       return false;
     }
-    if(!valid_quat(body_imu.transform.rotation)||!valid_quat(body_cam.transform.rotation))
+    if((use_imu_ && !valid_quat(body_imu.transform.rotation)) ||
+       !valid_quat(body_cam.transform.rotation))
       throw std::runtime_error("Invalid static TF quaternion");
     YAML::Node dev=YAML::LoadFile(template_yaml_);
-    YAML::Node slam=YAML::LoadFile(slam_yaml_);
+    const YAML::Node slam=YAML::LoadFile(slam_yaml_);
     if(!slam["sensor"] || !slam["sensor"]["mode"] ||
-       slam["sensor"]["mode"].as<std::string>()!="monocular_imu")
-      throw std::runtime_error("Milestone A supports sensor.mode=monocular_imu only");
+       leroy_xrslam::sensor_mode_requires_imu(
+         slam["sensor"]["mode"].as<std::string>())!=use_imu_ ||
+       !leroy_xrslam::supported_sensor_mode(
+         slam["sensor"]["mode"].as<std::string>()))
+      throw std::runtime_error("XRSLAM sensor mode changed after adapter construction");
     // XRSLAM cam0.q_bc/p_bc encode the camera's orientation/origin in body.
     // Confirm via a nonidentity test before enabling pose output.
     dev["cam0"]["extrinsic"]["q_bc"]=quat4(body_cam.transform.rotation);
     dev["cam0"]["extrinsic"]["p_bc"]=vec3(body_cam.transform.translation);
-    dev["imu"]["extrinsic"]["q_bi"]=quat4(body_imu.transform.rotation);
-    dev["imu"]["extrinsic"]["p_bi"]=vec3(body_imu.transform.translation);
+    if(use_imu_) {
+      dev["imu"]["extrinsic"]["q_bi"]=quat4(body_imu.transform.rotation);
+      dev["imu"]["extrinsic"]["p_bi"]=vec3(body_imu.transform.translation);
+    }
     const auto & c=*info_;
     // Rectified monocular pinhole: P defines actual image geometry.
     if(c.roi.do_rectify || c.p[0]<=0 || c.p[5]<=0 ||
@@ -206,7 +240,8 @@ private:
     if(!XRSLAMCreate(slam_yaml_.c_str(),generated_yaml_.c_str(),"","leroy_xrslam",&config))
       throw std::runtime_error("XRSLAMCreate failed");
     initialized_=true;
-    if(!XRSLAMRequiresIMU(config)) throw std::runtime_error("XRSLAM configuration unexpectedly has no IMU");
+    if((XRSLAMRequiresIMU(config)!=0)!=use_imu_)
+      throw std::runtime_error("XRSLAM IMU requirement disagrees with sensor.mode");
     announce("initializing",false);
     return true;
   }
@@ -219,6 +254,7 @@ private:
   }
   void imu(const sensor_msgs::msg::Imu & m) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if(!use_imu_)return;
     const double t=seconds(m.header.stamp);
     if(m.header.frame_id!=imu_frame_||t<=0||
        !is_finite_value(m.angular_velocity.x)||!is_finite_value(m.angular_velocity.y)||!is_finite_value(m.angular_velocity.z)||
@@ -249,20 +285,17 @@ private:
     if(failed_)return;
     const double t=seconds(m->header.stamp);
     if(m->header.frame_id!=camera_frame_ || t<=0)return;
-    // Camera frames can arrive before the TF graph is discovered and
-    // XRSLAMCreate succeeds. They cannot be consumed at that point: do NOT
-    // fill the runtime overflow-protected queue while waiting for startup.
-    // Match the effective camera time used by drain(): t + offset_.
-    // The first camera frame must follow the first IMU pair actually pushed
-    // to XRSLAM, for negative, zero, and positive configured offsets alike.
-    if(!initialized_ ||
-       !leroy_xrslam::camera_after_first_forwarded_imu(
-         t, offset_, first_forwarded_imu_time_))return;
+    // Reject pre-initialization camera frames instead of filling the
+    // runtime overflow-protected queue while TF becomes available.
+    // VIO additionally needs a first forwarded IMU pair; pure monocular
+    // deliberately does not subscribe to, await or push IMU samples.
+    if(!leroy_xrslam::can_queue_camera(
+         initialized_, use_imu_, t, offset_, first_forwarded_imu_time_))return;
     if(!pending_.empty() && t<=seconds(pending_.back()->header.stamp))return;
     if(t<=last_image_time_)return;
     if(pending_.size()>=8){ fail("camera_queue_overflow");return; }
     pending_.push_back(m);
-    if(initialized_)drain();
+    drain();
   }
   void poll() {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -281,7 +314,8 @@ private:
     while(!pending_.empty()) {
       const auto m=pending_.front();
       const double t=seconds(m->header.stamp);
-      if(last_imu_time_ < t+offset_+0.001)break;
+      if(leroy_xrslam::await_imu_for_camera(
+           use_imu_, last_imu_time_, t, offset_))break;
       if(t<=last_image_time_){pending_.pop_front();continue;}
       if(m->width!=info_->width||m->height!=info_->height) {fail("image_geometry_changed");return;}
       // Preserve RGB/BGR conventions expected by XRSLAMManager::PushImage.
@@ -470,7 +504,7 @@ private:
   std::string map_frame_,map_id_,map_status_;
   std::string last_status_;
   bool last_valid_=false,initialized_=false,failed_=false,pose_validated_=false;
-  bool enable_map_tf_=false,map_valid_=false;
+  bool enable_map_tf_=false,map_valid_=false,use_imu_=true;
   std::uint64_t prior_map_epoch_=0;
   double offset_=0,max_jump_=1,max_angular_jump_=1;
   double last_imu_time_=-1,last_image_time_=-1,last_pose_time_=-1;
