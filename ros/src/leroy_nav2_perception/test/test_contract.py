@@ -72,7 +72,7 @@ def test_obstacle_output_never_clears_on_invalid_depth():
 
 
 def test_image_contains_no_hardware_bridge():
-    recipe = (ROOT.parents[2] / 'Dockerfile.nav2').read_text()
+    recipe = (ROOT.parents[1] / 'Dockerfile.nav2').read_text()
     assert 'COPY src/leroy_bridge' not in recipe
     assert 'COPY src/leroy_bringup' not in recipe
     assert 'COPY src/leroy_depthart' not in recipe
