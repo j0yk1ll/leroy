@@ -2,7 +2,8 @@
 import math
 import unittest
 import numpy as np
-from corner_bearing_timing import bearing_lag_scan, pixels_to_imu_bearings
+from corner_bearing_timing import (bearing_lag_scan, bearing_interval_lag_scan,
+                                  pixels_to_imu_bearings)
 
 
 class BearingTests(unittest.TestCase):
@@ -29,6 +30,29 @@ class BearingTests(unittest.TestCase):
     def test_negative_lag(self):
         result = bearing_lag_scan(*self.sequence(-56))
         self.assertLessEqual(abs(result['all']['lag_ms']+56), 6)
+
+    def test_disjoint_interval_recovers_positive_lag(self):
+        track, imu = self.sequence(34)
+        for baseline in (0.12, 0.20):
+            result = bearing_interval_lag_scan(track, imu, baseline_s=baseline)
+            self.assertFalse(result['valid'])
+            self.assertIsNone(result.get('reason'), result)
+            self.assertLessEqual(abs(result['all']['lag_ms'] - 34), 10)
+            self.assertLess(result['all']['gain'], -0.8)
+            self.assertGreater(result['all']['intervals'], 45)
+
+    def test_disjoint_interval_recovers_negative_lag(self):
+        track, imu = self.sequence(-56)
+        for baseline in (0.12, 0.20):
+            result = bearing_interval_lag_scan(track, imu, baseline_s=baseline)
+            self.assertFalse(result['valid'])
+            self.assertIsNone(result.get('reason'), result)
+            self.assertLessEqual(abs(result['all']['lag_ms'] + 56), 10)
+
+    def test_disjoint_intervals_reject_bad_baseline(self):
+        track, imu = self.sequence(34)
+        with self.assertRaises(ValueError):
+            bearing_interval_lag_scan(track, imu, baseline_s=0.01)
 
     def test_image_ray_azimuth_uses_existing_camera_to_imu_axes(self):
         r_imu_cam = np.array([[0,0,1], [1,0,0], [0,1,0]],dtype=float)
