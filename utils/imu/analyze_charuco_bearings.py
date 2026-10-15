@@ -13,7 +13,8 @@ import cv2
 import numpy as np
 
 from analyze_charuco_bag import load_bag, live_extrinsic_rotation, stamp_ns
-from corner_bearing_timing import bearing_lag_scan, pixels_to_imu_bearings
+from corner_bearing_timing import (bearing_lag_scan, bearing_interval_lag_scan,
+                                  pixels_to_imu_bearings)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'charuco'))
 from calibrate import load_board, detect_charuco, charuco_object_points
@@ -24,6 +25,8 @@ def main():
     ap.add_argument('--bag', required=True)
     ap.add_argument('--target', required=True)
     ap.add_argument('--max-tracks', type=int, default=8)
+    ap.add_argument('--interval-baselines', nargs='*', type=float, default=[],
+                    help='Optional 0.08-0.40s NONOVERLAPPING bearing-rate cross-checks')
     args = ap.parse_args()
 
     images, imu, info, camera_frame, imu_frame = load_bag(args.bag)
@@ -98,7 +101,29 @@ def main():
               f"{all_fit['bearing_rmse_deg']:.3f} | "
               f"{all_fit['loss_gap_40ms_pct']:6.2f} | "
               f"{all_fit['one_pct_loss_interval_ms']}", flush=True)
-    print('Independent raw-pixel diagnostic only. '
+        for baseline in args.interval_baselines:
+            interval = bearing_interval_lag_scan(
+                tracks[fid], raw_imu, baseline_s=baseline)
+            fit = interval.get('all')
+            if fit is None:
+                print(f"  interval {baseline:.2f}s: {interval.get('reason')}",
+                      flush=True)
+                continue
+            first = interval.get('first_half')
+            second = interval.get('second_half')
+            halves = ('/'.join(f"{item['lag_ms']:+d}" if item else '?'
+                               for item in (first, second)))
+            print(
+                f"  interval {baseline:.2f}s: "
+                f"{fit['lag_ms']:+d}ms "
+                f"(half {halves}; n={fit['intervals']}; "
+                f"corr={fit['correlation']:+.3f}; "
+                f"gain={fit['gain']:+.3f}; "
+                f"loss-gap={fit['loss_gap_40ms_pct']:.2f}%; "
+                f"1%={fit['one_pct_loss_interval_ms']})",
+                flush=True)
+
+    print('Independent raw-pixel diagnostic only. 
           'DO NOT apply any lag to XRSLAM.', flush=True)
 
 
