@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-dev \
     ros-jazzy-tf2-geometry-msgs \
     ros-jazzy-yaml-cpp-vendor \
+    ros-jazzy-ament-cmake-pytest \
     && rm -rf /var/lib/apt/lists/*
 
 # The XRSLAM core remains ROS-independent. Disable optional ML and GUI
