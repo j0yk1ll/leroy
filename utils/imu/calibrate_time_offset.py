@@ -80,9 +80,14 @@ def search_offset(pose_rows, imu_rows, rot_imu_cam):
     imu = sorted(imu_rows)
     ti = np.array([(t-origin)/1e9 for t,z in imu])
     gi = np.array([z for t,z in imu])
-    if np.std(vz) < 0.035 or np.std(gi) < 0.035:
+    visual_std=float(np.std(vz))
+    imu_std=float(np.std(gi))
+    diagnostics={'visual_yaw_std_rad_s':visual_std,
+                 'imu_yaw_std_rad_s':imu_std,
+                 'imu_peak_abs_yaw_rad_s':float(np.max(np.abs(gi)))}
+    if visual_std < 0.035 or imu_std < 0.035:
         return {'valid': False, 'reason': 'Insufficient varying yaw signal',
-                'visual_pairs': len(visual)}
+                'visual_pairs': len(visual), **diagnostics}
     # Integrated gyro is correctly averaged over each observed camera interval.
     cumulative = np.r_[0.0,np.cumsum((gi[1:]+gi[:-1])*np.diff(ti)*0.5)]
     lag_ms = np.arange(-250,251,2,dtype=int)
@@ -119,8 +124,10 @@ def search_offset(pose_rows, imu_rows, rot_imu_cam):
     first=estimate(tmid<median_t)
     second=estimate(tmid>=median_t)
     if all_res is None:
-        return {'valid':False,'reason':'Insufficient correlated signal','visual_pairs':len(visual)}
-    all_res.update({'visual_pairs':len(visual), 'first_half':first,'second_half':second})
+        return {'valid':False,'reason':'Insufficient correlated signal',
+                'visual_pairs':len(visual), **diagnostics}
+    all_res.update({'visual_pairs':len(visual), 'first_half':first,
+                    'second_half':second, **diagnostics})
     valid=(all_res['correlation']>=0.65 and all_res['peak_separation']>=0.06
            and abs(all_res['lag_ms'])<240 and first is not None and second is not None
            and abs(first['lag_ms']-second['lag_ms'])<=15)
@@ -155,6 +162,21 @@ def charuco_pose_violation(p, min_range, max_range, max_displacement,
     return None
 
 
+def choose_motion_segment(index, yaw_only, rng):
+    """Choose an alternating yaw sweep when timing excitation is requested."""
+    if yaw_only:
+        return 'yaw_left' if index % 2 == 0 else 'yaw_right'
+    return rng.choice(['yaw_left', 'yaw_right', 'front', 'back', 'left', 'right'])
+
+
+def yaw_command_rad_s(yaw_only):
+    """A bounded nominal yaw request; 0.21 rad/s corresponds to ~61 PWM.
+
+    Actual motor output is independently capped at +/-64 PWM by the bridge.
+    """
+    return 0.21 if yaw_only else 0.16
+
+
 def args_parser():
     p=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('--target',help='Existing ChArUco board_config.json')
@@ -169,6 +191,8 @@ def args_parser():
     p.add_argument('--max-displacement',type=float,default=0.18,
                    help='Max camera displacement in board coordinates from starting pose')
     p.add_argument('--arm',action='store_true',help='Enable limited /cmd_vel motions')
+    p.add_argument('--yaw-only',action='store_true',
+                   help='Armed motion: alternate short yaw sweeps at 0.21 rad/s; no translation')
     p.add_argument('--confirm-estop',action='store_true',help='Independent hardware emergency stop tested')
     p.add_argument('--confirm-clear-area',action='store_true',
                    help='Explicit acknowledgement: cleared bounded area, supervised, independent E-stop ready')
@@ -183,6 +207,8 @@ def args_parser():
         p.error('seconds >=20; wait>=5; min-corners in [6,20]')
     if a.arm and not (a.confirm_clear_area and a.confirm_estop):
         p.error('--arm requires --confirm-clear-area and --confirm-estop')
+    if a.yaw_only and not a.arm:
+        p.error('--yaw-only requires --arm')
     if not (0.4<=a.min_range<a.max_range<=5):
         p.error('Invalid distance bounds')
     if not (0.05<=a.max_displacement<=0.25):
@@ -460,8 +486,9 @@ def main():
                     self.send_stop()
                     return
                 self.stage='motion'
-                self.stage_end=now+self.rng.uniform(0.5,1.0)
-                kind=self.rng.choice(['yaw_left','yaw_right','front','back','left','right'])
+                duration=self.rng.uniform(0.7,1.0) if args.yaw_only else self.rng.uniform(0.5,1.0)
+                self.stage_end=now+duration
+                kind=choose_motion_segment(self.motion_count,args.yaw_only,self.rng)
                 self.segment=kind
                 self.motion_count+=1
                 print(f'Excitation {self.motion_count}: {kind} for {self.stage_end-now:.2f}s',flush=True)
@@ -481,9 +508,9 @@ def main():
             if abs(yaw_err)>0.16:
                 cmd.angular.z=correction
             elif self.segment=='yaw_left':
-                cmd.angular.z=0.16+correction
+                cmd.angular.z=yaw_command_rad_s(args.yaw_only)+correction
             elif self.segment=='yaw_right':
-                cmd.angular.z=-0.16+correction
+                cmd.angular.z=-yaw_command_rad_s(args.yaw_only)+correction
             elif self.segment=='front':
                 cmd.linear.x=0.025
                 cmd.angular.z=correction
@@ -561,6 +588,7 @@ def main():
                                 if node.recording_started is not None else 0,
             'bag':args.output if node.recording_started is not None else None,
             'motion_enabled':args.arm,
+            'yaw_only':args.yaw_only,
             'maneuvers_completed_or_started':node.motion_count,
             'camera_frame':node.image_frame,'imu_frame':node.imu_frame,
             'target_file':args.target,'counts':node.counts,
