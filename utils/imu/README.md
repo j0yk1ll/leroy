@@ -99,6 +99,42 @@ podman exec -it leroy-ros bash -lc '
 '
 ```
 
+#### Diagnose low temporal correlation from an existing bag (no robot movement)
+
+A complete supervised yaw-only run can still produce a weak alignment score
+when adjacent-frame ChArUco PnP orientation jitter dominates real yaw.
+For example, one 20-second field trial had IMU yaw std 0.0807 rad/s,
+visual yaw std 0.1955 rad/s, and correlation only 0.264
+(required >= 0.65). **Neither sufficient IMU excitation nor agreement
+between weak half-run offsets makes that estimate valid.**
+
+Before any longer motor run, analyze the EXISTING bag with the read-only
+`analyze_charuco_bag.py` utility. It uses the same physical printed board,
+the CameraInfo recorded in the bag, and the **existing live TF** from
+`camera_optical_frame` to `imu_link` (it does not change extrinsics).
+It replays detections, rejects implausible pose flips, and compares current
+adjacent-frame visual rotations with longer 120, 250 and 400 ms intervals,
+each integrated against the actual IMU gyro timestamps:
+
+```bash
+podman exec -it leroy-ros bash -lc '
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  python3 /tmp/leroy_utils/imu/analyze_charuco_bag.py \
+    --bag /tmp/leroy_charuco_auto_yaw_02 \
+    --target /tmp/leroy_utils/charuco/calibration_board/board_config.json
+'
+```
+
+This does **not** publish motor commands, alter recorded bags or change the
+live calibration script's default algorithm. Longer relative-rotation
+intervals reduce orientation-derivative jitter but smooth real dynamics,
+correlate successive samples, and can broaden the timing peak. Treat all
+reported lag candidates as **diagnostic only**. Only adopt a revised
+estimator after independent synthetic/field validation and a sufficiently
+long recording with strong correlation, a distinct peak, and consistent
+split estimates. Do not propagate any `lag_ms` to XRSLAM yet.
+
 #### Planar-PnP pose-flip rejection
 
 A real yaw-only trial produced a one-frame ChArUco pose jump: 0.425 m
