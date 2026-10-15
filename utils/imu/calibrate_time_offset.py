@@ -131,6 +131,30 @@ def search_offset(pose_rows, imu_rows, rot_imu_cam):
     return all_res
 
 
+def charuco_pose_violation(p, min_range, max_range, max_displacement,
+                           initial_camera_in_board=None):
+    """Identify a genuine geometric safety violation from a valid ChArUco pose.
+
+    A missing pose is handled separately by the controller's brief stop/hold
+    gate: a single skipped detector frame is not a displacement violation.
+    """
+    if p is None:
+        return 'ChArUco pose unavailable'
+    cx, cy = float(p['cx']), float(p['cy'])
+    if not (0.23 < cx < 0.77 and 0.20 < cy < 0.80):
+        return f'ChArUco center outside image safety margins ({cx:.2f}, {cy:.2f})'
+    rng = float(p['range_m'])
+    if not min_range <= rng <= max_range:
+        return f'ChArUco target range outside limits ({rng:.2f}m)'
+    if initial_camera_in_board is not None:
+        delta = np.asarray(p['location_b'], dtype=float) - initial_camera_in_board
+        displacement = float(np.linalg.norm(delta))
+        if not math.isfinite(displacement) or displacement > max_displacement:
+            return (f'ChArUco camera displacement exceeds limit '
+                    f'({displacement:.3f}m > {max_displacement:.3f}m)')
+    return None
+
+
 def args_parser():
     p=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('--target',help='Existing ChArUco board_config.json')
@@ -413,8 +437,21 @@ def main():
             if self.last_pose_at is None or now-self.last_pose_at>0.30:
                 self.stop('Lost ChArUco tracking')
                 return
-            if not self.safe_pose(self.last_pose,initial=True):
-                self.stop('ChArUco near edge, range invalid, or displacement exceeded')
+            if self.last_pose is None:
+                # A single failed ChArUco detection used to trigger the
+                # generic pose-limit STOP even when the target was centered.
+                # Command zero while waiting briefly for reacquisition;
+                # the 0.30s missing-pose timeout above remains a hard stop.
+                self.send_stop()
+                return
+            violation = self.pose_violation(self.last_pose, initial=True)
+            if violation is not None:
+                self.stop(violation)
+                return
+            # Require several good detections before resuming motor output
+            # following an intermittent dropout; preserve the hard limit.
+            if self.good_since is None or now-self.good_since<0.20:
+                self.send_stop()
                 return
             if self.stage_end is None or now>=self.stage_end:
                 if self.stage=='motion':
@@ -462,18 +499,13 @@ def main():
             cmd.angular.z=max(-0.22,min(0.22,cmd.angular.z))
             self.pub.publish(cmd)
 
+        def pose_violation(self,p,initial):
+            return charuco_pose_violation(
+                p, args.min_range, args.max_range, args.max_displacement,
+                self.initial_camera_in_board if initial else None)
+
         def safe_pose(self,p,initial):
-            if p is None:
-                return False
-            # Require board center well inside the image; do not blindly search.
-            if not (0.23<p['cx']<0.77 and 0.20<p['cy']<0.80):
-                return False
-            if not (args.min_range<=p['range_m']<=args.max_range):
-                return False
-            if initial and self.initial_camera_in_board is not None:
-                if np.linalg.norm(p['location_b']-self.initial_camera_in_board)>args.max_displacement:
-                    return False
-            return True
+            return self.pose_violation(p,initial) is None
 
         def status(self):
             p=self.last_pose
