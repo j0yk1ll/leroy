@@ -1,0 +1,33 @@
+# Optional, hardware-free Nav2 Jazzy development image.
+# Build from the ros/ directory; never replace the running leroy-ros container.
+FROM docker.io/osrf/ros:jazzy-desktop
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    ROS_DOMAIN_ID=167 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    LEROY_NAV2_DRY_RUN=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-colcon-common-extensions \
+    python3-yaml \
+    python3-pytest \
+    ros-jazzy-navigation2 \
+    ros-jazzy-nav2-bringup \
+    ros-jazzy-ament-cmake-pytest \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /leroy_ws
+# Deliberately exclude bridge, sensors, XRSLAM, motor drivers and robot bringup.
+COPY src/leroy_nav2 /leroy_ws/src/leroy_nav2
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && colcon build --packages-select leroy_nav2 --cmake-args -DBUILD_TESTING=ON \
+    && . /leroy_ws/install/setup.sh \
+    && colcon test --packages-select leroy_nav2 --event-handlers console_direct+ \
+    && colcon test-result --verbose \
+    && ros2 pkg executables nav2_controller | grep -E '(^| )controller_server$' \
+    && ros2 pkg executables nav2_lifecycle_manager | grep -E '(^| )lifecycle_manager$' \
+    && ros2 pkg prefix nav2_mppi_controller
+
+# A non-running shell is the default: starting any Nav2 node is a deliberate action.
+CMD ["/bin/bash"]
