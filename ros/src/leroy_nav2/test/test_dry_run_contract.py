@@ -34,6 +34,11 @@ def test_simulation_yaml_is_jazzy_omni_and_inert():
     assert costmap['global_frame'] == 'odom'
     assert costmap['robot_base_frame'] == 'base_link'
     assert costmap['track_unknown_space'] is True
+    # Nav2's Jazzy costmap declares dimensions as integer ROS parameters.
+    # YAML floats (e.g. 5.0) trigger InvalidParameterTypeException on startup.
+    for dimension in ('width', 'height'):
+        assert type(costmap[dimension]) is int, f'{dimension} must be integer'
+        assert costmap[dimension] > 0
     assert costmap['plugins'] == ['inflation_layer']
     assert 'obstacle_layer' not in costmap
     assert 'voxel_layer' not in costmap
