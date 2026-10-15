@@ -1,0 +1,12 @@
+# Deployment-policy manifest, NOT a Nav2 ros__parameters file.
+# Milestone 1 has no hardware launch or motor command path.
+# Do not pass this file to a Nav2 node as parameters.
+deployment:
+  mode: hardware
+  enabled: false
+  bridge_command_output_enabled: false
+  odometry_validated: false
+  obstacle_coverage_validated: false
+  footprint_measured: false
+  operator_acceptance_completed: false
+  # No inferred or provisional physical calibration is authorized here.
