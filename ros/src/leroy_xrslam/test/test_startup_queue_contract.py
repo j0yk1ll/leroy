@@ -4,12 +4,13 @@ This is a lightweight guard against accidentally restoring the startup race
 or weakening runtime image queue safety. Real ROS integration is still required.
 """
 from pathlib import Path
-import re
 import unittest
 
 
-SOURCE = (Path(__file__).resolve().parents[1]
-          / "src" / "leroy_xrslam_node.cpp").read_text(encoding="utf-8")
+PACKAGE = Path(__file__).resolve().parents[1]
+SOURCE = (PACKAGE / "src" / "leroy_xrslam_node.cpp").read_text(encoding="utf-8")
+TIMING_HEADER = (PACKAGE / "include" / "leroy_xrslam" / "startup_timing.hpp"
+                 ).read_text(encoding="utf-8")
 
 
 class XrslamStartupQueueContract(unittest.TestCase):
@@ -17,13 +18,22 @@ class XrslamStartupQueueContract(unittest.TestCase):
         image = SOURCE.split("  void image(", 1)[1].split("  void poll(", 1)[0]
         self.assertRegex(
             image,
-            r"if\(!initialized_ \|\| first_forwarded_imu_time_<0 \|\|\s*"
-            r"t<=first_forwarded_imu_time_\)return;",
+            r"if\(!initialized_ \|\|\s*"
+            r"!leroy_xrslam::camera_after_first_forwarded_imu\(\s*"
+            r"t, offset_, first_forwarded_imu_time_\)\)return;",
         )
         self.assertLess(
-            image.index("if(!initialized_ || first_forwarded_imu_time_<0"),
+            image.index("!leroy_xrslam::camera_after_first_forwarded_imu("),
             image.index("pending_.push_back(m)"),
         )
+        # The compiled predicate must use exactly the same effective camera
+        # time convention as the adapter's normal drain() path.
+        self.assertIn(
+            "camera_header_time + camera_imu_offset_sec > first_forwarded_imu_time",
+            TIMING_HEADER,
+        )
+        drain = SOURCE.split("  void drain(", 1)[1].split("  void read_pose(", 1)[0]
+        self.assertIn("t+offset_+0.001", drain)
 
     def test_only_actual_forwarded_imu_unblocks_camera(self):
         imu = SOURCE.split("  void imu(", 1)[1].split("  void image(", 1)[0]
