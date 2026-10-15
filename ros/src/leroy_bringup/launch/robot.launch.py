@@ -20,7 +20,6 @@ def _launch_xrslam(context, *args, **kwargs):
         'xrslam_device_template_yaml',
         'xrslam_image_topic',
         'xrslam_camera_info_topic',
-        'xrslam_camera_imu_offset_sec',
     )
     missing = [name for name in required if not arg(name)]
     if missing:
@@ -29,23 +28,24 @@ def _launch_xrslam(context, *args, **kwargs):
             + ', '.join(missing)
         )
 
-    try:
-        offset = float(arg('xrslam_camera_imu_offset_sec'))
-    except ValueError as exc:
-        raise RuntimeError('xrslam_camera_imu_offset_sec must be a measured number') from exc
-    if not math.isfinite(offset):
-        raise RuntimeError('xrslam_camera_imu_offset_sec must be finite')
+    # The adapter reads sensor.mode from XRSLAM SLAM YAML. An offset is
+    # mandatory for monocular_imu and optional for pure monocular; the adapter
+    # enforces the mode-specific rule and rejects visual-only metric odometry.
+    offset_text = arg('xrslam_camera_imu_offset_sec')
+    offset = None
+    if offset_text:
+        try:
+            offset = float(offset_text)
+        except ValueError as exc:
+            raise RuntimeError('xrslam_camera_imu_offset_sec must be a number') from exc
+        if not math.isfinite(offset):
+            raise RuntimeError('xrslam_camera_imu_offset_sec must be finite')
 
     pose_validated = arg('xrslam_pose_convention_validated').lower()
     if pose_validated not in ('true', 'false'):
         raise RuntimeError('xrslam_pose_convention_validated must be true or false')
 
-    return [Node(
-        package='leroy_xrslam',
-        executable='leroy_xrslam_node',
-        name='leroy_xrslam',
-        output='screen',
-        parameters=[{
+    xrslam_params = {
             'slam_yaml': arg('xrslam_slam_yaml'),
             'device_template_yaml': arg('xrslam_device_template_yaml'),
             'image_topic': arg('xrslam_image_topic'),
@@ -55,11 +55,19 @@ def _launch_xrslam(context, *args, **kwargs):
             'imu_frame': 'imu_link',
             'camera_optical_frame': arg('camera_frame'),
             'odom_frame': 'odom',
-            'camera_imu_offset_sec': offset,
             'pose_convention_validated': pose_validated == 'true',
             # No map->odom until persistent map alignment is verified.
             'enable_map_tf': False,
-        }],
+    }
+    if offset is not None:
+        xrslam_params['camera_imu_offset_sec'] = offset
+
+    return [Node(
+        package='leroy_xrslam',
+        executable='leroy_xrslam_node',
+        name='leroy_xrslam',
+        output='screen',
+        parameters=[xrslam_params],
     )]
 
 
@@ -175,6 +183,7 @@ def generate_launch_description():
         # Managed as calibration assets by the Leroy deployment.
         DeclareLaunchArgument('xrslam_slam_yaml', default_value=''),
         DeclareLaunchArgument('xrslam_device_template_yaml', default_value=''),
+        # Required for monocular_imu only; omit for visual-only diagnostics.
         DeclareLaunchArgument('xrslam_camera_imu_offset_sec', default_value=''),
         DeclareLaunchArgument(
             'xrslam_pose_convention_validated', default_value='false',
