@@ -64,7 +64,7 @@ From your Arch Linux checkout, with no changes to the running container:
 
 ```bash
 git fetch origin
-git switch fix/nav2-m2-fixture-costmap-topic-and-shutdown
+git switch fix/nav2-m2-costmap-callbackgroup-lifetime-fixture
 cd ros
 podman build -f Dockerfile.nav2 -t leroy-nav2:jazzy .
 ```
@@ -207,3 +207,42 @@ no motion path.
   has been authorized; do that only in Milestone 5.
 - Do not merge or advance to Milestone 3 until operator evidence reviewed
   and explicitly approved.
+
+
+## Experimental Jazzy costmap destructor workaround — pending verification
+
+The official Jazzy `nav2_costmap_2d` standalone executable failed
+repeatedly with SIGSEGV (exit -11) at
+`rclcpp::CallbackGroup::~CallbackGroup()` in the costmap destructor,
+**even after a successful `shutdown` transition to `finalized [4]`**.
+One other run exited cleanly without explanation; do not treat it as
+evidence that the problem is solved.
+
+To test lifetime ordering **without modifying the installed Nav2 package**,
+this branch adds a tiny separate `leroy_nav2_costmap_fixture` C++ package.
+The synthetic launch now uses its `costmap_fixture` executable rather
+than the stock `nav2_costmap_2d` standalone executable. The runner
+constructs the same upstream `Costmap2DROS` class, overrides
+`on_cleanup()`, and after the parent cleanup has stopped the executor
+thread, explicitly removes the manually added callback group, releases
+the dedicated executor, and releases the callback group before the ROS
+context shuts down. This is a hypothesis test, **not a confirmed fix**.
+The stock executable remains installed for future A/B comparison.
+
+After the isolated image builds and automated tests pass:
+
+1. Run the usual synthetic fixture with **`podman --network none`**, no
+   devices, no hardware bridge, no host mounts; never start Leroy hardware.
+2. In a second terminal, run the documented configure/activate sequence,
+   `fixture_probe`, then deactivate and cleanup the costmap.
+3. Optionally finalize the costmap and verify `finalized [4]`.
+4. Ctrl+C the fixture launch and check each process exit status,
+   especially whether `costmap_fixture` exited normally (no -11).
+5. Repeat **five independent launches** with the same sequence before
+   considering a race-sensitive shutdown issue fixed. Preserve and report
+   all results, including any crash or build/test failure.
+
+The actual geometry and obstacle-processing contract is unchanged.
+There is still no real camera calibration, odometry, motion authority, or
+verified collision-avoidance capability. This is isolated M2 diagnosis
+only; do not merge until the test evidence is reviewed.
