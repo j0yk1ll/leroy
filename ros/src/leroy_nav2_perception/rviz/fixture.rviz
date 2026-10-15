@@ -27,7 +27,7 @@ Visualization Manager:
       Name: Local synthetic costmap
       Enabled: true
       Topic:
-        Value: /costmap/costmap
+        Value: /costmap
   Global Options:
     Fixed Frame: base_link
     Frame Rate: 10

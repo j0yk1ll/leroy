@@ -43,6 +43,8 @@ def test_synthetic_fixture_obstacle_gates_and_costmap():
     assert source['clearing'] is False
     assert source['topic'] == sim['obstacle_cloud_topic']
     assert config['plugins'] == ['obstacle_layer', 'inflation_layer']
+    # This synthetic footprint logged an inscribed radius of 0.510 m.
+    assert config['inflation_layer']['inflation_radius'] >= 0.51
 
 
 @pytest.mark.parametrize('name', [
@@ -101,3 +103,14 @@ def test_ament_python_uses_pytest_in_colcon():
     assert 'colcon test --python-testing pytest' in docker
     assert '--return-code-on-test-failure' in docker
 
+def test_costmap_probe_matches_jazzy_topic_and_qos():
+    source = (
+        ROOT / 'leroy_nav2_perception/fixture_probe.py'
+    ).read_text()
+    assert "OccupancyGrid, '/costmap', self._on_costmap, grid_qos" in source
+    assert 'ReliabilityPolicy.RELIABLE' in source
+    assert 'DurabilityPolicy.TRANSIENT_LOCAL' in source
+    assert "'/costmap/costmap'" not in source
+    rviz = (ROOT / 'rviz/fixture.rviz').read_text()
+    assert 'Value: /costmap' in rviz
+    assert 'Value: /costmap/costmap' not in rviz
