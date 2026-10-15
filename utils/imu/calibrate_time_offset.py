@@ -162,6 +162,41 @@ def charuco_pose_violation(p, min_range, max_range, max_displacement,
     return None
 
 
+def implausible_pose_jump(current, previous, elapsed_s):
+    """Return a reason for an implausible single-frame planar-PnP pose flip.
+
+    This is a *trust gate*, not a replacement for geometry/displacement safety.
+    An untrusted pose is withheld, motors are commanded to zero, and the
+    existing 0.30s tracking-loss timeout remains an unconditional hard stop.
+    Generous slack permits observed normal ChArUco jitter and robot rotation.
+    """
+    if previous is None:
+        return None
+    if not math.isfinite(elapsed_s) or elapsed_s <= 0:
+        return 'Invalid ChArUco pose time interval'
+    p0=np.asarray(previous['location_b'],dtype=float)
+    p1=np.asarray(current['location_b'],dtype=float)
+    rot0=np.asarray(previous['rot'],dtype=float)
+    rot1=np.asarray(current['rot'],dtype=float)
+    if (not np.isfinite(p0).all() or not np.isfinite(p1).all()
+            or not np.isfinite(rot0).all() or not np.isfinite(rot1).all()):
+        return 'Nonfinite ChArUco pose'
+    step_m=float(np.linalg.norm(p1-p0))
+    delta=rot1@rot0.T
+    cosine=float(np.clip((np.trace(delta)-1.0)*0.5,-1.0,1.0))
+    angle_rad=float(math.acos(cosine))
+    # Reject gross jumps, not ordinary subpixel-PnP jitter.
+    # At 30 Hz: ~0.13 m linear, ~10deg angular allowance.
+    max_step_m=0.075+1.5*elapsed_s
+    max_angle_rad=math.radians(6.0)+2.0*elapsed_s
+    if step_m>max_step_m or angle_rad>max_angle_rad:
+        return (f'ChArUco PnP pose jump: {step_m:.3f}m and '
+                f'{math.degrees(angle_rad):.1f}deg in {elapsed_s:.3f}s '
+                f'(allowed {max_step_m:.3f}m, '
+                f'{math.degrees(max_angle_rad):.1f}deg)')
+    return None
+
+
 def choose_motion_segment(index, yaw_only, rng):
     """Choose an alternating yaw sweep when timing excitation is requested."""
     if yaw_only:
@@ -271,6 +306,8 @@ def main():
             self.last_imu_at=None
             self.last_pose_at=None
             self.last_pose=None
+            self.previous_accepted_pose=None
+            self.last_reject_log_at=-1e9
             self.initial_camera_in_board=None
             self.good_since=None
             self.recording_started=None
@@ -279,7 +316,8 @@ def main():
             self.imu_rows=[]
             self.latest_gyro_z=None
             self.writer=None
-            self.counts={'images':0,'imu':0,'good_poses':0,'bad_poses':0,'bag_frames':0,'bag_imu':0}
+            self.counts={'images':0,'imu':0,'good_poses':0,'bad_poses':0,
+                         'rejected_pose_jumps':0,'bag_frames':0,'bag_imu':0}
             self.last_detection_at=-1e9
             self.r_imu_cam=None
             self.r_base_cam=None
@@ -387,11 +425,42 @@ def main():
                 self.last_pose=None
                 self.good_since=None
                 return
-            self.last_pose=detector.pose(gray,self.info,args.min_corners,args.max_rmse)
-            if self.last_pose is None:
+            candidate=detector.pose(gray,self.info,args.min_corners,args.max_rmse)
+            if candidate is None:
+                self.last_pose=None
                 self.counts['bad_poses']+=1
                 self.good_since=None
                 return
+            if args.arm and self.recording_started is not None:
+                # Image-edge/range safety violations are never hidden by the
+                # continuity filter, even if a pose jump also occurred.
+                violation=charuco_pose_violation(
+                    candidate,args.min_range,args.max_range,
+                    args.max_displacement,initial_camera_in_board=None)
+                if violation is not None:
+                    self.last_pose=None
+                    self.stop(violation)
+                    return
+                # A long gap must STOP, even if the next image re-detects the
+                # board just before the periodic control timer checks it.
+                if self.last_pose_at is not None and now-self.last_pose_at>0.30:
+                    self.last_pose=None
+                    self.stop('Lost ChArUco tracking')
+                    return
+            if self.previous_accepted_pose is not None and self.last_pose_at is not None:
+                reason=implausible_pose_jump(
+                    candidate,self.previous_accepted_pose,now-self.last_pose_at)
+                if reason is not None:
+                    self.last_pose=None
+                    self.good_since=None
+                    self.counts['rejected_pose_jumps']+=1
+                    if now-self.last_reject_log_at>=0.5:
+                        print('HOLD: '+reason,flush=True)
+                        self.last_reject_log_at=now
+                    self.send_stop()
+                    return
+            self.last_pose=candidate
+            self.previous_accepted_pose=candidate
             self.counts['good_poses']+=1
             self.last_pose_at=now
             if self.good_since is None:

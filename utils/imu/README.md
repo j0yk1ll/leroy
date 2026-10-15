@@ -99,6 +99,37 @@ podman exec -it leroy-ros bash -lc '
 '
 ```
 
+#### Planar-PnP pose-flip rejection
+
+A real yaw-only trial produced a one-frame ChArUco pose jump: 0.425 m
+translation and 21.9 degrees rotation in 36 ms, immediately returning to
+the original pose on the next frame. Board center remained near (0.495,
+0.486) at 1.18 m. The low 0.18–0.23 px reprojection error did **not**
+distinguish the incorrect planar-PnP branch from a true camera pose.
+
+To avoid treating one implausible PnP branch flip as actual robot travel,
+the temporal calibration script now withholds a pose that jumps farther
+or rotates faster than a deliberately generous frame-to-frame continuity
+envelope. On rejection it **commands zero motor velocity immediately**,
+clears the good-tracking timer and waits for 0.20 s of stable reacquisition.
+A sustained absence of accepted poses still triggers the hard 0.30 s
+tracking-loss stop. Real image-edge/range violations stop immediately,
+and plausible physical movement beyond 0.18 m from the starting pose
+continues to trigger the unchanged displacement stop. Even a true but
+physically implausible displacement forces zero output and, if persistent,
+a hard tracking-loss stop. No safety limits are increased.
+
+`HOLD: ChArUco PnP pose jump...` messages and the
+`counts.rejected_pose_jumps` summary field identify frames excluded from
+motion control and from visual angular-velocity estimation. The filter is
+not a new camera-to-IMU spatial calibration. It does **not** guarantee
+that remaining poses are accurate; a valid temporal offset still requires
+signal/correlation/split consistency. Run the ROS-free tests via:
+
+```bash
+python3 -m unittest discover -s utils/imu -p test_charuco_motion_safety.py -v
+```
+
 #### Yaw-focused excitation when the IMU signal is too weak
 
 If a full supervised recording completes but the offset estimator reports
