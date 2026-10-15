@@ -67,9 +67,46 @@ def visual_gyro_z(pose_rows, rot_imu_cam):
     return series
 
 
-def search_offset(pose_rows, imu_rows, rot_imu_cam):
-    """Estimate camera-header minus IMU-header shift, with split validation."""
-    visual = visual_gyro_z(pose_rows, rot_imu_cam)
+def windowed_visual_gyro_z(pose_rows, rot_imu_cam, baseline_s):
+    """Diagnostic: relative ChArUco rotation over a longer interval.
+
+    The current online estimator uses adjacent detected poses, which amplifies
+    planar-PnP orientation jitter. Longer intervals reduce that derivative
+    noise, but also smear fast dynamics and may broaden the lag-correlation
+    peak. This method is NOT the default live estimator.
+    """
+    if not 0.10 <= baseline_s <= 0.60:
+        raise ValueError('windowed yaw baseline must be between 0.10 and 0.60 seconds')
+    rows = sorted(pose_rows, key=lambda item: item[0])
+    series = []
+    j = 1
+    for i, (ta, ra) in enumerate(rows):
+        j = max(j, i + 1)
+        while j < len(rows) and (rows[j][0] - ta) / 1e9 < baseline_s:
+            j += 1
+        if j >= len(rows):
+            break
+        tb, rb = rows[j]
+        dt = (tb - ta) / 1e9
+        if dt > baseline_s + 0.12:
+            continue
+        delta_r = rb @ ra.T
+        vec, _ = cv2.Rodrigues(delta_r)
+        omega_imu = rot_imu_cam @ (-vec.reshape(3) / dt)
+        series.append((ta, tb, float(omega_imu[2])))
+    return series
+
+
+def search_offset(pose_rows, imu_rows, rot_imu_cam, visual_baseline_s=None):
+    """Estimate camera-header minus IMU-header shift, with split validation.
+
+    visual_baseline_s is ONLY for offline window-length diagnostics.
+    The default reproduces the online adjacent-detection estimator.
+    """
+    visual = (visual_gyro_z(pose_rows, rot_imu_cam)
+              if visual_baseline_s is None
+              else windowed_visual_gyro_z(pose_rows, rot_imu_cam,
+                                          visual_baseline_s))
     if len(visual) < 100 or len(imu_rows) < 500:
         return {'valid': False, 'reason': 'Not enough tracked ChArUco poses / IMU samples',
                 'visual_pairs': len(visual)}
