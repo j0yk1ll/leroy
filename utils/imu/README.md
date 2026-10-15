@@ -135,6 +135,58 @@ estimator after independent synthetic/field validation and a sufficiently
 long recording with strong correlation, a distinct peak, and consistent
 split estimates. Do not propagate any `lag_ms` to XRSLAM yet.
 
+#### Orientation-domain timing diagnosis (read-only)
+
+In the completed 20-second yaw-only recording,
+`leroy_charuco_auto_yaw_02`, adjacent-frame visual yaw had only
+0.264 correlation with the gyro. A 250 ms visual rotation baseline
+improved correlation to 0.733, but its peak separation was only 0.017
+(required >=0.06 in the established online estimator). A 400 ms
+baseline improved correlation to 0.801 but generated a broad,
+split-inconsistent peak. **Do not interpret these values as a valid
+camera/IMU time offset.**
+
+For an independent diagnostic that avoids dividing noisy PnP angle
+differences by ~30–70 ms frame spacings, the read-only
+`analyze_charuco_orientation.py` uses the existing saved bag and
+existing live camera-to-IMU TF. It compares the visual **relative yaw
+angles** against the trapezoidally integrated measured IMU yaw rate
+over candidate timing offsets. For each candidate it fits only an
+unknown starting angle and linear gyro drift, without changing TF,
+intrinsics, bag timestamps or the online estimator. It compares
+full-recording lag, per-half lag, residual angular RMSE, and the
+relative increase in residual loss when moving at least 40 ms away
+from the optimum. A broad flat residual-loss valley means the
+data still cannot uniquely identify an offset.
+
+Copy `utils/imu/orientation_timing.py` and
+`utils/imu/analyze_charuco_orientation.py` into the running container's
+`/tmp/leroy_utils/imu/` directory, then run:
+
+```bash
+podman exec -it leroy-ros bash -lc '
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  python3 /tmp/leroy_utils/imu/analyze_charuco_orientation.py \
+    --bag /tmp/leroy_charuco_auto_yaw_02 \
+    --target /tmp/leroy_utils/charuco/calibration_board/board_config.json
+'
+```
+
+This analysis does **not** publish to `/cmd_vel` and contains no
+motor-controller logic. The approach assumes a stationary board
+and limited yaw excursions (so camera relative rotation vectors
+have no full-turn phase ambiguity). It uses ordinary least squares
+and is vulnerable to residual PnP outliers; reported values are
+strictly **diagnostic**. Run the ROS-free synthetic tests via:
+
+```bash
+python3 -m unittest discover -s utils/imu -p test_orientation_timing.py -v
+```
+
+No lag reported by this utility should be applied to XRSLAM without
+a separate validated estimator and independent repeatable recording.
+
 #### Planar-PnP pose-flip rejection
 
 A real yaw-only trial produced a one-frame ChArUco pose jump: 0.425 m
