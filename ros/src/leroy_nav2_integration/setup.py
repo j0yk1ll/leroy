@@ -31,5 +31,7 @@ setup(
         'fault_odom_fixture = leroy_nav2_integration.fault_odom_fixture:main',
         'fault_audit = leroy_nav2_integration.fault_audit:main',
         'shadow_replay = leroy_nav2_integration.shadow_replay:main',
+        'synthetic_shadow_candidate = leroy_nav2_integration.synthetic_shadow_candidate:main',
+        'ros_shadow_audit = leroy_nav2_integration.ros_shadow_audit:main',
     ]},
 )
