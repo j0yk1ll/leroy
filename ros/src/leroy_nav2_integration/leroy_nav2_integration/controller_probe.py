@@ -175,23 +175,33 @@ def main(args=None):
                 'FAIL: accepted synthetic path but no nonzero bounded diagnostic '
                 f'proposal (samples={node.diag_samples}). Inspect costmap/MPPI logs.')
 
-        print(
-            'PASS: offline MPPI accepted synthetic FollowPath, produced '
-            'bounded diagnostic-only velocity, controller costmap marked '
-            'lethal+unknown, no /cmd_vel or live /odom; NO path completion claim')
     finally:
+        cancel_error = None
         if goal_handle is not None:
             try:
-                # Never leave a synthetic action running after the probe exits.
+                # An accepted goal MUST receive a cancel acknowledgement
+                # (or be confirmed terminal) before the probe can PASS.
                 cancel = goal_handle.cancel_goal_async()
                 rclpy.spin_until_future_complete(node, cancel, timeout_sec=4.0)
-                if not cancel.done():
-                    print('WARNING: cancellation unconfirmed; deactivate controller')
+                if not cancel.done() or cancel.result() is None:
+                    cancel_error = 'FAIL: FollowPath cancellation was not acknowledged'
+                elif not cancel.result().goals_canceling:
+                    # It may have already aborted or reached its goal.
+                    result = goal_handle.get_result_async()
+                    rclpy.spin_until_future_complete(node, result, timeout_sec=3.0)
+                    if not result.done():
+                        cancel_error = 'FAIL: goal neither canceled nor terminal'
             except Exception as ex:
-                print(f'WARNING: cancellation unavailable: {ex}; deactivate controller')
+                cancel_error = f'FAIL: unable to confirm cancellation: {ex}'
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+        if cancel_error:
+            raise RuntimeError(cancel_error)
+    print(
+        'PASS: offline MPPI accepted synthetic FollowPath, produced '
+        'bounded diagnostic-only velocity, controller costmap marked '
+        'lethal+unknown, no /cmd_vel or live /odom; NO path completion claim')
 
 
 if __name__ == '__main__':

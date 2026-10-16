@@ -104,6 +104,8 @@ def test_action_probe_is_bounded_and_does_not_publish_commands():
     assert "controller_id = 'FollowPath'" in source
     assert 'send_goal_async(goal)' in source
     assert 'cancel_goal_async()' in source
+    assert 'cancel.result().goals_canceling' in source
+    assert 'FAIL: FollowPath cancellation was not acknowledged' in source
     assert "'/leroy_nav2/diagnostics/proposed_cmd_vel'" in source
     assert "Twist, PROPOSED_CMD, self._on_cmd" in source
     assert "'/cmd_vel' in topics or '/odom' in topics" in source
