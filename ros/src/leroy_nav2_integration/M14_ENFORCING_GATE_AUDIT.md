@@ -210,6 +210,42 @@ blackout, and at least one recovered diagnostic
 nonzero forward, then `finalized [4]` and all six
 clean fixture process exits.
 
+## ROS graph startup discovery troubleshooting
+
+ROS 2 publisher endpoint introspection can temporarily report an
+unresolved node name/namespace (e.g. `_NODE_NAME_UNKNOWN_`) even while
+a correctly typed publisher exists. M14's gate audit now classifies a
+**single** such output endpoint as **PENDING**, never verified, for
+at most 12 seconds from audit startup. Both the gated `Twist` and
+gate-status `String` publisher must eventually resolve to precisely
+the one `/m14_software_gate` node before pre-fault audit acceptance.
+Wrong type, unexpected known node/namespace, or **multiple**
+publishers remain immediate hard errors. Identity loss while a
+synthetic fault is active is a failure. ROS node names are still
+not cryptographic source authentication.
+
+If the audit reports a publisher error again, preserve the full
+failure line: it now includes the topic and observed endpoint
+(name, namespace, ROS type). While the disconnected fixture is
+still running, inspect ONLY inside that container:
+
+```bash
+podman exec leroy-nav2-m14 bash -lc '
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  ros2 topic info --verbose /leroy_nav2/diagnostics/gated_cmd_vel
+  ros2 topic info --verbose /leroy_nav2/diagnostics/m14_gate_status
+  ros2 node list
+'
+```
+
+Do not bypass graph checks, remove publisher limits or point
+diagnostic output to `/cmd_vel` just to obtain a PASS. On an audit
+error, `set -e` in Terminal 2 skips its lifecycle teardown; manually
+deactivate/cleanup/shutdown the synthetic controller when possible,
+then Ctrl+C Terminal 1 and check all six fixture exits. Rebuild a
+new image and start a **fresh** isolated fixture for each retry.
+
 ## M14 acceptance boundary
 
 M14 requires:

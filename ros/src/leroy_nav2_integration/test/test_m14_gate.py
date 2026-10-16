@@ -3,9 +3,14 @@
 import ast
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from leroy_nav2_integration.m14_gate_graph_contract import inspect_gate_publisher
+from leroy_nav2_integration.m9_mppi_source import (
+    UNKNOWN_NODE, UNKNOWN_NAMESPACE,
+)
 from leroy_nav2_integration.m14_gate_core import (
     DiagnosticCommandGate, ZERO, proposal_valid,
 )
@@ -229,6 +234,69 @@ def test_image_registers_only_diagnostic_gate_and_audit():
     for excluded in ('COPY src/leroy_bridge', 'COPY src/leroy_bringup'):
         assert excluded not in docker
 
+
+
+def _publisher(name='m14_software_gate', namespace='/',
+               typ='geometry_msgs/msg/Twist'):
+    return SimpleNamespace(
+        node_name=name, node_namespace=namespace, topic_type=typ)
+
+
+@pytest.mark.parametrize('typ', [
+    'geometry_msgs/msg/Twist', 'std_msgs/msg/String',
+])
+def test_m14_gated_graph_source_exact_identity_is_required(typ):
+    verified, pending, evidence = inspect_gate_publisher(
+        [_publisher(typ=typ)], expected_type=typ)
+    assert verified is True and pending is False
+    assert evidence == [('m14_software_gate', '/', typ)]
+
+
+@pytest.mark.parametrize('name,namespace', [
+    (UNKNOWN_NODE, '/'),
+    ('m14_software_gate', UNKNOWN_NAMESPACE),
+    (UNKNOWN_NODE, UNKNOWN_NAMESPACE),
+    (None, '/'),
+    ('m14_software_gate', ''),
+])
+def test_m14_gated_graph_incomplete_discovery_is_only_pending(
+        name, namespace):
+    valid, pending, _ = inspect_gate_publisher(
+        [_publisher(name=name, namespace=namespace)],
+        expected_type='geometry_msgs/msg/Twist')
+    assert valid is False and pending is True
+
+
+def test_m14_gated_graph_empty_discovery_is_pending_not_verified():
+    assert inspect_gate_publisher(
+        [], expected_type='geometry_msgs/msg/Twist') == (
+            False, True, [])
+
+
+@pytest.mark.parametrize('endpoints,expected_type', [
+    ([_publisher(name='spoofed_gate')], 'geometry_msgs/msg/Twist'),
+    ([_publisher(namespace='/other')], 'geometry_msgs/msg/Twist'),
+    ([_publisher(typ='std_msgs/msg/String')], 'geometry_msgs/msg/Twist'),
+    ([_publisher(), _publisher()], 'geometry_msgs/msg/Twist'),
+    ([_publisher(name=UNKNOWN_NODE), _publisher()],
+     'geometry_msgs/msg/Twist'),
+])
+def test_m14_gated_graph_invalid_source_or_duplicate_fails_immediately(
+        endpoints, expected_type):
+    verified, pending, evidence = inspect_gate_publisher(
+        endpoints, expected_type=expected_type)
+    assert (verified, pending) == (False, False)
+    assert evidence
+
+
+def test_m14_audit_requires_resolved_outputs_and_bounded_discovery():
+    audit = (PKG / 'm14_gate_audit.py').read_text()
+    assert 'inspect_gate_publisher(' in audit
+    assert 'GATE_DISCOVERY_TIMEOUT_S = 12.0' in audit
+    assert 'self.gate_publishers_verified = verified_all' in audit
+    assert 'and node.gate_publishers_verified' in audit
+    assert 'self.triggered or time.monotonic()' in audit
+    assert "repr((topic, evidence))" in audit
 
 def test_physical_hardware_policy_still_off():
     text = (ROOT.parent / 'leroy_nav2/config/hardware.disabled.yaml').read_text()

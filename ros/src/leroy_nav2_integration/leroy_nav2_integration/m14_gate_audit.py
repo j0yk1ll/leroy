@@ -19,10 +19,12 @@ from .controller_probe import _make_synthetic_path, _spin_until
 from .m11_blackout_metrics import parse_window
 from .m11_blackout_probe import M11BlackoutProbe
 from .m9_mppi_shadow_probe import require_offline
+from .m14_gate_graph_contract import inspect_gate_publisher
 from .m14_software_gate import GATED_TOPIC, STATUS_TOPIC
 
 
 OBSERVE_S = 9.0
+GATE_DISCOVERY_TIMEOUT_S = 12.0
 MAX_RECEIPTS = 512
 EXPECTED = {
     'depth': 'BLOCKED_DEPTH',
@@ -43,6 +45,7 @@ class M14GateAudit(M11BlackoutProbe):
         self.gate_blocked_ticks = 0
         self.gate_last_seq = 0
         self.gate_discovery_since = time.monotonic()
+        self.gate_publishers_verified = False
         self.gate_output = self.create_subscription(
             Twist, GATED_TOPIC, self._on_gated, 10)
         self.gate_status = self.create_subscription(
@@ -109,18 +112,28 @@ class M14GateAudit(M11BlackoutProbe):
         expected = (
             (GATED_TOPIC, 'geometry_msgs/msg/Twist'),
             (STATUS_TOPIC, 'std_msgs/msg/String'))
+        verified_all = True
         for topic, typ in expected:
             if topic in topics and topics[topic] != [typ]:
-                raise RuntimeError('FAIL: M14 gated topic wrong type')
-            pubs = self.get_publishers_info_by_topic(topic)
-            if pubs and (len(pubs) != 1
-                         or pubs[0].node_name != 'm14_software_gate'
-                         or pubs[0].node_namespace != '/'):
                 raise RuntimeError(
-                    'FAIL: M14 unexpected gated diagnostic publisher')
-            if (not pubs or topic not in topics) and (
-                    time.monotonic() - self.gate_discovery_since > 12.0):
-                raise RuntimeError('FAIL: M14 gate output discovery timeout')
+                    'FAIL: M14 gated topic wrong type: ' +
+                    repr((topic, topics[topic])))
+            pubs = self.get_publishers_info_by_topic(topic)
+            verified, pending, evidence = inspect_gate_publisher(
+                pubs, expected_type=typ)
+            if not verified and not pending:
+                raise RuntimeError(
+                    'FAIL: M14 unexpected gated diagnostic publisher: ' +
+                    repr((topic, evidence)))
+            if not verified:
+                verified_all = False
+                if (self.triggered or time.monotonic() -
+                        self.gate_discovery_since > GATE_DISCOVERY_TIMEOUT_S):
+                    raise RuntimeError(
+                        'FAIL: M14 gate output identity discovery timeout '
+                        'or lost during fault: ' + repr((topic, evidence)))
+        # Pending discovery is never sufficient for audit acceptance.
+        self.gate_publishers_verified = verified_all
 
 
 def main(args=None):
@@ -162,6 +175,7 @@ def main(args=None):
 
         if not _spin_until(
                 node, lambda: (node.verified_source
+                              and node.gate_publishers_verified
                               and node.action_nonzero_samples >= 1
                               and node.gate_pre_nonzero >= 1
                               and node.healthy_samples >= 1), 18.0):
