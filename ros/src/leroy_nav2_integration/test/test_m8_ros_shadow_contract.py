@@ -197,3 +197,63 @@ def test_m8_audit_retains_strict_identity_check_at_start_and_finish():
     assert 'FAIL: fake candidate publisher missing:' in source
     assert 'create_publisher' not in calls(AUDIT)
     assert "'/cmd_vel' in topics or '/odom' in topics" in source
+
+
+def test_dds_discovery_placeholders_wait_without_granting_identity():
+    from types import SimpleNamespace
+    from leroy_nav2_integration.shadow_endpoint_contract import (
+        publisher_discovery_pending, publisher_problem,
+    )
+
+    def ep(name, namespace='/', typ='geometry_msgs/msg/Twist'):
+        return SimpleNamespace(
+            node_name=name, node_namespace=namespace, topic_type=typ)
+
+    unknown = ep('_NODE_NAME_UNKNOWN_', '_NODE_NAMESPACE_UNKNOWN_')
+    correct = ep('m8_synthetic_candidate', '/')
+    assert publisher_discovery_pending([]) is True
+    assert publisher_discovery_pending([unknown]) is True
+    assert publisher_problem([unknown], required=True) is not None
+    assert publisher_discovery_pending(
+        [ep('m8_synthetic_candidate', '_NODE_NAMESPACE_UNKNOWN_')]) is True
+    assert publisher_discovery_pending(
+        [ep('_NODE_NAME_UNKNOWN_', '/')]) is True
+
+    # A verified graph is *not* pending.
+    assert publisher_discovery_pending([correct]) is False
+    assert publisher_problem([correct], required=True) is None
+
+    # Wrong endpoints never get a discovery grace period.
+    for entries in (
+        [ep('unexpected')],
+        [ep('m8_synthetic_candidate', '/other')],
+        [ep('m8_synthetic_candidate', '/', 'std_msgs/msg/String')],
+        [unknown, correct],
+        [unknown, unknown],
+        [ep('_NODE_NAME_UNKNOWN_', '/', 'std_msgs/msg/String')],
+    ):
+        assert publisher_discovery_pending(entries) is False
+        assert publisher_problem(entries, required=True) is not None
+
+
+def test_ros_shadow_audit_rejects_unresolved_graph_beyond_bounded_grace():
+    source = AUDIT.read_text()
+    assert 'GRAPH_DISCOVERY_TIMEOUT_S = 12.0' in source
+    assert 'verified = node.check_graph()' in source
+    assert 'if not verified:' in source
+    assert 'publisher_discovery_pending(endpoints)' in source
+    assert 'return not pending' in source
+    assert 'graph_pending_since = None' in source
+    assert 'now - graph_pending_since >= GRAPH_DISCOVERY_TIMEOUT_S' in source
+    assert 'FAIL: M8 fictional publisher graph identity' in source
+    assert 'M8 SHADOW: WAITING_GRAPH_IDENTITY' in source
+    assert 'node.window = ShadowWindow()' in source
+    assert 'baseline = False' in source
+    assert 'blocked = False' in source
+    assert 'rearmed = False' in source
+    assert 'blocked_start = None' in source
+    assert 'publisher_problem(endpoints, required=True)' in source
+    assert 'FAIL: untrusted fictional proposal publisher:' in source
+    assert 'create_publisher' not in calls(AUDIT)
+    assert 'send_goal_async' not in calls(AUDIT)
+    assert "'/cmd_vel' in topics or '/odom' in topics" in source

@@ -18,6 +18,7 @@ from rclpy.qos import (
 )
 from sensor_msgs.msg import PointCloud2
 
+from .shadow_endpoint_contract import publisher_discovery_pending
 from .shadow_endpoint_contract import publisher_problem
 from .shadow_policy import DiagnosticProposal, ShadowSnapshot, ShadowWindow
 from .synthetic_shadow_candidate import SYNTHETIC_CANDIDATE
@@ -28,6 +29,7 @@ CLOUD = '/leroy_nav2/diagnostics/obstacle_points'
 GRID = '/local_costmap/costmap'
 FAULTS = {'depth': 'WOULD_VETO_BLOCKED_DEPTH',
           'odom': 'WOULD_VETO_BLOCKED_ODOM'}
+GRAPH_DISCOVERY_TIMEOUT_S = 12.0
 
 
 def _stamp(stamp):
@@ -159,12 +161,17 @@ class RosShadowAudit(Node):
                     'velocity_smoother', 'robot_state_publisher')):
                 raise RuntimeError('FAIL: forbidden hardware/navigation node')
         endpoints = self.get_publishers_info_by_topic(SYNTHETIC_CANDIDATE)
+        # Publisher discovery is asynchronous. A ROS/DDS placeholder must
+        # never be trusted, but may be retried for a short bounded period.
+        # Wrong type, duplicate, or KNOWN wrong publisher still fails now.
+        pending = publisher_discovery_pending(endpoints)
         problem = publisher_problem(endpoints, required=False)
-        if problem:
+        if not pending and problem:
             raise RuntimeError(
                 'FAIL: untrusted fictional proposal publisher: ' + problem)
         if self.failure:
             raise RuntimeError('FAIL: ' + self.failure)
+        return not pending
 
 
 def main(args=None):
@@ -178,10 +185,35 @@ def main(args=None):
         rearmed = False
         blocked_start = None
         last_label = None
+        graph_pending_since = None
         until = time.monotonic() + 85.0
         while time.monotonic() < until:
             rclpy.spin_once(node, timeout_sec=0.12)
-            node.check_graph()
+            verified = node.check_graph()
+            if not verified:
+                now = time.monotonic()
+                if graph_pending_since is None:
+                    graph_pending_since = now
+                if now - graph_pending_since >= GRAPH_DISCOVERY_TIMEOUT_S:
+                    endpoints = node.get_publishers_info_by_topic(
+                        SYNTHETIC_CANDIDATE)
+                    raise RuntimeError(
+                        'FAIL: M8 fictional publisher graph identity '
+                        f'unresolved after {GRAPH_DISCOVERY_TIMEOUT_S}s: ' +
+                        publisher_problem(endpoints, required=True))
+                if last_label != 'WAITING_GRAPH_IDENTITY':
+                    print('M8 SHADOW: WAITING_GRAPH_IDENTITY', flush=True)
+                # No healthy labels based on unidentified publishers.
+                # A later discovery interruption invalidates prior recovery
+                # evidence, so full READY -> FAULT -> REARM is required anew.
+                node.window = ShadowWindow()
+                baseline = False
+                blocked = False
+                rearmed = False
+                blocked_start = None
+                last_label = 'WAITING_GRAPH_IDENTITY'
+                continue
+            graph_pending_since = None
             label = node.window.observe(node.snapshot())
             if label != last_label:
                 print('M8 SHADOW: ' + label, flush=True)

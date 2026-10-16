@@ -193,3 +193,46 @@ For an audit failure: attempt controlled lifecycle cleanup, then Ctrl+C
 in the fixture launch terminal. Keep `--network none --ipc private
 --pid private --cap-drop all --security-opt no-new-privileges` and never
 touch `leroy-ros` or `/cmd_vel`.
+
+## Follow-up: DDS graph-discovery placeholder (operator confirmed)
+
+In the M8 depth audit, `ros2 topic info --verbose` observed the
+**correct single** `m8_synthetic_candidate` publisher, type
+`geometry_msgs/msg/Twist`, namespace `/`. Yet the new Python audit
+node's *initial* endpoint lookup saw:
+
+```text
+discovered_count=1
+discovered=[{'node_name': '_NODE_NAME_UNKNOWN_',
+             'node_namespace': '_NODE_NAMESPACE_UNKNOWN_',
+             'topic_type': 'geometry_msgs/msg/Twist'}]
+```
+
+This is consistent with an **unresolved DDS/ROS graph endpoint name**,
+not proof of a rogue publisher. An independently launched Python
+subscriber has its own discovery timeline; the preceding `ros2 topic
+info` command does not guarantee that subscriber has resolved its
+publisher metadata.
+
+The optional M8 audit therefore withholds **all healthy shadow
+results** and prints `M8 SHADOW: WAITING_GRAPH_IDENTITY` while no
+candidate publisher, or a **single** candidate of the correct type
+with an unresolved node name/namespace, remains visible. It retries
+up to 12 seconds. Once exactly one matching node name, namespace and
+type resolves, the audit begins from a **fresh M7 rearm window** and
+requires the complete baseline → synthetic blackout veto → rearm →
+recovery sequence.
+
+A wrong known name/namespace, wrong type, or duplicate endpoint
+**fails immediately**. If the publisher remains unknown or absent
+for 12 seconds, the audit **fails with its actual endpoint list**.
+If publisher identity disappears later, M8 discards the existing
+healthy baseline and fault evidence; unknown identities never produce
+a positive decision. Neither a ROS node name nor a DDS endpoint is a
+cryptographic provenance guarantee; M8 remains a read-only test audit.
+
+This is a **hypothesis-informed correction**, not an operator-tested
+resolution of the earlier M8 failure. Build a new optional image
+tag and test both modes separately. Do not rerun Terminal 2 while the
+controller remains activated from a previous failed attempt; first
+shut down the isolated fixture, then start a fresh one.
