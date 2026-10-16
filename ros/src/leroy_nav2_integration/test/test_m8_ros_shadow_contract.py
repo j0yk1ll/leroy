@@ -148,3 +148,52 @@ def test_optional_container_build_fails_if_m8_launch_not_copied_or_installed():
         '/leroy_ws/install/leroy_nav2_integration/share/'
         'leroy_nav2_integration/launch/' + launch_name
     ) in docker
+
+def test_m8_publisher_identity_contract_reports_real_discovery_evidence():
+    """No unknown or duplicated endpoint may be treated as the fake source."""
+    from types import SimpleNamespace
+
+    from leroy_nav2_integration.shadow_endpoint_contract import (
+        endpoint_report, publisher_problem,
+    )
+
+    def ep(name='m8_synthetic_candidate', typ='geometry_msgs/msg/Twist'):
+        return SimpleNamespace(
+            node_name=name, node_namespace='/', topic_type=typ)
+
+    expected = ep()
+    assert publisher_problem([], required=False) is None
+    assert publisher_problem([expected], required=True) is None
+    assert publisher_problem([expected], required=False) is None
+
+    empty = publisher_problem([], required=True)
+    assert 'discovered_count=0' in empty
+
+    wrong = publisher_problem([ep('some_other_node')], required=False)
+    assert 'discovered_count=1' in wrong
+    assert 'some_other_node' in wrong
+    assert 'm8_synthetic_candidate' in wrong
+
+    bad_type = publisher_problem([ep(typ='std_msgs/msg/String')], required=True)
+    assert 'std_msgs/msg/String' in bad_type
+
+    doubled = publisher_problem([expected, expected], required=False)
+    assert 'discovered_count=2' in doubled
+    assert doubled.count('m8_synthetic_candidate') >= 2
+
+    assert endpoint_report([expected]) == [{
+        'node_name': 'm8_synthetic_candidate',
+        'node_namespace': '/',
+        'topic_type': 'geometry_msgs/msg/Twist',
+    }]
+
+
+def test_m8_audit_retains_strict_identity_check_at_start_and_finish():
+    source = AUDIT.read_text()
+    assert 'from .shadow_endpoint_contract import publisher_problem' in source
+    assert 'publisher_problem(endpoints, required=False)' in source
+    assert 'publisher_problem(endpoints, required=True)' in source
+    assert 'FAIL: untrusted fictional proposal publisher:' in source
+    assert 'FAIL: fake candidate publisher missing:' in source
+    assert 'create_publisher' not in calls(AUDIT)
+    assert "'/cmd_vel' in topics or '/odom' in topics" in source

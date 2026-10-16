@@ -158,3 +158,38 @@ and six clean exits.
 
 Draft PR must remain unmerged until reviewed; no M9 or actual motor
 interface without explicit separate authorization.
+
+## M8 failure triage — fictional publisher graph identity
+
+If `ros_shadow_audit` reports `FAIL: untrusted fictional proposal
+publisher`, **do not bypass the publisher identity check or wire the
+candidate topic to MPPI/motors**. A clean shutdown is not a shadow-audit
+PASS.
+
+With only Terminal 1's disconnected M8 fixture still running, inspect
+the ROS graph from within the **same** Podman container, before
+activating the controller or sending any action:
+
+```bash
+podman exec leroy-nav2-m8 bash -lc '
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  ros2 topic info --verbose /leroy_nav2/diagnostics/synthetic_shadow_candidate
+'
+```
+
+The expected graph advertises one publisher with node name
+`m8_synthetic_candidate` and type `geometry_msgs/msg/Twist`.
+Collect the full publisher-count, node-name, namespace and topic-type
+output. The M8 audit now prints those same fields on a failed check.
+**Multiple, wrong-named, or wrong-typed publishers remain test
+failures.** No fallback to accepting arbitrary `Twist` sources.
+
+The earlier M8 launch validated six clean fixture process exits
+following a failed audit, but the missing publisher identity evidence
+means the ROS-connected shadow-policy validation is still pending.
+
+For an audit failure: attempt controlled lifecycle cleanup, then Ctrl+C
+in the fixture launch terminal. Keep `--network none --ipc private
+--pid private --cap-drop all --security-opt no-new-privileges` and never
+touch `leroy-ros` or `/cmd_vel`.
