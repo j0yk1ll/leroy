@@ -143,6 +143,11 @@ def test_m16_uses_subscriptions_only_not_ros_publishers_services_actions():
         and isinstance(n.func, ast.Attribute)
     ]
     assert names.count('create_subscription') == 9
+    # Jazzy rclpy.Node.subscriptions is a read-only property. Static
+    # guard complements the real-node constructor test in the image build.
+    assert "self._m16_subscriptions = [" in source
+    assert "self.subscriptions =" not in source
+    assert "zip(INPUTS,self._m16_subscriptions)" in source
     for forbidden in (
         'create_publisher', 'create_service', 'create_client',
         'create_timer', 'send_goal_async', 'set_parameters',

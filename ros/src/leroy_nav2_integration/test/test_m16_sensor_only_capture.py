@@ -69,13 +69,20 @@ def test_runner_executes_one_passive_observer_and_shutdown():
             sh.index('source /leroy_ws/install/setup.bash') <
             sh.index('set -u', sh.index('source /leroy_ws/install/setup.bash')))
     assert 'M16_ROS_ENV_SELFTEST=PASS' in sh
+    assert 'M16_OBSERVER_INIT_SELFTEST=PASS' in sh
+    assert 'node = PassiveSensorObserver()' in sh
+    assert 'len(node._m16_subscriptions) == 9' in sh
     assert 'LEROY_M16_ENV_SELFTEST=1 /usr/local/bin/leroy-m16-sensor-run' in (
         WORKSPACE / 'Dockerfile.m16-sensors').read_text()
     assert 'ros2 launch /opt/m16/launch/m16_sensor_only.launch.py' in sh
     assert 'python3 -m leroy_nav2_integration.m16_passive_observer' in sh
     assert sh.count('python3 -m leroy_nav2_integration.m16_passive_observer') == 1
     assert 'trap cleanup EXIT' in sh
-    assert 'kill -INT "$launch_pid"' in sh
+    assert 'kill -TERM "$launch_pid"' in sh
+    assert 'kill -KILL "$launch_pid"' in sh
+    assert 'M16_SENSOR_LAUNCH_SHUTDOWN=LAUNCHER_EXITED_AFTER_SIGTERM' in sh
+    assert 'M16_SENSOR_LAUNCH_SHUTDOWN=FORCED_SIGKILL' in sh
+    assert 'kill -INT "$launch_pid"' not in sh
     assert 'M16_PASSIVE_REPORT_JSON=' in sh
     assert 'M16_CAMERA_DEPTH_VERDICT=' in sh
     assert 'OBSERVED_CAMERA_DEPTH_MESSAGE_CONTRACT' in sh

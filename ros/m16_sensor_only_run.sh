@@ -20,8 +20,26 @@ fi
 # Build-time entrypoint regression: exercise this exact ROS setup sequence
 # without needing a camera device or starting any ROS nodes. Not a sensor PASS.
 if [[ "${LEROY_M16_ENV_SELFTEST:-0}" == "1" ]]; then
-  PYTHONPATH="/opt/m16/monitor:${PYTHONPATH:-}" python3 -c \
-    'import rclpy; import leroy_nav2_integration.m16_passive_observer; print("M16_ROS_ENV_SELFTEST=PASS")'
+  PYTHONPATH="/opt/m16/monitor:${PYTHONPATH:-}" python3 - <<'PY'
+import rclpy
+from leroy_nav2_integration.m16_passive_observer import PassiveSensorObserver
+
+rclpy.init()
+node = None
+try:
+    node = PassiveSensorObserver()
+    assert len(node._m16_subscriptions) == 9
+    report = node.report(5.0)
+    assert report['observation_only'] is True
+    assert report['verdict'] == 'INCOMPLETE_OR_UNVERIFIED_REAL_STREAMS'
+    print('M16_OBSERVER_INIT_SELFTEST=PASS', flush=True)
+finally:
+    if node is not None:
+        node.destroy_node()
+    if rclpy.ok():
+        rclpy.shutdown()
+PY
+  echo 'M16_ROS_ENV_SELFTEST=PASS'
   exit 0
 fi
 
@@ -48,19 +66,24 @@ launch_pid=$!
 
 cleanup() {
   trap - EXIT INT TERM
-  echo 'M16 SENSOR-ONLY: stopping sensor launch'
-  kill -INT "$launch_pid" 2>/dev/null || true
+  echo 'M16 SENSOR-ONLY: stopping sensor launch with SIGTERM'
+  # Bash starts background jobs with SIGINT ignored in a noninteractive
+  # shell. LaunchService handles SIGTERM and shuts down its child nodes.
+  kill -TERM "$launch_pid" 2>/dev/null || true
   local count
-  for count in {1..60}; do
+  for count in {1..75}; do
     if ! kill -0 "$launch_pid" 2>/dev/null; then
       wait "$launch_pid" 2>/dev/null || true
+      echo 'M16_SENSOR_LAUNCH_SHUTDOWN=LAUNCHER_EXITED_AFTER_SIGTERM'
       return
     fi
     sleep .2
   done
-  echo 'M16 SENSOR-ONLY: SIGINT cleanup timed out; terminating launch'
-  kill -TERM "$launch_pid" 2>/dev/null || true
+  echo 'M16 SENSOR-ONLY: SIGTERM timeout; escalating to SIGKILL' >&2
+  kill -KILL "$launch_pid" 2>/dev/null || true
   wait "$launch_pid" 2>/dev/null || true
+  echo 'M16_SENSOR_LAUNCH_SHUTDOWN=FORCED_SIGKILL'
+  exit 1
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM

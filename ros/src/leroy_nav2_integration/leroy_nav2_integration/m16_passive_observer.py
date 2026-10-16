@@ -76,7 +76,10 @@ class PassiveSensorObserver(Node):
         latched = QoSProfile(
             depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
             reliability=ReliabilityPolicy.RELIABLE)
-        self.subscriptions = [
+        # rclpy.Node.subscriptions is a read-only property on Jazzy.
+        # Hold our handles in a private attribute instead; the Node owns
+        # subscriptions and never creates publishers or service clients.
+        self._m16_subscriptions = [
             self.create_subscription(
                 Image, INPUTS['camera_image'][0],
                 lambda m: self._image('camera_image', m),
@@ -107,7 +110,7 @@ class PassiveSensorObserver(Node):
                 PointCloud2, INPUTS['obstacle_cloud'][0],
                 self._cloud, qos_profile_sensor_data),
         ]
-        if any(s.topic_name != INPUTS[k][0] for k,s in zip(INPUTS,self.subscriptions)):
+        if any(s.topic_name != INPUTS[k][0] for k,s in zip(INPUTS,self._m16_subscriptions)):
             raise RuntimeError('M16 refuses ROS subscription remapping')
         self.get_logger().info(
             'M16 passive observer: subscriptions only, never commands motors')
