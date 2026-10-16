@@ -18,6 +18,7 @@ from rclpy.qos import (
 )
 from sensor_msgs.msg import PointCloud2
 
+from .shadow_endpoint_contract import publisher_problem
 from .shadow_policy import DiagnosticProposal, ShadowSnapshot, ShadowWindow
 from .synthetic_shadow_candidate import SYNTHETIC_CANDIDATE
 
@@ -158,10 +159,10 @@ class RosShadowAudit(Node):
                     'velocity_smoother', 'robot_state_publisher')):
                 raise RuntimeError('FAIL: forbidden hardware/navigation node')
         endpoints = self.get_publishers_info_by_topic(SYNTHETIC_CANDIDATE)
-        if endpoints and (
-                len(endpoints) != 1 or
-                endpoints[0].node_name != 'm8_synthetic_candidate'):
-            raise RuntimeError('FAIL: untrusted fictional proposal publisher')
+        problem = publisher_problem(endpoints, required=False)
+        if problem:
+            raise RuntimeError(
+                'FAIL: untrusted fictional proposal publisher: ' + problem)
         if self.failure:
             raise RuntimeError('FAIL: ' + self.failure)
 
@@ -208,9 +209,10 @@ def main(args=None):
             if label == 'HEALTHY_DIAGNOSTIC_ONLY' and rearmed:
                 # Check the producer still belongs only to this fixture.
                 endpoints = node.get_publishers_info_by_topic(SYNTHETIC_CANDIDATE)
-                if (len(endpoints) != 1 or
-                        endpoints[0].node_name != 'm8_synthetic_candidate'):
-                    raise RuntimeError('FAIL: fake candidate publisher missing')
+                problem = publisher_problem(endpoints, required=True)
+                if problem:
+                    raise RuntimeError(
+                        'FAIL: fake candidate publisher missing: ' + problem)
                 print(
                     'PASS: M8 ROS shadow ' + node.mode +
                     ' observed healthy fake data, vetoed stale input, '
