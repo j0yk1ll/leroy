@@ -63,6 +63,14 @@ def test_sensor_launch_only_offline_no_bridge_or_loc_state_override():
 def test_runner_executes_one_passive_observer_and_shutdown():
     sh = (WORKSPACE / 'm16_sensor_only_run.sh').read_text()
     assert 'set -Eeuo pipefail' in sh
+    assert 'set +u' in sh and 'set -u' in sh
+    assert (sh.index('set +u') <
+            sh.index('source /opt/ros/jazzy/setup.bash') <
+            sh.index('source /leroy_ws/install/setup.bash') <
+            sh.index('set -u', sh.index('source /leroy_ws/install/setup.bash')))
+    assert 'M16_ROS_ENV_SELFTEST=PASS' in sh
+    assert 'LEROY_M16_ENV_SELFTEST=1 /usr/local/bin/leroy-m16-sensor-run' in (
+        WORKSPACE / 'Dockerfile.m16-sensors').read_text()
     assert 'ros2 launch /opt/m16/launch/m16_sensor_only.launch.py' in sh
     assert 'python3 -m leroy_nav2_integration.m16_passive_observer' in sh
     assert sh.count('python3 -m leroy_nav2_integration.m16_passive_observer') == 1

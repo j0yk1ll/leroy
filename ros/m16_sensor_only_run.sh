@@ -2,8 +2,13 @@
 # M16 only: no bridge, no serial device, no motors, no Nav2 control.
 set -Eeuo pipefail
 
+# ROS/ament setup scripts are not nounset-safe: they test unset variables
+# (e.g. AMENT_TRACE_SETUP_FILES). Keep error checking but temporarily
+# disable nounset ONLY for sourcing the trusted, installed ROS overlays.
+set +u
 source /opt/ros/jazzy/setup.bash
 source /leroy_ws/install/setup.bash
+set -u
 
 if [[ "${LEROY_M16_SENSOR_ONLY:-}" != "1" ||
       "${LEROY_NAV2_DRY_RUN:-}" != "1" ||
@@ -12,6 +17,14 @@ if [[ "${LEROY_M16_SENSOR_ONLY:-}" != "1" ||
   echo 'FAIL: M16 isolated sensor-only environment not set' >&2
   exit 1
 fi
+# Build-time entrypoint regression: exercise this exact ROS setup sequence
+# without needing a camera device or starting any ROS nodes. Not a sensor PASS.
+if [[ "${LEROY_M16_ENV_SELFTEST:-0}" == "1" ]]; then
+  PYTHONPATH="/opt/m16/monitor:${PYTHONPATH:-}" python3 -c \
+    'import rclpy; import leroy_nav2_integration.m16_passive_observer; print("M16_ROS_ENV_SELFTEST=PASS")'
+  exit 0
+fi
+
 if [[ "${M16_VIDEO_DEVICE:-}" != "/dev/video2" ]]; then
   echo 'FAIL: M16 only permits explicitly mapped /dev/video2' >&2
   exit 1

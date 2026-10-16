@@ -36,7 +36,8 @@ RUN chmod 0755 /usr/local/bin/leroy-m16-sensor-run \
     && test -s /opt/DepthART/checkpoints/metric/depthart_metric_indoor_s_448.pth \
     && ros2 pkg executables usb_cam | grep -Fx 'usb_cam usb_cam_node_exe' \
     && ros2 pkg executables leroy_depthart | grep -Fx 'leroy_depthart depthart_node' \
-    && test -f /opt/ros/jazzy/lib/rclcpp_components/component_container
+    && test -f /opt/ros/jazzy/lib/rclcpp_components/component_container \
+    && LEROY_M16_ENV_SELFTEST=1 /usr/local/bin/leroy-m16-sensor-run
 
 # Overrides the inherited normal robot startup entry; starts only M16.
 CMD ["/usr/local/bin/leroy-m16-sensor-run"]
