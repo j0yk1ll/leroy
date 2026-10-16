@@ -1,0 +1,43 @@
+# M16 capture sidecar, never the normal Leroy robot runtime.
+# Uses the locally verified low-PWM base to inherit patched usb_cam, calibrated
+# camera YAML, CPU DepthART checkpoint and image_proc. DOES NOT run bridge.
+# The inherited image contains leroy_bridge code; the M16 launch intentionally
+# has no bridge node, and the operator MUST map only /dev/video2 (no serial).
+ARG LEROY_SENSOR_BASE_IMAGE=localhost/leroy-ros:jazzy-lowpwm
+FROM ${LEROY_SENSOR_BASE_IMAGE}
+
+ENV LEROY_M16_SENSOR_ONLY=1 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=168 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    LEROY_M16_DURATION_S=45 \
+    M16_VIDEO_DEVICE=/dev/video2 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY src/leroy_bringup/launch/m16_sensor_only.launch.py \
+    /opt/m16/launch/m16_sensor_only.launch.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/__init__.py \
+    /opt/m16/monitor/leroy_nav2_integration/__init__.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/m16_passive_observer.py \
+    /opt/m16/monitor/leroy_nav2_integration/m16_passive_observer.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/m16_passive_contract.py \
+    /opt/m16/monitor/leroy_nav2_integration/m16_passive_contract.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/m15_sensor_contract.py \
+    /opt/m16/monitor/leroy_nav2_integration/m15_sensor_contract.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/fault_contract.py \
+    /opt/m16/monitor/leroy_nav2_integration/fault_contract.py
+COPY m16_sensor_only_run.sh /usr/local/bin/leroy-m16-sensor-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m16-sensor-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && python3 -m py_compile /opt/m16/launch/m16_sensor_only.launch.py \
+       /opt/m16/monitor/leroy_nav2_integration/*.py \
+    && test -s /config/camera/front_camera.yaml \
+    && test -s /opt/DepthART/checkpoints/metric/depthart_metric_indoor_s_448.pth \
+    && ros2 pkg executables usb_cam | grep -Fx 'usb_cam usb_cam_node_exe' \
+    && ros2 pkg executables leroy_depthart | grep -Fx 'leroy_depthart depthart_node' \
+    && test -f /opt/ros/jazzy/lib/rclcpp_components/component_container
+
+# Overrides the inherited normal robot startup entry; starts only M16.
+CMD ["/usr/local/bin/leroy-m16-sensor-run"]

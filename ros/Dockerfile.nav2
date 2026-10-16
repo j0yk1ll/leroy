@@ -29,6 +29,11 @@ COPY src/leroy_nav2_odometry /leroy_ws/src/leroy_nav2_odometry
 COPY src/leroy_nav2_integration /leroy_ws/src/leroy_nav2_integration
 # Copy the build recipe only so the static safety/quoting regression test can inspect it.
 COPY Dockerfile.nav2 /leroy_ws/Dockerfile.nav2
+# M16 sensor-only packaging is static-tested in this disconnected image.
+# Copy only the launch file and build/run recipes; never sensor drivers or bridge.
+COPY Dockerfile.m16-sensors m16_sensor_only_run.sh /leroy_ws/
+COPY src/leroy_bringup/launch/m16_sensor_only.launch.py /leroy_ws/m16_sensor_only.launch.py
+RUN bash -n /leroy_ws/m16_sensor_only_run.sh
 
 # Fail at build time if the source checkout/context predates M8.
 RUN python3 -c "from pathlib import Path; p=Path('/leroy_ws/src/leroy_nav2_integration/launch/m8_ros_shadow_fixture.launch.py'); assert p.is_file(), f'FAIL: M8 launch missing from COPY build context: {p}'"
