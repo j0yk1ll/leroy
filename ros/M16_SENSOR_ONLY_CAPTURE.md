@@ -98,6 +98,27 @@ podman build --no-cache \
 This is a lightweight derived image; it does not redownload the model,
 recompile the camera or rebuild the motor bridge.
 
+## ROS environment initialization regression
+
+In the initial operator trial, the container exited before launching any
+camera process with:
+```text
+/opt/ros/jazzy/setup.bash: line 8: AMENT_TRACE_SETUP_FILES: unbound variable
+```
+The M16 runner uses strict Bash error checking but now suspends `nounset`
+only while sourcing the installed ROS and Leroy overlay setup scripts.
+`set -u` is restored before normal startup. The derived sensor image's
+build performs `LEROY_M16_ENV_SELFTEST=1` against the real runner,
+requiring `M16_ROS_ENV_SELFTEST=PASS` without devices or sensor startup.
+A smoke pass only verifies shell/ROS imports, not real sensor readiness.
+Keep `LEROY_M16_ENV_SELFTEST` unset for the real camera run.
+
+Run the operator commands in a terminal without inherited `set -e` when
+collecting an unknown Podman exit code; otherwise a nonzero status could
+close that terminal. Use `set +e`, `set +u`, and `set +o pipefail`
+before the container command and capture `${PIPESTATUS[0]}` immediately
+after the `tee` pipeline.
+
 ## Step 4 — Complete 45-second real-camera observation (one terminal)
 
 ```bash
