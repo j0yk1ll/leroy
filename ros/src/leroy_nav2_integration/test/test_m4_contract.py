@@ -105,6 +105,8 @@ def test_pose_and_rolling_origin_must_actually_move():
     assert not spans([float('nan'), .2], .05)
     assert not spans([], .05)
     probe = (ROOT / 'leroy_nav2_integration/integrated_probe.py').read_text()
+    assert "TFMessage, '/tf_static', self._on_tf_static, grid_qos" in probe
+    assert 'self.camera_tf_seen' in probe
     assert 'self.lethal_and_unknown' in probe
     assert "100 in msg.data and -1 in msg.data" in probe
     assert 'self.center_matches' in probe

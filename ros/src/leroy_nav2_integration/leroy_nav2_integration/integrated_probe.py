@@ -37,6 +37,7 @@ class IntegratedProbe(Node):
         self.raw_stamps = set()
         self.obstacle_stamps = set()
         self.cloud_pairs = 0
+        self.camera_tf_seen = False
         self.stopped = False
         self.forward = False
         self.strafe = False
@@ -54,6 +55,8 @@ class IntegratedProbe(Node):
             self._on_odom, qos_profile_sensor_data)
         self.create_subscription(
             TFMessage, '/tf', self._on_tf, qos_profile_sensor_data)
+        self.create_subscription(
+            TFMessage, '/tf_static', self._on_tf_static, grid_qos)
         self.create_subscription(
             PointCloud2, '/leroy_nav2/diagnostics/raw_depth_points',
             self._on_raw, qos_profile_sensor_data)
@@ -110,6 +113,17 @@ class IntegratedProbe(Node):
         self.odom_by_stamp[stamp] = (p.x, p.y, q.z, q.w)
         self._pair_tf(stamp)
 
+    def _on_tf_static(self, msg):
+        for tf in msg.transforms:
+            if (tf.header.frame_id == 'base_link'
+                    and tf.child_frame_id == 'sim_camera_optical_frame'):
+                q = tf.transform.rotation
+                v = (q.x, q.y, q.z, q.w, tf.transform.translation.z)
+                if (all(math.isfinite(a) for a in v)
+                        and abs(sum(a * a for a in v[:4]) - 1.0) < 1e-5
+                        and v[4] > 0.0):
+                    self.camera_tf_seen = True
+
     def _on_tf(self, msg):
         for tf in msg.transforms:
             if tf.header.frame_id == 'odom' and tf.child_frame_id == 'base_link':
@@ -155,6 +169,7 @@ class IntegratedProbe(Node):
     def ready(self):
         return all((
             self.odom_tf_matches >= 5,
+            self.camera_tf_seen,
             self.cloud_pairs >= 2,
             self.lethal_and_unknown,
             self.center_matches >= 2,
@@ -193,7 +208,8 @@ def main(args=None):
                 return
         raise RuntimeError(
             'FAIL: incomplete M4 integration: '
-            f'tf={node.odom_tf_matches} clouds={node.cloud_pairs} '
+            f'tf={node.odom_tf_matches} camera_tf={node.camera_tf_seen} '
+            f'clouds={node.cloud_pairs} '
             f'lethal_unknown={node.lethal_and_unknown} '
             f'center={node.center_matches} '
             f'odom_x={spans(node.x_samples, 0.10)} '

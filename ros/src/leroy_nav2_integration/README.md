@@ -87,7 +87,9 @@ PASS: synthetic odom->base_link->camera TF, same-stamp depth clouds, odom-frame 
 finalized [4]
 ```
 
-The finite probe monitors stamped odometry and TF, both synthetic cloud
+The finite probe also requires a latched `base_link → sim_camera_optical_frame`
+static TF with a valid quaternion and positive synthetic camera height.
+It monitors stamped odometry and TF, both synthetic cloud
 frames and matching acquisition stamps, moving x/y/yaw poses, lethal
 and unknown space together in the same published costmap, rolling
 origin shifts for forward and sideways movements, and window center
