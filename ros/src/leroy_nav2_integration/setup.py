@@ -33,5 +33,6 @@ setup(
         'shadow_replay = leroy_nav2_integration.shadow_replay:main',
         'synthetic_shadow_candidate = leroy_nav2_integration.synthetic_shadow_candidate:main',
         'ros_shadow_audit = leroy_nav2_integration.ros_shadow_audit:main',
+        'mppi_shadow_probe = leroy_nav2_integration.m9_mppi_shadow_probe:main',
     ]},
 )
