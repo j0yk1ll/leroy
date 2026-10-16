@@ -29,9 +29,13 @@ COPY src/leroy_nav2_integration /leroy_ws/src/leroy_nav2_integration
 # Copy the build recipe only so the static safety/quoting regression test can inspect it.
 COPY Dockerfile.nav2 /leroy_ws/Dockerfile.nav2
 
+# Fail at build time if the source checkout/context predates M8.
+RUN python3 -c "from pathlib import Path; p=Path('/leroy_ws/src/leroy_nav2_integration/launch/m8_ros_shadow_fixture.launch.py'); assert p.is_file(), f'FAIL: M8 launch missing from COPY build context: {p}'"
+
 RUN . /opt/ros/jazzy/setup.sh \
     && colcon build --packages-select leroy_nav2 leroy_nav2_perception leroy_nav2_costmap_fixture leroy_nav2_odometry leroy_nav2_integration --cmake-args -DBUILD_TESTING=ON \
     && . /leroy_ws/install/setup.sh \
+    && python3 -c "from pathlib import Path; p=Path('/leroy_ws/install/leroy_nav2_integration/share/leroy_nav2_integration/launch/m8_ros_shadow_fixture.launch.py'); assert p.is_file(), f'FAIL: M8 launch missing from installed share: {p}'" \
     && colcon test --python-testing pytest --return-code-on-test-failure \
          --packages-select leroy_nav2 leroy_nav2_perception leroy_nav2_costmap_fixture leroy_nav2_odometry leroy_nav2_integration --event-handlers console_direct+ \
     && colcon test-result --verbose \
