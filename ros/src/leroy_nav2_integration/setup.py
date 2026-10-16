@@ -26,5 +26,6 @@ setup(
     license='Apache-2.0',
     entry_points={'console_scripts': [
         'integrated_probe = leroy_nav2_integration.integrated_probe:main',
+        'controller_probe = leroy_nav2_integration.controller_probe:main',
     ]},
 )
