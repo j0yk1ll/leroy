@@ -14,8 +14,7 @@ ENV LEROY_M16_SENSOR_ONLY=1 \
     M16_VIDEO_DEVICE=/dev/video2 \
     PYTHONDONTWRITEBYTECODE=1
 
-COPY src/leroy_bringup/launch/m16_sensor_only.launch.py \
-    /opt/m16/launch/m16_sensor_only.launch.py
+COPY m16_sensor_only.launch.py /opt/m16/launch/m16_sensor_only.launch.py
 COPY src/leroy_nav2_integration/leroy_nav2_integration/__init__.py \
     /opt/m16/monitor/leroy_nav2_integration/__init__.py
 COPY src/leroy_nav2_integration/leroy_nav2_integration/m16_passive_observer.py \

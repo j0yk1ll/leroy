@@ -32,7 +32,7 @@ COPY Dockerfile.nav2 /leroy_ws/Dockerfile.nav2
 # M16 sensor-only packaging is static-tested in this disconnected image.
 # Copy only the launch file and build/run recipes; never sensor drivers or bridge.
 COPY Dockerfile.m16-sensors m16_sensor_only_run.sh /leroy_ws/
-COPY src/leroy_bringup/launch/m16_sensor_only.launch.py /leroy_ws/m16_sensor_only.launch.py
+COPY m16_sensor_only.launch.py /leroy_ws/m16_sensor_only.launch.py
 RUN bash -n /leroy_ws/m16_sensor_only_run.sh
 
 # Fail at build time if the source checkout/context predates M8.

@@ -88,9 +88,10 @@ def test_capture_image_inherits_existing_camera_runtime_not_robot_cmd():
     assert 'ROS_DOMAIN_ID=168' in df
     assert 'ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST' in df
     assert 'COPY src/leroy_nav2_integration/leroy_nav2_integration/m16_passive_observer.py' in df
-    assert 'COPY src/leroy_bringup/launch/m16_sensor_only.launch.py' in df
+    assert 'COPY m16_sensor_only.launch.py /opt/m16/launch/m16_sensor_only.launch.py' in df
     assert 'COPY src/leroy_bridge' not in df
     assert 'COPY src/leroy_xrslam' not in df
+    assert 'COPY src/leroy_bringup' not in df
     assert 'CMD ["/usr/local/bin/leroy-entrypoint"]' not in df
     assert "leroy_bridge.launch.py" not in df
     assert "robot.launch.py" not in df
@@ -98,6 +99,7 @@ def test_capture_image_inherits_existing_camera_runtime_not_robot_cmd():
 
 def test_optional_image_runs_static_sensor_only_contract_regression():
     source = (WORKSPACE / 'Dockerfile.nav2').read_text()
+    assert 'COPY src/leroy_bringup' not in source
     for name in (
         'Dockerfile.m16-sensors', 'm16_sensor_only_run.sh',
         'm16_sensor_only.launch.py',
