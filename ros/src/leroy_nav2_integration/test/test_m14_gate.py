@@ -148,7 +148,37 @@ def test_m14_ros_gate_actual_publisher_contract():
     assert 'M14 diagnostic topic remapping forbidden' in s
     assert "'/cmd_vel' in topics" in s
     assert 'send_goal_async' not in s
-    assert 'serial' not in s
+    # Inspect executable Python syntax, not prose in the module docstring.
+    # The existing source says "serial" only to document excluded I/O.
+    tree = ast.parse(s)
+    imports = {
+        alias.name.split('.')[0]
+        for node in ast.walk(tree) if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        (node.module or '').split('.')[0]
+        for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+    }
+    assert not {'serial', 'serial_asyncio'} & imports
+    calls = [
+        node for node in ast.walk(tree) if isinstance(node, ast.Call)
+    ]
+    assert not any(
+        (isinstance(call.func, ast.Name)
+         and call.func.id in {'Serial', 'serial_for_url'})
+        or (isinstance(call.func, ast.Attribute)
+            and call.func.attr in {'Serial', 'serial_for_url'})
+        for call in calls
+    )
+    # Exactly two ROS publishers, both on the diagnostic-only topics.
+    publishers = [
+        call for call in calls
+        if isinstance(call.func, ast.Attribute)
+        and call.func.attr == 'create_publisher'
+    ]
+    assert len(publishers) == 2
+    assert {ast.unparse(call.args[1]) for call in publishers} == {
+        'GATED_TOPIC', 'STATUS_TOPIC'}
     assert 'self.create_timer(0.1, self._tick)' in s
 
 
