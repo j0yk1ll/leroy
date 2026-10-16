@@ -1,0 +1,42 @@
+# M4: diagnostic-only rolling Nav2 costmap in SYNTHETIC odom frame.
+# The only sensor is 4x4 fake depth; no planner/controller or real free space.
+costmap:
+  ros__parameters:
+    use_sim_time: false
+    global_frame: odom
+    robot_base_frame: base_link
+    update_frequency: 2.0
+    publish_frequency: 2.0
+    rolling_window: true
+    track_unknown_space: true
+    width: 4
+    height: 4
+    resolution: 0.05
+    transform_tolerance: 0.2
+    # Arbitrary footprint, NOT a measurement of Leroy.
+    footprint: "[[0.5, 0.5], [0.5, -0.5], [-0.5, -0.5], [-0.5, 0.5]]"
+    plugins: ["obstacle_layer", "inflation_layer"]
+    obstacle_layer:
+      plugin: "nav2_costmap_2d::ObstacleLayer"
+      enabled: true
+      # Unknown space never becomes free merely because depth is absent.
+      footprint_clearing_enabled: false
+      combination_method: 1
+      observation_sources: "depth_points"
+      depth_points:
+        topic: /leroy_nav2/diagnostics/obstacle_points
+        data_type: PointCloud2
+        marking: true
+        clearing: false
+        min_obstacle_height: -0.1
+        max_obstacle_height: 1.5
+        obstacle_min_range: 0.0
+        obstacle_max_range: 3.0
+        observation_persistence: 3.0
+        expected_update_rate: 0.0
+    inflation_layer:
+      plugin: "nav2_costmap_2d::InflationLayer"
+      # Synthetic footprint inscribed radius ~=0.510m, not real robot.
+      inflation_radius: 0.65
+      cost_scaling_factor: 3.0
+    always_send_full_costmap: true
