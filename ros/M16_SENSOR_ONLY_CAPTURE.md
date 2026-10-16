@@ -36,7 +36,7 @@ new launch are copied from the M16 branch; the original image/tag and
 The checked-in `/config/camera/front_camera.yaml` provides the prior
 calibration *asset* only. Its accuracy on the currently mounted camera,
 optical-frame extrinsics, and physical depth correctness are NOT certified
-by this run. If `/dev/video2` is not the actual video capture device,
+by this run. If host `/dev/video6` is not the actual video capture device,
 STOP and report the preflight; do not map random video or serial devices.
 
 The rectifier uses the same component architecture as the existing robot
@@ -53,8 +53,8 @@ Run from an existing Leroy Git checkout (this block finds repository root):
 set -e
 cd "$(git rev-parse --show-toplevel)"
 git fetch origin
-git switch feature/nav2-m16-sensor-only-capture
-git pull --ff-only origin feature/nav2-m16-sensor-only-capture
+git switch main
+git pull --ff-only origin main
 cd ros
 podman build --no-cache -f Dockerfile.nav2 -t leroy-nav2:m16-passive .
 ```
@@ -70,8 +70,8 @@ Still in `ros/`:
 ```bash
 set -e
 podman image exists localhost/leroy-ros:jazzy-lowpwm
-test -c /dev/video2
-ls -l /dev/video2
+test -c /dev/video6
+ls -l /dev/video6
 podman inspect leroy-ros --format \
   'M16 existing robot container: status={{.State.Status}} image={{.Config.Image}}'
 ```
@@ -81,10 +81,10 @@ and the preexisting `leroy-ros` is still stopped. Do NOT use
 `podman start leroy-ros`; the normal robot launch starts a motor-capable
 bridge and is not required for this sensor experiment.
 
-If `test -c /dev/video2` fails, stop. Verify which physical camera
+If `test -c /dev/video6` fails, stop. Verify which physical camera
 corresponds to the checked-in calibration file *outside this test*;
 do not guess a different V4L2 node. The current follow-up is fixed to
-the known, previously configured `/dev/video2` interface.
+the currently identified host `/dev/video6` interface, mapped to internal `/dev/video2`.
 
 ## Step 3 — Build separate M16 camera-only image
 
@@ -119,16 +119,38 @@ close that terminal. Use `set +e`, `set +u`, and `set +o pipefail`
 before the container command and capture `${PIPESTATUS[0]}` immediately
 after the `tee` pipeline.
 
+## Jazzy runtime constructor and shutdown regression
+
+The first real-camera trial **opened the host /dev/video6 camera** and ran
+DepthART, but the observer failed immediately while assigning
+`self.subscriptions`: Jazzy's `rclpy.Node.subscriptions` is a read-only
+property. The corrected implementation retains subscription handles as
+`self._m16_subscriptions`.
+
+The sensor-only image build smoke now **constructs** a real
+`PassiveSensorObserver`, verifies nine active subscription handles and
+an incomplete read-only summary with no sources, and prints
+`M16_OBSERVER_INIT_SELFTEST=PASS` and `M16_ROS_ENV_SELFTEST=PASS`.
+It does NOT claim actual camera/depth acceptance. The runner now sends
+SIGTERM first to its background ROS launch, because noninteractive Bash
+background jobs may ignore SIGINT. It prints
+`M16_SENSOR_LAUNCH_SHUTDOWN=LAUNCHER_EXITED_AFTER_SIGTERM` if the launch
+process exits or `...=FORCED_SIGKILL` and exits nonzero after 15 seconds.
+Inspect ROS child exit logs separately.
+
 ## Step 4 — Complete 45-second real-camera observation (one terminal)
 
 ```bash
-set -o pipefail
+# On the Arch Linux HOST; no sourcing of /opt/ros or /leroy_ws here.
+set +e
+set +u
+set +o pipefail
 podman run --rm --name leroy-m16-camera-only \
   --network none --ipc private --pid private --shm-size 512m \
   --cap-drop all --security-opt no-new-privileges \
   --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=512m \
-  --device /dev/video2:/dev/video2 \
+  --device /dev/video6:/dev/video2 \
   -e ROS_DOMAIN_ID=168 \
   -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   -e LEROY_M16_SENSOR_ONLY=1 \
@@ -137,6 +159,8 @@ podman run --rm --name leroy-m16-camera-only \
   -e M16_VIDEO_DEVICE=/dev/video2 \
   leroy-ros:m16-sensor-only \
   2>&1 | tee m16_real_camera_depth.log
+M16_CAPTURE_EXIT=${PIPESTATUS[0]}
+echo "M16_CAPTURE_EXIT_CODE=$M16_CAPTURE_EXIT"
 ```
 
 This one terminal automatically performs all operations:
@@ -146,8 +170,8 @@ This one terminal automatically performs all operations:
 3. Runs the original **M16 read-only observer** for a bounded 45 seconds;
 4. Emits the full `M16_PASSIVE_REPORT_JSON=`, `M16_VERDICT=` and
    **new** `M16_CAMERA_DEPTH_VERDICT=`;
-5. Signals the launch for shutdown; a 12-second fallback terminates it
-   if graceful cleanup hangs; Podman then removes only the dedicated
+5. Signals the launch for shutdown; a 15-second fallback forcibly terminates
+   it if shutdown hangs, explicitly marking the run as unsuccessful; Podman then removes only the dedicated
    `leroy-m16-camera-only` container.
 
 No second terminal is necessary for normal execution. If it hangs,
@@ -199,8 +223,10 @@ frames or camera images.
   even if camera/depth passes, because this **deliberately isolated**
   source does not start IMU, XRSLAM, odom/TF or calibrated obstacle
   conversion. Those are separate M16 validation steps.
-- A missing report line, nonzero process exit, or unclean three-process
-  shutdown is a test-infrastructure failure and needs log review.
+- A missing report line, nonzero process exit, or forced shutdown marker is a
+  test-infrastructure failure and needs log review. A launch-process exit
+  after SIGTERM alone does NOT prove every child process exited cleanly;
+  inspect ROS process-exit logs.
 
 **This is partial real-source software validation only.** It is a
 step toward validating Leroy's actual camera/DepthART performance
