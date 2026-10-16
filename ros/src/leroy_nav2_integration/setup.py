@@ -37,5 +37,8 @@ setup(
         'm10_fake_depth = leroy_nav2_integration.m10_triggered_fake_fault:main_depth',
         'm10_fake_odom = leroy_nav2_integration.m10_triggered_fake_fault:main_odom',
         'm10_active_fault_probe = leroy_nav2_integration.m10_active_fault_probe:main',
+        'm11_timed_depth = leroy_nav2_integration.m11_timed_fake_fault:main_depth',
+        'm11_timed_odom = leroy_nav2_integration.m11_timed_fake_fault:main_odom',
+        'm11_blackout_probe = leroy_nav2_integration.m11_blackout_probe:main',
     ]},
 )
