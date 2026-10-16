@@ -130,3 +130,21 @@ def test_m8_executables_registered_in_optional_image():
     for forbidden in ('COPY src/leroy_bridge', 'COPY src/leroy_depthart',
                       'COPY src/leroy_bringup'):
         assert forbidden not in docker
+
+
+def test_optional_container_build_fails_if_m8_launch_not_copied_or_installed():
+    """Catch stale Docker contexts and incomplete ROS package install data."""
+    root = ROOT.parents[1]
+    docker = (root / 'Dockerfile.nav2').read_text()
+    setup = (ROOT / 'setup.py').read_text()
+    launch_name = 'm8_ros_shadow_fixture.launch.py'
+    assert (ROOT / 'launch' / launch_name).is_file()
+    assert "glob('launch/*.launch.py')" in setup
+    assert 'FAIL: M8 launch missing from COPY build context' in docker
+    assert 'FAIL: M8 launch missing from installed share' in docker
+    assert docker.count(launch_name) >= 2
+    assert '/leroy_ws/src/leroy_nav2_integration/launch/' + launch_name in docker
+    assert (
+        '/leroy_ws/install/leroy_nav2_integration/share/'
+        'leroy_nav2_integration/launch/' + launch_name
+    ) in docker
