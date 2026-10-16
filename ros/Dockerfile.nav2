@@ -69,7 +69,11 @@ RUN . /opt/ros/jazzy/setup.sh \
     && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m13_authority_design' \
     && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m14_software_gate' \
     && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m14_gate_audit' \
-    && python3 -c "from pathlib import Path; p=Path('/leroy_ws/install/leroy_nav2_integration/share/leroy_nav2_integration/launch/m14_gate_fault_fixture.launch.py'); assert p.is_file(), f'FAIL: missing installed M14 launch: {p}'"
+    && python3 -c "from pathlib import Path; p=Path('/leroy_ws/install/leroy_nav2_integration/share/leroy_nav2_integration/launch/m14_gate_fault_fixture.launch.py'); assert p.is_file(), f'FAIL: missing installed M14 launch: {p}'" \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m15_real_input_gate' \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m15_replay_source' \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m15_input_probe' \
+    && python3 -c "from pathlib import Path; p=Path('/leroy_ws/install/leroy_nav2_integration/share/leroy_nav2_integration/launch/m15_real_input_replay.launch.py'); assert p.is_file(), f'FAIL: missing installed M15 replay launch: {p}'"
 
 # A non-running shell is the default: starting any Nav2 node is deliberate.
 CMD ["/bin/bash"]

@@ -44,5 +44,8 @@ setup(
         'm13_authority_design = leroy_nav2_integration.m13_authority_design:main',
         'm14_software_gate = leroy_nav2_integration.m14_software_gate:main',
         'm14_gate_audit = leroy_nav2_integration.m14_gate_audit:main',
+        'm15_real_input_gate = leroy_nav2_integration.m15_real_input_gate:main',
+        'm15_replay_source = leroy_nav2_integration.m15_replay_source:main',
+        'm15_input_probe = leroy_nav2_integration.m15_input_probe:main',
     ]},
 )
