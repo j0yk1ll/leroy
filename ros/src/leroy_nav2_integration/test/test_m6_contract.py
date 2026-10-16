@@ -163,3 +163,9 @@ def test_m6_executables_exist_in_optional_image_recipe():
     for forbidden in ('COPY src/leroy_bridge', 'COPY src/leroy_bringup',
                       'COPY src/leroy_depthart'):
         assert forbidden not in recipe
+
+def test_both_missing_streams_cannot_masquerade_as_one_fault():
+    a = healthy_inputs()
+    a.update(odom_recv=None, odom_stamp=None,
+             depth_recv=None, depth_stamp=None)
+    assert diagnostic_state(**a) == 'BLOCKED_BOTH'

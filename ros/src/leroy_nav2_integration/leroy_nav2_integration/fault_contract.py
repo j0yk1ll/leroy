@@ -44,9 +44,15 @@ def diagnostic_state(*, now_mono, now_ros, odom_recv, odom_stamp,
     """
     if not math.isfinite(now_mono) or not math.isfinite(now_ros):
         return 'BLOCKED_CLOCK'
-    if not _recent(now_mono, now_ros, odom_recv, odom_stamp):
+    odom_fresh = _recent(now_mono, now_ros, odom_recv, odom_stamp)
+    depth_fresh = _recent(now_mono, now_ros, depth_recv, depth_stamp)
+    # An isolated fault must never be attributed to only one stream when
+    # both streams have dropped. Keep this evidence explicit.
+    if not odom_fresh and not depth_fresh:
+        return 'BLOCKED_BOTH'
+    if not odom_fresh:
         return 'BLOCKED_ODOM'
-    if not _recent(now_mono, now_ros, depth_recv, depth_stamp):
+    if not depth_fresh:
         return 'BLOCKED_DEPTH'
     if not map_valid or not _recent(now_mono, now_ros, map_recv, now_ros):
         return 'BLOCKED_COSTMAP'
