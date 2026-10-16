@@ -34,5 +34,8 @@ setup(
         'synthetic_shadow_candidate = leroy_nav2_integration.synthetic_shadow_candidate:main',
         'ros_shadow_audit = leroy_nav2_integration.ros_shadow_audit:main',
         'mppi_shadow_probe = leroy_nav2_integration.m9_mppi_shadow_probe:main',
+        'm10_fake_depth = leroy_nav2_integration.m10_triggered_fake_fault:main_depth',
+        'm10_fake_odom = leroy_nav2_integration.m10_triggered_fake_fault:main_odom',
+        'm10_active_fault_probe = leroy_nav2_integration.m10_active_fault_probe:main',
     ]},
 )

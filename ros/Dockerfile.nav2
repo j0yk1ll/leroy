@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-navigation2 \
     ros-jazzy-nav2-bringup \
     ros-jazzy-ament-cmake-pytest \
+    ros-jazzy-std-srvs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /leroy_ws
@@ -55,7 +56,11 @@ RUN . /opt/ros/jazzy/setup.sh \
     && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration shadow_replay' \
     && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration synthetic_shadow_candidate' \
     && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration ros_shadow_audit' \
-    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration mppi_shadow_probe'
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration mppi_shadow_probe' \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m10_fake_depth' \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m10_fake_odom' \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration m10_active_fault_probe' \
+    && python3 -c "from pathlib import Path; p=Path('/leroy_ws/install/leroy_nav2_integration/share/leroy_nav2_integration/launch/m10_active_fault_fixture.launch.py'); assert p.is_file(), f'FAIL: missing installed M10 launch: {p}'"
 
 # A non-running shell is the default: starting any Nav2 node is deliberate.
 CMD ["/bin/bash"]
