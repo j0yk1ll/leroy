@@ -27,5 +27,8 @@ setup(
     entry_points={'console_scripts': [
         'integrated_probe = leroy_nav2_integration.integrated_probe:main',
         'controller_probe = leroy_nav2_integration.controller_probe:main',
+        'fault_depth_fixture = leroy_nav2_integration.fault_depth_fixture:main',
+        'fault_odom_fixture = leroy_nav2_integration.fault_odom_fixture:main',
+        'fault_audit = leroy_nav2_integration.fault_audit:main',
     ]},
 )

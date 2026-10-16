@@ -44,7 +44,10 @@ RUN . /opt/ros/jazzy/setup.sh \
     && ros2 pkg executables leroy_nav2_odometry | grep -Fx 'leroy_nav2_odometry synthetic_odom' \
     && ros2 pkg executables leroy_nav2_odometry | grep -Fx 'leroy_nav2_odometry odom_probe' \
     && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration integrated_probe' \
-    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration controller_probe'
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration controller_probe' \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration fault_depth_fixture' \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration fault_odom_fixture' \
+    && ros2 pkg executables leroy_nav2_integration | grep -Fx 'leroy_nav2_integration fault_audit'
 
 # A non-running shell is the default: starting any Nav2 node is deliberate.
 CMD ["/bin/bash"]
