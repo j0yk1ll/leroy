@@ -41,5 +41,6 @@ setup(
         'm11_timed_odom = leroy_nav2_integration.m11_timed_fake_fault:main_odom',
         'm11_blackout_probe = leroy_nav2_integration.m11_blackout_probe:main',
         'm12_no_go_audit = leroy_nav2_integration.m12_no_go_audit:main',
+        'm13_authority_design = leroy_nav2_integration.m13_authority_design:main',
     ]},
 )
