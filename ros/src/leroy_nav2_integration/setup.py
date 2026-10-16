@@ -47,5 +47,6 @@ setup(
         'm15_real_input_gate = leroy_nav2_integration.m15_real_input_gate:main',
         'm15_replay_source = leroy_nav2_integration.m15_replay_source:main',
         'm15_input_probe = leroy_nav2_integration.m15_input_probe:main',
+        'm16_passive_observer = leroy_nav2_integration.m16_passive_observer:main',
     ]},
 )
