@@ -111,7 +111,7 @@ def test_action_probe_is_bounded_and_does_not_publish_commands():
     assert "'/cmd_vel' in topics or '/odom' in topics" in source
     assert "'/local_costmap/costmap'" in source
     assert 'self.map_ready' in source
-    assert 'self.nonzero_samples >= 1' in source
+    assert 'node.nonzero_samples >= 1' in source
     assert 'abs(linear.y) <= 0.151' in source
     assert 'no /cmd_vel or live /odom' in source
     assert 'create_publisher(' not in source
