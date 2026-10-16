@@ -1,6 +1,6 @@
 """M3 test matrix: ROS-free synthetic mecanum and fail-closed geometry."""
 
-from math import isclose, pi
+from math import pi
 
 import pytest
 
@@ -41,12 +41,6 @@ def test_wheel_sign_convention_independent_lateral_and_yaw():
     assert yaw.vy == pytest.approx(0.)
     assert yaw.wz > 0
 
-
-@pytest.mark.parametrize('bad', [
-    Geometry,  # handled separately
-])
-def test_geometry_class_is_present(bad):
-    assert bad is Geometry
 
 
 @pytest.mark.parametrize('values', [
@@ -126,3 +120,12 @@ def test_motion_profile_never_depends_on_remote_velocity_commands():
         assert forbidden not in pub and forbidden not in launch
     assert 'cmd_vel' in probe  # fail-closed graph assertion
     assert 'leroy_bridge' not in launch
+
+def test_probe_requires_measured_pose_differences_not_only_twist():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    probe = (root / 'leroy_nav2_odometry/odom_probe.py').read_text()
+    assert 'moved_forward = max(self.x_samples)' in probe
+    assert 'moved_lateral = max(self.y_samples)' in probe
+    assert 'rotated = max(self.yaw_samples)' in probe

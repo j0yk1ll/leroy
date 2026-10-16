@@ -25,6 +25,9 @@ class OdomProbe(Node):
         self.lateral = False
         self.yaw = False
         self.stopped = False
+        self.x_samples = []
+        self.y_samples = []
+        self.yaw_samples = []
         self.create_subscription(
             Odometry, '/leroy_nav2/diagnostics/synthetic_odom',
             self._on_odom, qos_profile_sensor_data)
@@ -54,6 +57,9 @@ class OdomProbe(Node):
         self.yaw |= t.angular.z > 0.1
         self.stopped |= all(abs(v) < 1e-6 for v in (
             t.linear.x, t.linear.y, t.angular.z))
+        self.x_samples.append(p.x)
+        self.y_samples.append(p.y)
+        self.yaw_samples.append(2.0 * math.atan2(q.z, q.w))
         self.odom[ns] = (p.x, p.y, q.z, q.w)
         self._match(ns)
 
@@ -79,8 +85,15 @@ class OdomProbe(Node):
             raise RuntimeError('FAIL: TF/odom matching backlog')
 
     def ready(self):
+        # Observe pose changes, not merely a nonzero reported wheel twist.
+        if not self.x_samples:
+            return False
+        moved_forward = max(self.x_samples) - min(self.x_samples) > 0.10
+        moved_lateral = max(self.y_samples) - min(self.y_samples) > 0.10
+        rotated = max(self.yaw_samples) - min(self.yaw_samples) > 0.20
         return (self.matched >= 5 and self.forward and self.lateral
-                and self.yaw and self.stopped)
+                and self.yaw and self.stopped and moved_forward
+                and moved_lateral and rotated)
 
 
 def main(args=None):
