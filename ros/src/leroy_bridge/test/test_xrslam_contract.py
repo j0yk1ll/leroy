@@ -38,10 +38,10 @@ def test_odom_endpoints_are_created_only_in_diagnostic_mode():
     assert 'if self._degraded_odometry_enabled and self._publish_odom_tf else None' in SOURCE
 
 
-def test_supervised_low_pwm_and_watchdog_interlocks():
-    # No explicit YAML => motor commands remain disabled by default.
+def test_provisional_pwm_values_are_inert_under_m22d_lockdown():
+    # A configured PWM gain cannot enable motor commands with this guard.
     assert _default('wheel_velocity_to_pwm_gain') == 0.0
-    # The robot YAML explicitly opts into provisional, bounded low-duty output.
+    # YAML retains historical synthetic scale only; no active /cmd_vel inlet.
     assert _yaml_value('wheel_velocity_to_pwm_gain') == '12.75'
     assert _yaml_value('max_pwm') == '64'
     assert _yaml_value('watchdog_ms') == '500'
@@ -50,6 +50,8 @@ def test_supervised_low_pwm_and_watchdog_interlocks():
     assert _yaml_value('wheel_radius_m') == '0.020'
     assert _yaml_value('half_wheelbase_m') == '0.180'
     assert _yaml_value('half_track_m') == '0.275'
+    assert 'self._cmd_sub =' not in SOURCE
+    assert 'command_to_bytes(command)' in SOURCE
     assert 'max_wheel_angular_velocity_rad_s' not in SOURCE
     assert 'max_wheel_angular_velocity_rad_s' not in CONFIG
     assert 'pwm_full_scale_wheel_velocity_rad_s' not in SOURCE
@@ -57,8 +59,8 @@ def test_supervised_low_pwm_and_watchdog_interlocks():
 
 
 def test_cached_motor_safety_parameters_are_read_only():
-    # A live ROS parameter set must not report a value different from the
-    # cached PWM/watchdog fields actually used by the bridge.
+    # Preserve frozen historical bridge settings during software lockdown.
+    # PWM values no longer authorize nonzero serial wheel commands.
     tree = ast.parse(SOURCE)
     readonly = set()
     for node in ast.walk(tree):

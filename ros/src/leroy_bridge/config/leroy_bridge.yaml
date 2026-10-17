@@ -15,9 +15,11 @@ leroy_bridge:
     half_wheelbase_m: 0.180
     half_track_m: 0.275
 
-    # Provisional open-loop gain: PWM counts per wheel rad/s, not a
-    # measured speed limit. Equivalent to 255 / 20 from the earlier scale.
-    # Supervised low-duty test only; keep the hardware E-stop accessible.
+    # M22D: legacy calibration record ONLY; cannot enable motion.
+    # The current bridge has NO raw /cmd_vel subscription and its unique
+    # serial writer rejects ALL nonzero set_wheels packets.
+    # 12.75 remains a provisional PWM/(wheel rad/s) reference for M22C
+    # synthetic math tests, NOT an active movement configuration.
     wheel_velocity_to_pwm_gain: 12.75
     # Independent 25%-of-full-scale motor duty ceiling.
     max_pwm: 64
