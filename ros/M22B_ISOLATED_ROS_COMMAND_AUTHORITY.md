@@ -28,7 +28,7 @@ Four topic contracts:
 - /leroy_nav2/diagnostics/m22b/gated_cmd_vel
 - /leroy_nav2/diagnostics/m22b/authority_status
 
-Five acceptance phases:
+Six acceptance phases:
 
 1. Startup remains latched and publishes exact-zero diagnostic Twist
 2. Explicit TEST-ONLY rearm, continuous 10Hz evaluation and 1s
@@ -36,7 +36,9 @@ Five acceptance phases:
 3. Competing second publisher on fake proposal topic triggers
    BLOCKED_COMMAND_OWNERSHIP with exact-zero ROS output
 4. Removing the competing publisher does NOT automatically rearm
-5. After a fresh test-only rearm, stale generation stamp latches
+5. After rearm, malformed ROS JSON latches even if a valid envelope
+   is delivered before the next gate tick (poison flag cannot be masked)
+6. After another fresh test-only rearm, stale generation stamp latches
    and subsequent missing proposals do not replay old velocity
 
 The gate refuses ROS topic remapping, rejects unrecognized/duplicate
@@ -111,6 +113,7 @@ Require M22A 16/16 PASS plus:
 `M22B_REARM_AND_DIAGNOSTIC_FORWARD=PASS`,
 `M22B_DUPLICATE_PUBLISHER_INHIBIT=PASS`,
 `M22B_NO_AUTOMATIC_REARM=PASS`,
+`M22B_MALFORMED_MESSAGE_INHIBIT=PASS`,
 `M22B_STALE_COMMAND_INHIBIT=PASS`,
 `M22B_MISSING_MESSAGE_NO_REPLAY=PASS`,
 `M22B_ROS_AUTHORITY_SELFTEST=PASS`,
