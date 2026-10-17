@@ -25,7 +25,7 @@ camera exposure-to-MCU acquisition offset has been measured.
   reviewed integration with ACTUAL parsed MCU fields after successful IMU
   publication. No motor, MCU/serial, camera-device, or ROS publisher access
   is established by simply importing the adapter.
-- m21d_metadata_capture_test.py: 12 pure-Python regression tests for
+- m21d_metadata_capture_test.py: 13 pure-Python regression tests for
   schema conformity, safe output, overflow, duplicate timestamps/sequences,
   source mismatch, uint32 MCU wrap, and absence of any auto-start entrypoint.
 
@@ -80,7 +80,7 @@ M21D_OFFLINE_EXIT=${PIPESTATUS[0]}
 echo "M21D_OFFLINE_EXIT_CODE=$M21D_OFFLINE_EXIT"
 ```
 
-Expected: 12 unit tests PASS, M21D_DEMO_REPORT_JSON reports 33 synthetic
+Expected: 13 unit tests PASS, M21D_DEMO_REPORT_JSON reports 33 synthetic
 events and device_access false, M21C_FORMAT_REPORT_JSON verdict
 M21C_OFFLINE_METADATA_FORMAT_VALID, and exit 0.
 
@@ -97,3 +97,9 @@ Nav2 or DepthART. Only existing approved M18 START/STOP commands may be
 used; missing STOP ACK leaves state unknown and motor power inhibited.
 No physical capture commands are provided for M21D. CPU DepthART
 optimization remains deferred.
+
+The AST-based runtime guard in the corrected 13-test suite ignores mentions
+of forbidden API names in comments and docstrings but detects actual calls
+(including ordinary import aliases). It still cannot prove the absence of
+runtime behavior introduced indirectly by imported dependencies; that requires
+separate import-only ROS container tests and review.
