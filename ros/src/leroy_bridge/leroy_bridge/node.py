@@ -208,12 +208,13 @@ class LeroyBridgeNode(Node):
                 'right encoder telemetry is not synthesized.'
             )
 
-        if not self._kinematics_configured():
-            self.get_logger().warning(
-                'cmd_vel motor output is disabled until wheel_radius_m, '
-                'half_wheelbase_m, half_track_m, and '
-                'wheel_velocity_to_pwm_gain are configured.'
-            )
+        # No geometry, PWM gain, ROS remap or runtime parameter can
+        # enable motion under the M22D CDC allowlist.
+        self.get_logger().warning(
+            'M22D: raw /cmd_vel disabled; CDC permits ZERO wheel '
+            'commands and approved sensor/watchdog controls ONLY. '
+            'No motion-authority ingress is implemented.'
+        )
 
         self.get_logger().info(
             f'Connected to {self._serial_port}; IMU={self._imu_stream_hz} Hz, '
