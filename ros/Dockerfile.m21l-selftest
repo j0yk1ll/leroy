@@ -1,0 +1,25 @@
+# M21L: synthetic ROS producer/executor join with no physical device maps.
+# Inherits operator-validated M21H simulation runtime; overrides CMD.
+ARG LEROY_M21L_BASE_IMAGE=localhost/leroy-sensors:m21h-cleanup-selftest
+FROM ${LEROY_M21L_BASE_IMAGE}
+
+ENV LEROY_M20_SENSOR_ONLY=1 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m21k_offline_quiescence.py /opt/m21l/m21k_offline_quiescence.py
+COPY m21l_ros_executor_quiescence_selftest.py /opt/m21l/m21l_ros_executor_quiescence_selftest.py
+COPY m21l_no_device_run.sh /usr/local/bin/leroy-m21l-selftest-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m21l-selftest-run \
+    && bash -n /usr/local/bin/leroy-m21l-selftest-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m21l:/opt/m21h:/opt/m21g:/opt/m21f:/opt/m21e:/opt/m20:/opt/m18:/opt/m18/monitor:${PYTHONPATH:-}" \
+    && python3 -m py_compile /opt/m21l/m21k_offline_quiescence.py \
+       /opt/m21l/m21l_ros_executor_quiescence_selftest.py \
+    && python3 -c 'from m21k_offline_quiescence import finish_after_quiescence; from m18_imu_stream_source import ImuStreamSource; print("M21L_ROS_IMPORT_SELFTEST=PASS")'
+
+CMD ["/usr/local/bin/leroy-m21l-selftest-run"]
