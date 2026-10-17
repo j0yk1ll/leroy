@@ -14,6 +14,7 @@ MAX_VY = 0.15
 MAX_WZ = 0.30
 MAX_AGE_NS = 250_000_000
 RECOVERY_NS = 1_000_000_000
+MAX_EVALUATION_GAP_NS = 200_000_000  # synthetic 10Hz gate deadline
 EXPECTED_OWNER = "controller_server"
 
 
@@ -88,6 +89,11 @@ class DiagnosticAuthority:
         if type(now_ns) is not int or now_ns <= 0 or (
                 self.last_now_ns is not None and now_ns <= self.last_now_ns):
             return self._trip("BLOCKED_MONOTONIC_CLOCK")
+        if (self.state in ("REARMING", "ARMED")
+                and self.last_now_ns is not None
+                and now_ns - self.last_now_ns > MAX_EVALUATION_GAP_NS):
+            self.last_now_ns = now_ns
+            return self._trip("BLOCKED_EVALUATOR_STALL")
         self.last_now_ns = now_ns
 
         if type(operator_rearm) is not bool:
