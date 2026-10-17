@@ -21,7 +21,7 @@ class QuiescenceError(ValueError):
 
 def finish_after_quiescence(capture, output_path, stop_request,
                             request_producer_shutdown, producer_threads,
-                            join_timeout_s=1.0):
+                            join_timeout_s=1.0, producer_faults=None):
     """Attempt STOP first, stop/join ALL registered producers, then save.
 
     A missing STOP ACK can still produce a diagnostic file; never a positive
@@ -44,6 +44,10 @@ def finish_after_quiescence(capture, output_path, stop_request,
         raise QuiescenceError("unjoinable producer thread")
     if type(join_timeout_s) not in (int, float) or not math.isfinite(join_timeout_s) or not 0 < join_timeout_s <= 5:
         raise QuiescenceError("bounded join timeout must be in (0,5] seconds")
+    # Error reports are written by the ROS and IMU producer threads.
+    # Inspect only AFTER join, so fully terminated workers cannot race it.
+    if producer_faults is not None and not isinstance(producer_faults, (list, tuple)):
+        raise QuiescenceError("producer_faults must be a list or tuple")
 
     stop_acked = False
     stop_error = None
@@ -73,6 +77,7 @@ def finish_after_quiescence(capture, output_path, stop_request,
     still_alive = [worker.name for worker in threads if worker.is_alive()]
     quiescent = not unstarted and not still_alive
 
+    faults = [str(value) for value in (producer_faults or ())]
     saved = False
     save_error = None
     event_count = None
@@ -86,7 +91,8 @@ def finish_after_quiescence(capture, output_path, stop_request,
             bytes_written = record_report["record_file_bytes"]
         except Exception as exc:
             save_error = type(exc).__name__ + ": " + str(exc)
-    accepted = stop_acked and quiescent and quiesce_error is None and saved
+    accepted = (stop_acked and quiescent and quiesce_error is None
+                and not faults and saved)
     return {
         "milestone": "M21K",
         "evidence_type": capture.rows[0]["evidence_type"],
@@ -98,6 +104,8 @@ def finish_after_quiescence(capture, output_path, stop_request,
         "producers_quiescent": quiescent,
         "unstarted_producers": unstarted,
         "active_producers": still_alive,
+        "producer_faults": faults,
+        "producer_fault_count": len(faults),
         "metadata_saved": saved,
         "save_error": save_error,
         "saved_event_count": event_count,
