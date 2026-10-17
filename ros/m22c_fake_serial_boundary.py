@@ -98,17 +98,20 @@ class SyntheticBridgeBoundary:
 
         pwm = ZERO_PWM
         if decision.output != ZERO:
-            converted = mecanum_twist_to_pwm(
-                vx=decision.output[0],
-                vy=decision.output[1],
-                wz=decision.output[2],
-                **self._pwm_params)
-            if (converted is None or len(converted) != 4
-                    or any(type(value) is not int
-                           for value in converted)):
-                decision = self._core._trip("BLOCKED_PWM_CONVERSION")
-            else:
+            try:
+                converted = mecanum_twist_to_pwm(
+                    vx=decision.output[0],
+                    vy=decision.output[1],
+                    wz=decision.output[2],
+                    **self._pwm_params)
+                if (converted is None or len(converted) != 4
+                        or any(type(value) is not int
+                               for value in converted)):
+                    raise ValueError("synthetic PWM conversion refused")
                 pwm = tuple(converted)
+            except (TypeError, ValueError, OverflowError):
+                decision = self._core._trip("BLOCKED_PWM_CONVERSION")
+                pwm = ZERO_PWM
         packet = ("set_wheels {} {} {} {}\n".format(*pwm)).encode("ascii")
         try:
             self._fake_transport.write(packet)
