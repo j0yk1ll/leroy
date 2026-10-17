@@ -1,12 +1,13 @@
 # leroy_bridge
 
-ROS 2 Jazzy serial bridge for Leroy's MCU. It owns **hardware telemetry and
-motor commands**, not the robot's normal odometry or sensor TF.
+ROS 2 Jazzy serial bridge for Leroy's MCU. It owns hardware
+telemetry and is the intended future actuator interface, but **M22D removes
+the raw `/cmd_vel` subscription and inhibits ALL nonzero wheel commands**.
+No software authority or motor-motion ingress is enabled by M22D.
 
 Publishes `/imu/data_raw` (`sensor_msgs/msg/Imu`, best effort, depth 10,
 `imu_link`, nominal 100 Hz) and `/wheel/encoder_counts`
-(`leroy_msgs/msg/EncoderCounts`, best effort, depth 10). Subscribes to
-`/cmd_vel` (`geometry_msgs/msg/Twist`, reliable, depth 10). The MCU
+(`leroy_msgs/msg/EncoderCounts`, best effort, depth 10). The MCU
 timestamp/sequence fields are preserved; right-encoder values are never
 fabricated. Raw IMU measurements use +X forward, +Y left, +Z up, rad/s and
 m/s², with unavailable quaternion orientation
@@ -24,54 +25,47 @@ The historical FL/RL-encoder plus IMU-yaw estimator remains source-available
 only as a deliberately enabled diagnostic fallback. Never run it alongside
 XRSLAM; enabling it does **not** happen automatically after tracking loss.
 
-## Supervised low-duty motor testing and motor interlock
+## M22D actuator ingress locked (software-only)
 
-The bridge code defaults to `wheel_velocity_to_pwm_gain: 0.0`, which
-**disables motor output** unless explicit configuration enables it.
-The checked-in Leroy robot YAML opts into a **provisional**, supervised
-low-duty trial:
+The bridge intentionally creates **no `/cmd_vel` subscription** and
+does not have a new alternative motion subscriber. Its unique
+`_send_command` serial-writer path calls the ROS-free
+`leroy_bridge.command_ingress.command_to_bytes` validator BEFORE
+any serial I/O. It admits only exact `set_wheels 0 0 0 0`,
+`keepalive`, sensor stream rate setters with the firmware's
+supported values, and a strictly positive `set_watchdog_ms`
+setting (1–60000). Any nonzero `set_wheels`, malformed command,
+unlisted opcode, newline injection or watchdog disable is rejected.
 
-```yaml
-wheel_velocity_to_pwm_gain: 12.75  # PWM counts per requested wheel rad/s
-max_pwm: 64                       # independent 25%-of-full-scale duty cap
-```
+The YAML file retains prior *provisional* `wheel_velocity_to_pwm_gain:
+12.75` and `max_pwm: 64` values for historical comparison, but
+these parameters cannot enable wheel output in M22D. The legacy
+`cmd_vel_timeout_s` read-only parameter also remains for compatibility;
+there is no `/cmd_vel` callback or velocity-timeout timer in M22D.
+The historical mecanum conversion function remains independently
+testable, but the production bridge node no longer uses it to emit
+motion. M22A–M22C are separate synthetic authority fixtures and are
+**NOT** wired into this bridge.
 
-The gain is an open-loop conversion coefficient (**PWM / (rad/s)**), not a
-measured physical wheel-speed limit. Its value `12.75` is equivalent to the
-previous provisional `255 / 20.0` conversion. At 0.16 rad/s commanded
-chassis yaw, the existing wheel geometry demands about 3.64 rad/s per wheel
-and produces roughly +/-46 PWM; the absolute command is capped at +/-64.
-A higher gain commands **more** duty for the same `/cmd_vel`; reducing the
-gain commands less duty. The cap is not a guaranteed chassis-speed limit.
+This is a deliberately motion-inhibiting software transition, not the
+final authorized software control architecture. A follow-on milestone
+must introduce a single independently validated, session-bound,
+replay-resistant bridge authority and a fake-serial fault suite before
+any nonzero motion path is considered.
 
-The bridge scales all four wheel commands together if the requested output
-exceeds `max_pwm`, preserving mecanum wheel ratios. NaN and infinite
-velocity commands are rejected. Low PWM may stall the motors; loaded speed
-cannot be predicted from the gain. Use a verified physical E-stop, a
-cleared area, and a supervising operator; verify wheel directions and the
-actual response before permitting automatic motion.
+**Opening the physical MCU CDC serial port can itself energize wheels or
+the manipulator, independent of ROS or `set_wheels` checks.**
+M22D source-level inhibition does not prove physical stop or ACK.
+Do not launch the real bridge or reconnect hardware under this test
+milestone; operator-controlled physical test authorization and motor
+rail isolation are separate prerequisites.
 
-The bridge retains `watchdog_ms: 500`, `keepalive_period_s: 0.10`,
-`cmd_vel_timeout_s: 0.25`, periodic command timeout checks, and a stop
-on shutdown. Automatic temporal calibration refuses to arm unless
-`0 < wheel_velocity_to_pwm_gain`, `max_pwm <= 64`, a valid command timeout
-`<= 0.30`, and a valid MCU watchdog `<= 500` ms. Its `--arm` mode
-still requires explicit operator and E-stop confirmations, and visual
-tracking; the camera is **not** a collision-avoidance system.
-
-For safety, the parameters used by the bridge's cached motor conversion,
-timeout, and watchdog logic are **read-only after node startup**.
-`ros2 param set` cannot change them in flight. If motion must be disabled,
-set `wheel_velocity_to_pwm_gain: 0.0` in the YAML and restart the rebuilt
-bridge. Changes to source or configuration do not affect the currently
-running container until built and deployed.
-
-ROS-independent regression tests, from the repository root:
+To test the source-level CDC allowlist without ROS/serial/devices:
 
 ```bash
-PYTHONPATH=ros/src/leroy_bridge python3 -m pytest \
-  ros/src/leroy_bridge/test/test_motor_pwm.py \
-  ros/src/leroy_bridge/test/test_xrslam_contract.py -q
+cd ros
+PYTHONPATH="$PWD/src/leroy_bridge:$PWD" PYTHONDONTWRITEBYTECODE=1 \
+  python3 -u src/leroy_bridge/test/test_m22d_command_ingress.py
 ```
 
 ## MCU-to-ROS timestamp mapping
