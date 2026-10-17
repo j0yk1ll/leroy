@@ -29,7 +29,7 @@ bad graph ownership, unhealthy input, or time regression LATCHES inhibit.
 Every blocked decision outputs the exact-zero tuple.
 
 Startup is latched. Once healthy, an explicit caller-triggered
-`operator_rearm=True` starts a 1-second synthetic healthy dwell.
+`operator_rearm=True` starts a 1-second synthetic healthy dwell with at most 200ms between evaluations.
 Rearming does not forward a proposal immediately, and any fault
 requires another deliberate rearm. Repeat rearm while armed is
 rejected. Zero output is a software decision only, NOT physical stop.
@@ -47,7 +47,7 @@ ROS integration work. This version does NOT enforce motor actuation.
 
 Fourteen pure-Python unittest cases exercise initial inhibit,
 explicit rearm/dwell, sequence and generation-time replay,
-clock reversal, missing/duplicate/wrong owner, wrong proposal owner,
+clock reversal, evaluator stalls while rearming or armed, missing/duplicate/wrong owner, wrong proposal owner,
 every health input, stale/future proposals, NaN/infinity/invalid axes,
 missing proposal, no automatic rearm after a fault, repeated rearm,
 invalid sequence and rearm types.
@@ -72,7 +72,7 @@ M22A_OFFLINE_EXIT=${PIPESTATUS[0]}
 echo "M22A_OFFLINE_EXIT_CODE=$M22A_OFFLINE_EXIT"
 ```
 
-Expected `Ran 14 tests`, `OK`,
+Expected `Ran 16 tests`, `OK`,
 `M22A_SOFTWARE_AUTHORITY_SELFTEST=PASS`,
 `M22A_VERDICT=SYNTHETIC_DIAGNOSTIC_AUTHORITY_ONLY`,
 `M22A_DEVICE_ACCESS=NONE`, `M22A_OFFLINE_EXIT_CODE=0`.
