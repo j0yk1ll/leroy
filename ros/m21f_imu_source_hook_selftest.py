@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M21F simulated ROS camera adapter contract: NO physical sensor access.
+"""M21F M18 IMU source-to-ROS-to-metadata selftest: NO physical devices.
 
 This selftest intentionally publishes synthetic camera *metadata* only from
 two disposable ROS nodes with the expected names. Such graph names prove
@@ -190,6 +190,6 @@ if __name__ == "__main__":
     try:
         raise SystemExit(run())
     except Exception as exc:
-        print("M21F_ROS_ADAPTER_SELFTEST=FAIL", flush=True)
+        print("M21F_SOURCE_METADATA_SELFTEST=FAIL", flush=True)
         print("M21F_ERROR=" + type(exc).__name__ + ": " + str(exc), flush=True)
         raise
