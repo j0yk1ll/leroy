@@ -5,7 +5,7 @@ import time
 from typing import Dict, Optional
 
 import rclpy
-from geometry_msgs.msg import TransformStamped, Twist
+from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
@@ -15,7 +15,7 @@ from tf2_ros import TransformBroadcaster
 from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
-from leroy_bridge.motor_pwm import mecanum_twist_to_pwm
+from leroy_bridge.command_ingress import command_to_bytes, CommandRejected
 
 import serial
 
@@ -143,16 +143,14 @@ class LeroyBridgeNode(Node):
             TransformBroadcaster(self)
             if self._degraded_odometry_enabled and self._publish_odom_tf else None
         )
-        self._cmd_sub = self.create_subscription(
-            Twist, '/cmd_vel', self._on_cmd_vel, 10
-        )
+        # M22D deliberately has NO /cmd_vel subscription. Raw Twist commands
+        # are not an authorized actuator interface. No alternative motion
+        # ingress is enabled in this milestone.
 
         self._serial_lock = threading.Lock()
         self._clock_mapper = McuClock(self)
         self._clock_fault = False
         self._stop_event = threading.Event()
-        self._last_cmd_vel_monotonic: Optional[float] = None
-        self._motion_commanded = False
         self._last_imu_seq: Optional[int] = None
         self._last_encoder_seq: Optional[int] = None
 
@@ -193,7 +191,6 @@ class LeroyBridgeNode(Node):
         self._keepalive_timer = self.create_timer(
             self._keepalive_period_s, self._send_keepalive
         )
-        self._cmd_timeout_timer = self.create_timer(0.05, self._check_cmd_timeout)
 
         if self._publish_odom_tf and not self._degraded_odometry_enabled:
             self.get_logger().warning(
@@ -229,8 +226,8 @@ class LeroyBridgeNode(Node):
             raise ValueError('imu_stream_hz must be one of 0, 10, 20, 50, 100')
         if self._encoder_stream_hz not in allowed_stream_hz:
             raise ValueError('encoder_stream_hz must be one of 0, 10, 20, 50, 100')
-        if self._watchdog_ms < 0 or self._watchdog_ms > 60000:
-            raise ValueError('watchdog_ms must be in 0..60000')
+        if self._watchdog_ms < 1 or self._watchdog_ms > 60000:
+            raise ValueError('watchdog_ms must be in 1..60000 during M22D')
         if self._keepalive_period_s <= 0.0:
             raise ValueError('keepalive_period_s must be > 0')
         if self._cmd_vel_timeout_s <= 0.0:
@@ -277,13 +274,19 @@ class LeroyBridgeNode(Node):
         return 0.0, 0.0, math.sin(half), math.cos(half)
 
     def _send_command(self, command: str) -> None:
-        payload = (command + '\n').encode('ascii')
+        try:
+            payload = command_to_bytes(command)
+        except CommandRejected as exc:
+            self.get_logger().error(f'M22D blocked unsafe CDC command: {exc}')
+            return False
         try:
             with self._serial_lock:
                 self._serial.write(payload)
                 self._serial.flush()
+            return True
         except (serial.SerialException, serial.SerialTimeoutException) as exc:
             self.get_logger().error(f'Serial write failed: {exc}')
+            return False
 
     def _send_keepalive(self) -> None:
         # On a clock fault, withhold keepalives so the MCU's independent
@@ -321,7 +324,6 @@ class LeroyBridgeNode(Node):
                 # Fail closed. Never silently re-anchor a rebooted/stepped
                 # sensor clock into the same VIO or odometry session.
                 self._clock_fault = True
-                self._motion_commanded = False
                 self._stop_event.set()
                 self._send_command('set_wheels 0 0 0 0')
                 self.get_logger().error(
@@ -345,7 +347,6 @@ class LeroyBridgeNode(Node):
             self._publish_encoders(self._fields(line))
             return
         if line == 'event watchdog_stop':
-            self._motion_commanded = False
             self.get_logger().warning('MCU watchdog stopped the platform')
             return
         if line.startswith('error '):
@@ -530,51 +531,6 @@ class LeroyBridgeNode(Node):
             transform.transform.rotation.z = qz
             transform.transform.rotation.w = qw
             self._tf_broadcaster.sendTransform(transform)
-
-    def _twist_to_pwm(self, msg: Twist):
-        if not self._kinematics_configured():
-            return None
-
-        # Open-loop wheel rad/s -> PWM via a direct PWM/(rad/s) gain.
-        # max_pwm remains an independent absolute command ceiling.
-        return mecanum_twist_to_pwm(
-            vx=float(msg.linear.x),
-            vy=float(msg.linear.y),
-            wz=float(msg.angular.z),
-            wheel_radius_m=self._wheel_radius_m,
-            half_wheelbase_m=self._half_wheelbase_m,
-            half_track_m=self._half_track_m,
-            wheel_velocity_to_pwm_gain=self._wheel_velocity_to_pwm_gain,
-            max_pwm=self._max_pwm,
-        )
-
-    def _on_cmd_vel(self, msg: Twist) -> None:
-        if self._clock_fault:
-            # An invalid timebase cannot drive a session with active motion.
-            return
-        pwm = self._twist_to_pwm(msg)
-        if pwm is None:
-            self.get_logger().warning(
-                'Ignoring /cmd_vel because mecanum geometry is not configured',
-                throttle_duration_sec=5.0,
-            )
-            return
-
-        self._last_cmd_vel_monotonic = time.monotonic()
-        self._motion_commanded = any(value != 0 for value in pwm)
-        self._send_command(
-            f'set_wheels {pwm[0]} {pwm[1]} {pwm[2]} {pwm[3]}'
-        )
-
-    def _check_cmd_timeout(self) -> None:
-        if not self._motion_commanded or self._last_cmd_vel_monotonic is None:
-            return
-        if time.monotonic() - self._last_cmd_vel_monotonic <= self._cmd_vel_timeout_s:
-            return
-
-        self._send_command('set_wheels 0 0 0 0')
-        self._motion_commanded = False
-        self.get_logger().warning('cmd_vel timeout; commanded wheel stop')
 
     def destroy_node(self):
         # Stop asynchronous telemetry before ROS context teardown.
