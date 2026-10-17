@@ -143,10 +143,13 @@ def run():
             port=PORT, baudrate=115200, timeout=0.08,
             write_timeout=0.25, exclusive=True,
         ) as device:
-            # CDC may reset MCU; power to motors MUST be physically isolated.
-            time.sleep(0.3)
-            device.reset_input_buffer()
+            # Start the protected region immediately after the port opens.
+            # CDC open, settling, or input-buffer reset may fail before START;
+            # even then attempt the allowlisted STOP in finally. This is NOT
+            # a substitute for physically disabling both motor power rails.
             try:
+                time.sleep(0.3)
+                device.reset_input_buffer()
                 send_only_whitelisted_serial_command(device, START)
                 started = wait_ack(device, timeout_s=2.0)
                 if not started:
