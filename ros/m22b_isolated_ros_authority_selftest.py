@@ -316,6 +316,25 @@ def run():
         gate.request_test_only_rearm()
         driver.run_for(1.52)
         require(gate.core.state == "ARMED", "second dwell did not arm")
+
+        # A malformed JSON message cannot be hidden by a later valid
+        # proposal callback before the next 10Hz safety evaluation.
+        malformed = String()
+        malformed.data = "{not-valid-json"
+        proposer.publish(malformed)
+        start_status = len(audit.statuses)
+        driver.run_for(0.35)  # deliberately send subsequent valid envelopes
+        require(any(item["reason"] == "BLOCKED_COMMAND_FORMAT"
+                    for item in audit.statuses[start_status:]),
+                "malformed ROS envelope did not latch")
+        require(all(output == ZERO for output in audit.outputs[-2:]),
+                "malformed envelope did not inhibit diagnostic output")
+        print("M22B_MALFORMED_MESSAGE_INHIBIT=PASS", flush=True)
+
+        # Recover deliberately once more to verify stale generation age.
+        gate.request_test_only_rearm()
+        driver.run_for(1.52)
+        require(gate.core.state == "ARMED", "third dwell did not arm")
         driver.propose_once(age_ns=500_000_000)
         start_status = len(audit.statuses)
         driver.run_for(0.35, send_proposals=False)
