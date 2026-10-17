@@ -73,6 +73,13 @@ class ImuStreamSource(Node):
         self.terminal_fault = None
 
     def consume(self, payload):
+        # Once a packet, clock, or metadata observer has caused a terminal
+        # fault, do not publish ANY further IMU samples even if a caller
+        # mistakenly catches the exception. The owning serial runner still
+        # must attempt STOP in its finally block.
+        if self.terminal_fault is not None:
+            raise RuntimeError("imu_source_terminal_fault_latched: " +
+                               self.terminal_fault)
         if len(payload) > 512:
             self.counts["malformed_imu_packets"] += 1
             return
