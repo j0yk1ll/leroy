@@ -171,7 +171,7 @@ def run():
                 end.set()
             lifecycle = finish_after_quiescence(
                 capture, destination, fake_stop, request_shutdown, threads,
-                join_timeout_s=2.0)
+                join_timeout_s=2.0, producer_faults=errors)
             if errors:
                 raise RuntimeError("M21L producer fault: " + repr(errors))
             if not lifecycle["producers_quiescent"]:
