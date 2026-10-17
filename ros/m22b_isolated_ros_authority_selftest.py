@@ -263,6 +263,14 @@ def run():
         health_pub = health.create_publisher(String, HEALTH_TOPIC, 10)
         driver = TestDriver(executor, proposer, health_pub)
 
+        # DDS discovery is asynchronous. Wait for the isolated two
+        # expected publishers before asserting the authority contract.
+        for _ in range(20):
+            if gate.graph_ok():
+                break
+            driver.run_for(0.10)
+        require(gate.graph_ok(), "expected synthetic sources undiscovered")
+
         # Startup must withhold commands without explicit test rearm.
         driver.run_for(0.42)
         require(len(audit.outputs) >= 2, "no ROS Twist diagnostics received")
@@ -291,6 +299,12 @@ def run():
                      start_parameter_services=False)
         executor.add_node(rogue)
         rogue.create_publisher(String, PROPOSAL_TOPIC, 10)
+        for _ in range(20):
+            if len(gate.get_publishers_info_by_topic(PROPOSAL_TOPIC)) >= 2:
+                break
+            driver.run_for(0.10)
+        require(len(gate.get_publishers_info_by_topic(PROPOSAL_TOPIC)) == 2,
+                "competing ROS publisher not discovered")
         start_status = len(audit.statuses)
         driver.run_for(0.45)
         require(any(item["reason"] == "BLOCKED_COMMAND_OWNERSHIP"
@@ -303,6 +317,11 @@ def run():
         executor.remove_node(rogue)
         rogue.destroy_node()
         rogue = None
+        for _ in range(20):
+            if gate.graph_ok():
+                break
+            driver.run_for(0.10)
+        require(gate.graph_ok(), "ROS publisher removal was not discovered")
         start_status = len(audit.statuses)
         driver.run_for(0.40)
         require(any(item["reason"] == "BLOCKED_MANUAL_REARM_REQUIRED"
