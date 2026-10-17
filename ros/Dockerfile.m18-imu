@@ -1,0 +1,35 @@
+# M18 isolated timestamped IMU ROS diagnostic from existing local runtime.
+# The inherited motor bridge executable is never launched, the new CMD
+# starts only m18_imu_stream_run.sh; operator maps one MCU USB tty and
+# MUST physically disconnect/inhibit actuator power before opening it.
+ARG LEROY_SENSOR_BASE_IMAGE=localhost/leroy-ros:jazzy-lowpwm
+FROM ${LEROY_SENSOR_BASE_IMAGE}
+
+ENV LEROY_M18_IMU_STREAM=1 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=169 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m18_imu_stream_contract.py /opt/m18/m18_imu_stream_contract.py
+COPY m18_imu_stream_source.py /opt/m18/m18_imu_stream_source.py
+COPY m18_imu_stream_test.py /opt/m18/m18_imu_stream_test.py
+COPY m18_imu_stream_run.sh /usr/local/bin/leroy-m18-imu-stream
+COPY src/leroy_nav2_integration/leroy_nav2_integration/__init__.py \
+    /opt/m18/monitor/leroy_nav2_integration/__init__.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/m16_passive_observer.py \
+    /opt/m18/monitor/leroy_nav2_integration/m16_passive_observer.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/m16_passive_contract.py \
+    /opt/m18/monitor/leroy_nav2_integration/m16_passive_contract.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/m15_sensor_contract.py \
+    /opt/m18/monitor/leroy_nav2_integration/m15_sensor_contract.py
+COPY src/leroy_nav2_integration/leroy_nav2_integration/fault_contract.py \
+    /opt/m18/monitor/leroy_nav2_integration/fault_contract.py
+
+RUN chmod 0755 /usr/local/bin/leroy-m18-imu-stream \
+    && bash -n /usr/local/bin/leroy-m18-imu-stream \
+    && PYTHONPATH=/opt/m18 PYTHONDONTWRITEBYTECODE=1 \
+       python3 -m unittest discover -s /opt/m18 -p m18_imu_stream_test.py -v \
+    && LEROY_M18_SELFTEST=1 /usr/local/bin/leroy-m18-imu-stream
+
+CMD ["/usr/local/bin/leroy-m18-imu-stream"]
