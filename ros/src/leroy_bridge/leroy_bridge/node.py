@@ -274,7 +274,7 @@ class LeroyBridgeNode(Node):
         half = 0.5 * yaw
         return 0.0, 0.0, math.sin(half), math.cos(half)
 
-    def _send_command(self, command: str) -> None:
+    def _send_command(self, command: str) -> bool:
         try:
             payload = command_to_bytes(command)
         except CommandRejected as exc:
