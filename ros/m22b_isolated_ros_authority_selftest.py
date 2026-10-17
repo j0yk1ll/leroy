@@ -71,8 +71,10 @@ class SyntheticAuthorityNode(Node):
                          start_parameter_services=False)
         self.core = DiagnosticAuthority()
         self.pending_proposal = None
+        self.invalid_proposal_seen = False
         self.inputs = None
         self.last_health_ns = None
+        self.invalid_health_seen = False
         self.pending_rearm = False
         self.proposal_subscription = self.create_subscription(
             String, PROPOSAL_TOPIC, self.on_proposal, 10)
@@ -100,6 +102,7 @@ class SyntheticAuthorityNode(Node):
             self.pending_proposal = Proposal(**data)
         except (TypeError, ValueError, KeyError):
             self.pending_proposal = None
+            self.invalid_proposal_seen = True
 
     def on_health(self, msg):
         self.inputs = None
@@ -107,12 +110,15 @@ class SyntheticAuthorityNode(Node):
         try:
             data = json.loads(msg.data)
             if not isinstance(data, dict) or set(data) != set(HEALTH_NAMES):
+                self.invalid_health_seen = True
                 return
             if not all(type(data[name]) is bool for name in HEALTH_NAMES):
+                self.invalid_health_seen = True
                 return
             self.inputs = Inputs(**data)
             self.last_health_ns = time.monotonic_ns()
         except (TypeError, ValueError, KeyError):
+            self.invalid_health_seen = True
             return
 
     def request_test_only_rearm(self):
@@ -141,10 +147,13 @@ class SyntheticAuthorityNode(Node):
             and self.last_health_ns is not None
             and 0 <= now - self.last_health_ns <= 250_000_000
         )
-        health = (self.inputs if fresh_health
+        health = (self.inputs if fresh_health and not self.invalid_health_seen
                   else Inputs(False, False, False, False, False))
-        proposal = self.pending_proposal
+        proposal = (None if self.invalid_proposal_seen
+                    else self.pending_proposal)
         self.pending_proposal = None  # Never reuse stale ROS callback state.
+        self.invalid_proposal_seen = False
+        self.invalid_health_seen = False
         rearm = self.pending_rearm
         self.pending_rearm = False
         result = self.core.evaluate(
