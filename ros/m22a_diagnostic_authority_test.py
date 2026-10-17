@@ -33,8 +33,10 @@ def tick(gate, seq, at, *, inputs=GOOD, publishers=(EXPECTED_OWNER,),
 def armed_gate():
     gate = DiagnosticAuthority()
     assert tick(gate, 0, BASE, operator_rearm=True).state == "REARMING"
-    assert tick(gate, 1, BASE + RECOVERY_NS // 2).output == ZERO
-    good = tick(gate, 2, BASE + RECOVERY_NS)
+    for i in range(1, 10):
+        waiting = tick(gate, i, BASE + i * 100_000_000)
+        assert waiting.state == "REARMING" and waiting.output == ZERO
+    good = tick(gate, 10, BASE + RECOVERY_NS)
     assert good.state == "ARMED" and good.output != ZERO
     return gate
 
@@ -57,16 +59,17 @@ class AuthorityTests(unittest.TestCase):
         a = tick(gate, 0, BASE, operator_rearm=True)
         self.assertEqual(a.output, ZERO)
         self.assertEqual(a.state, "REARMING")
-        b = tick(gate, 1, BASE + RECOVERY_NS - 1)
-        self.assertEqual(b.output, ZERO)
-        self.assertEqual(b.reason, "BLOCKED_REARM_DWELL")
-        c = tick(gate, 2, BASE + RECOVERY_NS)
+        for i in range(1, 10):
+            b = tick(gate, i, BASE + 100_000_000 * i)
+            self.assertEqual(b.output, ZERO)
+            self.assertEqual(b.reason, "BLOCKED_REARM_DWELL")
+        c = tick(gate, 10, BASE + RECOVERY_NS)
         self.assertEqual(c.state, "ARMED")
         self.assertEqual(c.output, (0.04, 0.0, 0.1))
 
     def test_replay_sequence_latches_even_when_other_inputs_healthy(self):
         gate = armed_gate()
-        result = tick(gate, 2, BASE + RECOVERY_NS + 25_000_000)
+        result = tick(gate, 10, BASE + RECOVERY_NS + 25_000_000)
         self.assert_latched(result)
         self.assertEqual(result.reason, "BLOCKED_REPLAY_SEQUENCE")
 
@@ -74,14 +77,14 @@ class AuthorityTests(unittest.TestCase):
         gate = armed_gate()
         at = BASE + RECOVERY_NS + 100_000_000
         stale_generation = BASE + RECOVERY_NS - 10_000_000
-        result = tick(gate, 3, at,
-                      proposal=packet(3, at, generated_mono_ns=stale_generation))
+        result = tick(gate, 11, at,
+                      proposal=packet(11, at, generated_mono_ns=stale_generation))
         self.assert_latched(result)
         self.assertEqual(result.reason, "BLOCKED_REPLAY_GENERATION_TIME")
 
     def test_clock_regression_latches(self):
         gate = armed_gate()
-        result = tick(gate, 3, BASE + RECOVERY_NS - 100_000_000)
+        result = tick(gate, 11, BASE + RECOVERY_NS - 100_000_000)
         self.assert_latched(result)
         self.assertEqual(result.reason, "BLOCKED_MONOTONIC_CLOCK")
 
@@ -90,7 +93,7 @@ class AuthorityTests(unittest.TestCase):
                            ("other_controller",)):
             with self.subTest(publishers=publishers):
                 gate = armed_gate()
-                result = tick(gate, 3, BASE + RECOVERY_NS + 25_000_000,
+                result = tick(gate, 11, BASE + RECOVERY_NS + 25_000_000,
                               publishers=publishers)
                 self.assert_latched(result)
                 self.assertEqual(result.reason, "BLOCKED_COMMAND_OWNERSHIP")
@@ -98,8 +101,8 @@ class AuthorityTests(unittest.TestCase):
     def test_proposal_owner_mismatch_fails_closed(self):
         gate = armed_gate()
         at = BASE + RECOVERY_NS + 25_000_000
-        result = tick(gate, 3, at,
-                      proposal=packet(3, at, owner="unauthorized"))
+        result = tick(gate, 11, at,
+                      proposal=packet(11, at, owner="unauthorized"))
         self.assert_latched(result)
         self.assertEqual(result.reason, "BLOCKED_COMMAND_FORMAT")
 
@@ -107,7 +110,7 @@ class AuthorityTests(unittest.TestCase):
         for name in GOOD.__dataclass_fields__:
             with self.subTest(name=name):
                 gate = armed_gate()
-                result = tick(gate, 3, BASE + RECOVERY_NS + 25_000_000,
+                result = tick(gate, 11, BASE + RECOVERY_NS + 25_000_000,
                               inputs=replace(GOOD, **{name: False}))
                 self.assert_latched(result)
                 self.assertEqual(result.reason, "BLOCKED_SENSOR_HEALTH")
@@ -117,7 +120,7 @@ class AuthorityTests(unittest.TestCase):
             with self.subTest(offset=offset):
                 gate = armed_gate()
                 at = BASE + RECOVERY_NS + 25_000_000
-                result = tick(gate, 3, at, proposal=packet(
+                result = tick(gate, 11, at, proposal=packet(
                     3, at, generated_mono_ns=at - offset))
                 self.assert_latched(result)
                 self.assertEqual(result.reason,
@@ -139,7 +142,7 @@ class AuthorityTests(unittest.TestCase):
             with self.subTest(data=data):
                 gate = armed_gate()
                 at = BASE + RECOVERY_NS + 25_000_000
-                result = tick(gate, 3, at, proposal=packet(3, at, **data))
+                result = tick(gate, 11, at, proposal=packet(11, at, **data))
                 self.assert_latched(result)
                 self.assertEqual(result.reason, reason)
 
@@ -154,28 +157,45 @@ class AuthorityTests(unittest.TestCase):
     def test_fault_requires_fresh_explicit_rearm(self):
         gate = armed_gate()
         t = BASE + RECOVERY_NS + 25_000_000
-        fault = tick(gate, 3, t, inputs=replace(GOOD, depth_fresh=False))
+        fault = tick(gate, 11, t, inputs=replace(GOOD, depth_fresh=False))
         self.assert_latched(fault)
-        restored = tick(gate, 4, t + 25_000_000)
+        restored = tick(gate, 12, t + 25_000_000)
         self.assert_latched(restored)
         self.assertEqual(restored.reason, "BLOCKED_MANUAL_REARM_REQUIRED")
-        recovering = tick(gate, 5, t + 50_000_000, operator_rearm=True)
+        recovering = tick(gate, 13, t + 50_000_000, operator_rearm=True)
         self.assertEqual(recovering.state, "REARMING")
         self.assertEqual(recovering.output, ZERO)
 
     def test_rearm_while_already_armed_is_not_an_override(self):
         gate = armed_gate()
-        result = tick(gate, 3, BASE + RECOVERY_NS + 25_000_000,
+        result = tick(gate, 11, BASE + RECOVERY_NS + 25_000_000,
                       operator_rearm=True)
         self.assert_latched(result)
         self.assertEqual(result.reason, "BLOCKED_UNEXPECTED_REARM")
+
+    def test_evaluator_stall_latches_armed(self):
+        gate = armed_gate()
+        result = tick(gate, 11, BASE + RECOVERY_NS + 200_000_001)
+        self.assert_latched(result)
+        self.assertEqual(result.reason, "BLOCKED_EVALUATOR_STALL")
+
+    def test_evaluator_stall_interrupts_rearm_dwell(self):
+        gate = DiagnosticAuthority()
+        self.assertEqual(tick(gate, 0, BASE, operator_rearm=True).state,
+                         "REARMING")
+        result = tick(gate, 1, BASE + 200_000_001)
+        self.assert_latched(result)
+        self.assertEqual(result.reason, "BLOCKED_EVALUATOR_STALL")
+        result = tick(gate, 2, BASE + 300_000_000)
+        self.assert_latched(result)
+        self.assertEqual(result.reason, "BLOCKED_MANUAL_REARM_REQUIRED")
 
     def test_invalid_sequence_and_rearm_flag_rejected(self):
         at = BASE + RECOVERY_NS + 25_000_000
         for bad_sequence in (-1, 2.5, True, 1 << 64):
             with self.subTest(bad_sequence=bad_sequence):
                 gate = armed_gate()
-                r = tick(gate, 3, at,
+                r = tick(gate, 11, at,
                          proposal=packet(bad_sequence, at))
                 self.assert_latched(r)
                 self.assertEqual(r.reason, "BLOCKED_COMMAND_FORMAT")
@@ -183,7 +203,7 @@ class AuthorityTests(unittest.TestCase):
         r = gate.evaluate(
             now_ns=at, inputs=GOOD,
             publishers=(EXPECTED_OWNER,),
-            proposal=packet(3, at), operator_rearm="true")
+            proposal=packet(11, at), operator_rearm="true")
         self.assert_latched(r)
         self.assertEqual(r.reason, "BLOCKED_INVALID_REARM")
 
