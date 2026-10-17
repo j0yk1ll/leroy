@@ -9,6 +9,41 @@ from m21d_metadata_capture import CaptureError, MetadataCapture
 from m21_record_contract import load
 
 
+def prohibited_runtime_calls(source):
+    """Detect actual MCU/ROS initialization calls, ignoring comments and strings.
+
+    Resolve conventional import aliases, including direct symbol imports.
+    A source-text substring is NOT evidence that an API was invoked.
+    """
+    tree = ast.parse(source)
+    modules = {}
+    symbols = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in ("serial", "rclpy"):
+                    modules[alias.asname or alias.name] = alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module in ("serial", "rclpy"):
+            for alias in node.names:
+                symbols[alias.asname or alias.name] = (node.module, alias.name)
+
+    prohibited = {("serial", "Serial"), ("rclpy", "init")}
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        if isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name):
+            target = (modules.get(fn.value.id), fn.attr)
+        elif isinstance(fn, ast.Name):
+            target = symbols.get(fn.id)
+        else:
+            continue
+        if target in prohibited:
+            found.append(".".join(target))
+    return found
+
+
 def example(capture, count=11, gap_ns=100000000, skip_info=False):
     for k in range(count):
         stamp = 1_900_000_000_000_000_000 + k * gap_ns
@@ -142,8 +177,22 @@ class RecorderTests(unittest.TestCase):
                              any(isinstance(x, ast.Constant) and x.value == "__main__"
                                  for x in n.test.comparators)
                              for n in ast.walk(parsed)))
-        self.assertFalse("serial.Serial(" in code or "rclpy.init(" in code)
+        self.assertEqual(prohibited_runtime_calls(code), [])
         self.assertIn("class PassiveCameraMetadataNode", code)
+
+    def test_runtime_guard_ignores_comments_but_rejects_calls(self):
+        harmless = ('# serial.Serial() and rclpy.init() are forbidden here\n'
+                    '"""No serial.Serial() / rclpy.init()"""\n'
+                    'import rclpy\n')
+        self.assertEqual(prohibited_runtime_calls(harmless), [])
+        self.assertEqual(prohibited_runtime_calls(
+            'import serial\nserial.Serial("/dev/ttyACM0")\n'),
+            ["serial.Serial"])
+        self.assertEqual(prohibited_runtime_calls(
+            'import rclpy as ros\nros.init()\n'), ["rclpy.init"])
+        self.assertEqual(prohibited_runtime_calls(
+            'from serial import Serial as Port\nPort("/dev/ttyACM0")\n'),
+            ["serial.Serial"])
 
 
 if __name__ == "__main__":
