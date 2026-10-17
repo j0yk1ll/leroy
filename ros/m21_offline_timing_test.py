@@ -1,4 +1,6 @@
 """No ROS, Podman, serial, or camera dependencies."""
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 from pathlib import Path
 import tempfile
@@ -89,7 +91,16 @@ class M21OfflineAuditTests(unittest.TestCase):
             path = Path(folder) / "capture.log"
             path.write_text("\n".join(content) + "\n")
             self.assertEqual(load_log(path), (records, markers))
-            self.assertEqual(main([str(path)]), 0)
+            # Do not print synthetic acceptance evidence during unittest runs.
+            # Only the subsequent real-log audit should appear in terminal output.
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(main([str(path)]), 0)
+            lines = output.getvalue().splitlines()
+            self.assertEqual(sum(line.startswith("M21_OFFLINE_REPORT_JSON=")
+                                 for line in lines), 1)
+            self.assertEqual(sum(line.startswith("M21_OFFLINE_VERDICT=")
+                                 for line in lines), 1)
 
     def test_duplicate_report_fails_closed(self):
         with tempfile.TemporaryDirectory() as folder:
