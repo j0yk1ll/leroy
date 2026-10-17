@@ -39,10 +39,15 @@ MAX_STAMP_AGE_S = 2.0
 
 
 class ImuStreamSource(Node):
-    def __init__(self):
+    def __init__(self, on_imu_published=None):
+        # Optional M21F metadata-only tap. Existing M18/M20 callers pass None
+        # and preserve the previously accepted physical publication path.
+        if on_imu_published is not None and not callable(on_imu_published):
+            raise TypeError("IMU metadata observer must be callable")
         super().__init__(
             "m18_imu_source", enable_rosout=False,
             start_parameter_services=False)
+        self._on_imu_published = on_imu_published
         self._imu_pub = self.create_publisher(
             Imu, "/imu/data_raw", qos_profile_sensor_data)
         if self._imu_pub.topic_name != "/imu/data_raw":
@@ -136,6 +141,18 @@ class ImuStreamSource(Node):
         self.last_age_s = round(age_s, 4)
         self.max_age_s = max(self.max_age_s or 0.0, age_s)
         self.counts["published_imu_messages"] += 1
+        # This fires ONLY after a successfully published, calibrated packet.
+        # Source-level MCU sequence and acquisition ticks cannot be recovered
+        # from sensor_msgs/Imu; pass the original parsed fields directly.
+        # NEVER invoke on a withheld or malformed packet.
+        if self._on_imu_published is not None:
+            try:
+                self._on_imu_published(dict(fields), stamp_ns, steady_ns)
+            except Exception as exc:
+                # Fail closed: the owning serial runner's finally block must
+                # attempt STOP rather than silently lose timing metadata.
+                self.terminal_fault = "imu_metadata_callback_failed"
+                raise RuntimeError(self.terminal_fault) from exc
 
     def export(self):
         count = self.counts["published_imu_messages"]
