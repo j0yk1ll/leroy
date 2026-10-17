@@ -52,6 +52,20 @@ performance or obstacle safety. Any physical event-based synchronization
 must be independently validated after this test. CPU DepthART
 performance investigation remains deferred by operator decision.
 
+## M19 build regression — ROS Jazzy Python path
+
+The initial M19 image build failed at step 6 when importing the unit test:
+```text
+ModuleNotFoundError: No module named 'rclpy'
+```
+The Dockerfile sourced the ROS setup scripts, then replaced the required
+ROS/ament Python paths with `PYTHONPATH=/opt/m19:/opt/m18:/opt/m18/monitor`.
+The corrected image layer **retains** those paths by exporting
+`PYTHONPATH="/opt/m19:/opt/m18:/opt/m18/monitor:${PYTHONPATH:-}"`.
+A required build-time import check now confirms `rclpy`, the installed
+clock mapper and M19 module can all load, printing
+`M19_ROS_PYTHONPATH_SELFTEST=PASS`. This check runs without hardware.
+
 ## Step 1 — Build M19 (host Arch shell, NO USB access)
 
 No `source /opt/ros` on Arch Linux. Do not enable host interactive
@@ -67,8 +81,8 @@ set +o pipefail
   set -euo pipefail
   cd "$(git rev-parse --show-toplevel)"
   git fetch origin
-  git switch feature/m19-stationary-imu-rate-audit
-  git pull --ff-only origin feature/m19-stationary-imu-rate-audit
+  git switch fix/m19-ros-pythonpath-image-build
+  git pull --ff-only origin fix/m19-ros-pythonpath-image-build
   cd ros
 
   podman image exists localhost/leroy-imu:m18-stamped-ros
@@ -79,11 +93,12 @@ set +o pipefail
 
 M19_BUILD_EXIT=${PIPESTATUS[0]}
 echo "M19_BUILD_EXIT_CODE=$M19_BUILD_EXIT"
-grep -E 'M19_ROS_CLOCK_AUDIT_SELFTEST=PASS|^OK$' \
+grep -E 'M19_ROS_PYTHONPATH_SELFTEST=PASS|M19_ROS_CLOCK_AUDIT_SELFTEST=PASS|^OK$' \
   m19_imu_clock_image_build.log || true
 ```
 
 **Required:** `M19_BUILD_EXIT_CODE=0`, Python unittest `OK`,
+`M19_ROS_PYTHONPATH_SELFTEST=PASS` and
 `M19_ROS_CLOCK_AUDIT_SELFTEST=PASS`. This uses **no** USB device,
 physical camera, motor bridge or long-duration clock estimator.
 It verifies software policy and constructs actual ROS nodes only.
