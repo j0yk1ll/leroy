@@ -22,8 +22,6 @@ RUN chmod 0755 /usr/local/bin/leroy-m21f-selftest-run \
     && export PYTHONPATH="/opt/m21f:/opt/m21e:/opt/m20:/opt/m18:/opt/m18/monitor:${PYTHONPATH:-}" \
     && python3 -m py_compile /opt/m21f/m18_imu_stream_source.py \
        /opt/m21f/m21f_imu_source_hook_selftest.py \
-    && python3 -c 'from m18_imu_stream_source import ImuStreamSource; \
-       assert ImuStreamSource.__init__.__defaults__ == (None,); \
-       print("M21F_M18_HOOK_IMPORT_SELFTEST=PASS")'
+    && python3 -c 'from m18_imu_stream_source import ImuStreamSource; assert ImuStreamSource.__init__.__defaults__ == (None,); print("M21F_M18_HOOK_IMPORT_SELFTEST=PASS")'
 
 CMD ["/usr/local/bin/leroy-m21f-selftest-run"]
