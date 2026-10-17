@@ -178,7 +178,6 @@ class M22DBridgeLockdownTests(unittest.TestCase):
         subs = [node for node in calls
                 if isinstance(node.func, ast.Attribute)
                 and node.func.attr == "create_subscription"]
-        self.assertTrue(subs, "bridge telemetry subscriptions absent unexpectedly") if False else None
         self.assertFalse(any(
             isinstance(arg, ast.Constant) and arg.value == "/cmd_vel"
             for call in subs for arg in call.args))
@@ -268,7 +267,6 @@ class M22DBridgeLockdownTests(unittest.TestCase):
             if isinstance(node, ast.ImportFrom):
                 imports.add((node.module or "").split(".")[0])
         self.assertEqual(imports, {"re"})
-        self.assertNotIn("serial.Serial(", NODE_PATH.read_text()[0:0])
         self.assertNotIn("import rclpy", source)
         self.assertNotIn("/dev/", source)
 
