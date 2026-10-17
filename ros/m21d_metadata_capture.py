@@ -6,6 +6,7 @@ M21C-compatible JSONL, never a physical camera/IMU offset calibration.
 """
 import json
 import os
+import threading
 from pathlib import Path
 
 from m21_record_contract import FIELDS, EXPECTED, integer, summarize
@@ -27,6 +28,7 @@ class MetadataCapture:
                       "evidence_type": evidence_type}]
         self.max_events = max_events
         self.closed = False
+        self._lock = threading.RLock()
 
     @staticmethod
     def stamp_ns(seconds, nanoseconds):
@@ -37,21 +39,22 @@ class MetadataCapture:
         return result
 
     def _append(self, record):
-        if self.closed:
-            raise CaptureError("capture already finished")
-        if len(self.rows) - 1 >= self.max_events:
-            raise CaptureError("bounded event capacity exhausted")
-        kind = record.get("kind")
-        if kind not in FIELDS or set(record) != FIELDS[kind]:
-            raise CaptureError("invalid metadata keys")
-        integer(record["receipt_mono_ns"], "receipt_mono_ns", 1)
-        integer(record["header_ros_ns"], "header_ros_ns", 1)
-        if (record["frame_id"], record["publisher"]) != EXPECTED[kind]:
-            raise CaptureError("unexpected frame or graph publisher claim")
-        if kind != "imu" and (record["width"], record["height"]) != (640, 480):
-            raise CaptureError("unexpected camera dimensions")
-        # Full temporal integrity and MCU sequence checks happen in finish().
-        self.rows.append(record)
+        with self._lock:
+            if self.closed:
+                raise CaptureError("capture already finished")
+            if len(self.rows) - 1 >= self.max_events:
+                raise CaptureError("bounded event capacity exhausted")
+            kind = record.get("kind")
+            if kind not in FIELDS or set(record) != FIELDS[kind]:
+                raise CaptureError("invalid metadata keys")
+            integer(record["receipt_mono_ns"], "receipt_mono_ns", 1)
+            integer(record["header_ros_ns"], "header_ros_ns", 1)
+            if (record["frame_id"], record["publisher"]) != EXPECTED[kind]:
+                raise CaptureError("unexpected frame or graph publisher claim")
+            if kind != "imu" and (record["width"], record["height"]) != (640, 480):
+                raise CaptureError("unexpected camera dimensions")
+            # Full temporal integrity and MCU sequence checks happen in finish().
+            self.rows.append(record)
 
     def image(self, *, frame_index, stamp_ns, receipt_mono_ns, frame_id,
               width, height, publisher="/camera/rectify_node"):
@@ -87,20 +90,21 @@ class MetadataCapture:
         Never overwrite a prior capture; error leaves capture available for
         diagnosis, no hardware cleanup or serial state is managed here.
         """
-        if self.closed:
-            raise CaptureError("capture already finished")
-        report = summarize(self.rows)
-        payload = "".join(json.dumps(row, separators=(",", ":"), allow_nan=False)
-                          + "\n" for row in self.rows).encode("utf-8")
-        if len(payload) > MAX_OUTPUT_BYTES:
-            raise CaptureError("output exceeds configured byte limit")
-        target = Path(path)
-        with target.open("xb") as fh:
-            fh.write(payload)
-            fh.flush()
-            os.fsync(fh.fileno())
-        self.closed = True
-        report["record_file_bytes"] = len(payload)
-        report["recorder_event_count"] = len(self.rows) - 1
-        report["recorder_device_access"] = False
-        return report
+        with self._lock:
+            if self.closed:
+                raise CaptureError("capture already finished")
+            report = summarize(self.rows)
+            payload = "".join(json.dumps(row, separators=(",", ":"), allow_nan=False)
+                              + "\n" for row in self.rows).encode("utf-8")
+            if len(payload) > MAX_OUTPUT_BYTES:
+                raise CaptureError("output exceeds configured byte limit")
+            target = Path(path)
+            with target.open("xb") as fh:
+                fh.write(payload)
+                fh.flush()
+                os.fsync(fh.fileno())
+            self.closed = True
+            report["record_file_bytes"] = len(payload)
+            report["recorder_event_count"] = len(self.rows) - 1
+            report["recorder_device_access"] = False
+            return report
