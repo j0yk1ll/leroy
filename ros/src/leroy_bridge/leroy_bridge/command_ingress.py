@@ -36,6 +36,8 @@ def command_to_bytes(command):
         raise CommandRejected("CDC command not in M22D allowlist")
     name = match.group("name")
     value_text = match.group("value")
+    if len(value_text) > 5:
+        raise CommandRejected("CDC numeric setting is too long")
     if str(int(value_text)) != value_text:
         raise CommandRejected("noncanonical numeric CDC setting")
     value = int(value_text)
