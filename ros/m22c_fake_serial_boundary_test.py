@@ -216,7 +216,7 @@ class FakeSerialAuthorityTests(unittest.TestCase):
                 fake.write(packet)
         self.assertEqual(fake.writes, [])
 
-    def test_module_stays_offline_and_production_bridge_unchanged(self):
+    def test_module_stays_offline_and_production_bridge_guarded(self):
         script = (HERE / "m22c_fake_serial_boundary.py").read_text()
         imports = set()
         for node in ast.walk(ast.parse(script)):
@@ -225,11 +225,14 @@ class FakeSerialAuthorityTests(unittest.TestCase):
             if isinstance(node, ast.ImportFrom):
                 imports.add((node.module or "").split(".")[0])
         self.assertFalse(imports & {"serial", "rclpy", "subprocess", "os", "socket"})
-        # An explicit reminder: deployed bridge still accepts untrusted Twist
-        # on /cmd_vel. This PR intentionally DOES NOT fix that bypass.
+        # M22D eliminated the raw /cmd_vel subscriber and denies all
+        # nonzero wheel protocol writes; still no authorized motion ingress.
         real_node = (HERE / "src/leroy_bridge/leroy_bridge/node.py").read_text()
-        self.assertIn("Twist, '/cmd_vel', self._on_cmd_vel, 10", real_node)
-        self.assertIn("mecanum_twist_to_pwm(", real_node)
+        self.assertNotIn("Twist, '/cmd_vel', self._on_cmd_vel, 10", real_node)
+        self.assertIn("command_to_bytes(command)", real_node)
+        self.assertIn("from leroy_bridge.command_ingress import", real_node)
+        # M22C continues to exercise the unchanged existing PWM converter.
+        self.assertIn("mecanum_twist_to_pwm(", script)
 
 
 if __name__ == "__main__":
