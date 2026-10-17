@@ -1,0 +1,31 @@
+# M21E isolated, hardware-free ROS camera adapter and metadata integration selftest.
+# INHERIT operator-validated M20 image, but DO NOT invoke M20's physical
+# sensor runner. NO --device mapping. Simulated publishers only.
+ARG LEROY_M21E_BASE_IMAGE=localhost/leroy-sensors:m20-camera-imu
+FROM ${LEROY_M21E_BASE_IMAGE}
+
+ENV LEROY_M20_SENSOR_ONLY=1 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m21_record_contract.py /opt/m21e/m21_record_contract.py
+COPY m21d_metadata_capture.py /opt/m21e/m21d_metadata_capture.py
+COPY m21d_passive_ros_adapter.py /opt/m21e/m21d_passive_ros_adapter.py
+COPY m21d_metadata_capture_test.py /opt/m21e/m21d_metadata_capture_test.py
+COPY m21e_ros_adapter_selftest.py /opt/m21e/m21e_ros_adapter_selftest.py
+COPY m21e_offline_selftest_run.sh /usr/local/bin/leroy-m21e-selftest-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m21e-selftest-run \
+    && bash -n /usr/local/bin/leroy-m21e-selftest-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m21e:/opt/m20:/opt/m18:/opt/m18/monitor:${PYTHONPATH:-}" \
+    && python3 -m py_compile /opt/m21e/m21_record_contract.py \
+       /opt/m21e/m21d_metadata_capture.py /opt/m21e/m21d_passive_ros_adapter.py \
+       /opt/m21e/m21e_ros_adapter_selftest.py \
+    && python3 -m unittest discover -s /opt/m21e -p m21d_metadata_capture_test.py -v \
+    && python3 -c 'import rclpy; import m21d_passive_ros_adapter; print("M21E_ROS_IMPORT_SELFTEST=PASS")'
+
+CMD ["/usr/local/bin/leroy-m21e-selftest-run"]
