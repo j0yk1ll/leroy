@@ -52,6 +52,25 @@ performance or obstacle safety. Any physical event-based synchronization
 must be independently validated after this test. CPU DepthART
 performance investigation remains deferred by operator decision.
 
+## M19 build regression — ROS Jazzy Python path
+
+The initial M19 build failed at Dockerfile step 6 while importing the
+M19 unit test:
+
+```text
+ModuleNotFoundError: No module named 'rclpy'
+```
+
+The Dockerfile sourced both ROS overlays, then ran unit tests with a
+temporary `PYTHONPATH=/opt/m19:/opt/m18:/opt/m18/monitor` that **replaced**
+the ROS/ament search path containing `rclpy`. The corrected image layer
+exports `PYTHONPATH="/opt/m19:/opt/m18:/opt/m18/monitor:${PYTHONPATH:-}"`,
+keeping the sourced ROS paths. It now imports `rclpy`, the installed
+`leroy_bridge.clock_sync` and the M19 module in a build-time regression
+check requiring `M19_ROS_PYTHONPATH_SELFTEST=PASS` before unit tests
+or ROS-node startup smoke. Neither the MCU nor robot is involved in
+this test. A passing Docker build is still required on the operator host.
+
 ## Step 1 — Build M19 (host Arch shell, NO USB access)
 
 No `source /opt/ros` on Arch Linux. Do not enable host interactive
@@ -67,8 +86,8 @@ set +o pipefail
   set -euo pipefail
   cd "$(git rev-parse --show-toplevel)"
   git fetch origin
-  git switch feature/m19-stationary-imu-rate-audit
-  git pull --ff-only origin feature/m19-stationary-imu-rate-audit
+  git switch fix/m19-ros-pythonpath-image-build
+  git pull --ff-only origin fix/m19-ros-pythonpath-image-build
   cd ros
 
   podman image exists localhost/leroy-imu:m18-stamped-ros
@@ -79,7 +98,145 @@ set +o pipefail
 
 M19_BUILD_EXIT=${PIPESTATUS[0]}
 echo "M19_BUILD_EXIT_CODE=$M19_BUILD_EXIT"
-grep -E 'M19_ROS_CLOCK_AUDIT_SELFTEST=PASS|^OK$' \
+grep -E 'M19_ROS_PYTHONPATH_SELFTEST=PASS|M19_ROS_CLOCK_AUDIT_SELFTEST=PASS|^OK$' \
+  m19_imu_clock_image_build.log || true
+```
+
+**Required:** `M19_BUILD_EXIT_CODE=0`, Python unittest `OK`,
+`M19_ROS_PYTHONPATH_SELFTEST=PASS`, and
+`M19_ROS_CLOCK_AUDIT_SELFTEST=PASS`. This uses **no** USB device,
+physical camera, motor bridge or long-duration clock estimator.
+It verifies software policy and constructs actual ROS nodes only.
+
+## Step 2 — Stationary physical/USB preflight (no serial open)
+
+**First** physically disable both wheel and manipulator drive power,
+verify the real hardware E-stop is engaged, and make sure Leroy is
+immobilized. If hardware isolation is not possible, **STOP**.
+
+```bash
+set +e
+set +u
+set +o pipefail
+cd "$(git rev-parse --show-toplevel)/ros"
+
+echo '=== MOTOR-CAPABLE CONTAINER ==='
+podman inspect leroy-ros \
+  --format 'status={{.State.Status}} image={{.Config.Image}}'
+
+echo '=== MCU CHARACTER DEVICE ==='
+ls -l /dev/ttyACM0
+test -c /dev/ttyACM0
+echo "M19_MCU_TTY_EXISTS_EXIT=$?"
+
+echo '=== STABLE USB DEVICE IDENTIFIERS ==='
+if [ -d /dev/serial/by-id ]; then
+  ls -l /dev/serial/by-id/
+fi
+
+echo '=== MCU SERIAL OWNERS ==='
+if command -v fuser >/dev/null 2>&1; then
+  fuser -v /dev/ttyACM0 2>&1 || true
+else
+  echo 'fuser unavailable; verify serial ownership by other means'
+fi
+```
+
+`/dev/ttyACM0` is the historically configured STM32 tty, not an
+identity guarantee. Match the device to the previously verified
+MCU /dev/serial/by-id entry before continuing. STOP on missing,
+ambiguous, changed or busy tty, or if original `leroy-ros` isn't
+`exited`. Do not fix device access with `--privileged` or map
+additional USB/serial devices.
+
+## Step 3 — Bounded 120-second stationary IMU audit
+
+Only after the image smoke passes AND physical/device checks above
+are independently satisfied. This runs the **separate** M19 image,
+with no host network, no camera device and only one MCU USB tty:
+
+```bash
+set +e
+set +u
+set +o pipefail
+
+cd "$(git rev-parse --show-toplevel)/ros"
+
+if [ "$(podman inspect leroy-ros --format '{{.State.Status}}' 2>/dev/null)" != "exited" ]; then
+  echo 'STOP: motor-capable leroy-ros must stay exited'
+elif [ ! -c /dev/ttyACM0 ]; then
+  echo 'STOP: MCU serial port missing'
+elif ! podman image exists localhost/leroy-imu:m19-clock-audit; then
+  echo 'STOP: M19 image unavailable'
+else
+  read -r -p \
+    'Confirm MCU identity, port unowned, wheel/manipulator drive power physically inhibited and E-stop verified. Type ISOLATED: ' \
+    confirmation
+  if [ "$confirmation" != "ISOLATED" ]; then
+    echo 'STOP: physical safety preconditions not confirmed'
+  else
+    podman run --rm \
+      --name leroy-m19-imu-clock-only \
+      --network none --ipc private --pid private \
+      --cap-drop all --security-opt no-new-privileges \
+      --read-only --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+      --group-add keep-groups \
+      --device /dev/ttyACM0:/dev/ttyACM0 \
+      -e LEROY_M18_IMU_STREAM=1 \
+      -e LEROY_M19_CLOCK_AUDIT=1 \
+      -e LEROY_NAV2_DRY_RUN=1 \
+      -e ROS_DOMAIN_ID=169 \
+      -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+      leroy-imu:m19-clock-audit \
+      2>&1 | tee m19_real_imu_clock.log
+
+    M19_CAPTURE_EXIT=${PIPESTATUS[0]}
+    echo "M19_CAPTURE_EXIT_CODE=$M19_CAPTURE_EXIT"
+  fi
+fi
+```
+
+M19 sends a fixed IMU-stream start command, observes 120 seconds
+of MCU timestamps and ROS IMU receipts, and attempts the fixed
+stream-stop command on exit. If user interrupts with Ctrl+C, the
+report must remain **incomplete**, not a pass. If absolutely required,
+in another host terminal stop ONLY the disposable M19 container:
+
+```bash
+podman stop --time 10 leroy-m19-imu-clock-only
+```
+
+If `M19_IMU_STREAM_STOP_ACK` is `UNVERIFIED` (e.g. SIGKILL,
+serial disconnect or error), do NOT assume the MCU reverted to
+zero IMU stream rate. Maintain physical motor power isolation until
+its state is independently inspected by an operator.
+
+## Step 4 — Extract clock results
+
+```bash
+cd "$(git rev-parse --show-toplevel)/ros"
+
+echo '=== M19 ACKS, CLOCK AUDIT AND VERDICT ==='
+grep -E '^(M19_IMU_STREAM_START_ACK|M19_IMU_STREAM_STOP_ACK|M19_IMU_CLOCK_AUDIT_JSON|M19_IMU_CLOCK_VERDICT|M19_IMU_CLOCK_ERROR|M16_VERDICT)=' \
+  m19_real_imu_clock.log || true
+
+echo '=== ORIGINAL MOTOR-CAPABLE CONTAINER ==='
+podman inspect leroy-ros \
+  --format 'status={{.State.Status}} image={{.Config.Image}}'
+echo '=== M19 DISPOSABLE CONTAINER ==='
+podman ps -a --filter name=leroy-m19-imu-clock-only \
+  --format '{{.Names}} {{.Status}}'
+```
+
+**Accept only** `M19_IMU_CLOCK_VERDICT=OBSERVED_STATIONARY_IMU_CLOCK_RATE_CONTRACT`,
+both firmware ACKs `PASS`, no fault counters, and capture exit 0.
+Do not read `clock_rate_estimate_ppm=0.0` as validated unless
+`clock_rate_estimate_ready=true`. Any accepted rate estimate is
+**host-relative** and does not establish physical camera phase.
+
+No camera/DepthART test, no XRSLAM launch, odometry, TF, Nav2
+controller, wheel, manipulator or firmware change is part of M19.
+ \
   m19_imu_clock_image_build.log || true
 ```
 
