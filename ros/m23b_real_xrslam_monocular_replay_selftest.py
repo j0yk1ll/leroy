@@ -95,10 +95,11 @@ class ReplayNode(Node):
         # Odometry while pose convention validation is FALSE.
 
 
-def _bounded_log_reader(proc, out):
+def _bounded_log_reader(proc, out, lock):
     try:
         for line in proc.stdout:
-            out.append(line.rstrip("\n")[:500])
+            with lock:
+                out.append(line.rstrip("\n")[:500])
     finally:
         proc.stdout.close()
 
@@ -164,6 +165,12 @@ def run():
         proc = None
         reader_thread = None
         logs = deque(maxlen=500)
+        log_lock = threading.Lock()
+
+        def recent_log_lines():
+            with log_lock:
+                return list(logs)
+
         delivered = {"image": 0, "info": 0}
         try:
             node = ReplayNode()
@@ -184,7 +191,7 @@ def run():
                 cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, bufsize=1)
             reader_thread = threading.Thread(
-                target=_bounded_log_reader, args=(proc, logs), daemon=True)
+                target=_bounded_log_reader, args=(proc, logs, log_lock), daemon=True)
             reader_thread.start()
 
             # Graph discovery is asynchronous; wait for actual XRSLAM
@@ -216,7 +223,7 @@ def run():
             else:
                 raise AssertionError(
                     "real XRSLAM adapter did not reach initializing: " +
-                    str(list(logs)[-8:]))
+                    str(recent_log_lines()[-8:]))
             print("M23B_REAL_XRSLAM_SYNTHETIC_INITIALIZING=PASS", flush=True)
 
             # Replay ONLY already-generated bag CDR sensor messages.
@@ -243,10 +250,10 @@ def run():
             # Console receipt originates in the exact C++ adapter's
             # XRSLAMPushSensorData -> XRSLAMRunOneFrame drain path.
             submitted = any("Submitted 1 camera frames to XRSLAM (monocular)"
-                            in line for line in logs)
+                            in line for line in recent_log_lines())
             require(submitted,
                     "no actual XRSLAM first-camera submission receipt: " +
-                    str(list(logs)[-12:]))
+                    str(recent_log_lines()[-12:]))
             print("M23B_REAL_XRSLAM_MONOCULAR_FRAME_SUBMITTED=PASS",
                   flush=True)
             node.assert_no_motion_authority()
