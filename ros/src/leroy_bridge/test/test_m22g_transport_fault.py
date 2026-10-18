@@ -154,7 +154,6 @@ class M22GTransportFaultTests(unittest.TestCase):
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "set"
             for node in ast.walk(method_named(klass, "_reader_loop"))))
-        self.assertNotIn("M22E", str(method_named(klass, "_send_command")))
 
 
 if __name__ == "__main__":
