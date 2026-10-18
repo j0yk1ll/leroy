@@ -126,6 +126,10 @@ class SignedDiagnosticGate(Node):
                     or any(type(state[name]) is not bool
                            for name in HEALTH_FIELDS)):
                 raise ValueError("malformed synthetic health")
+            # A short-lived false health sample remains a fault even
+            # if a subsequent true sample arrives before the gate tick.
+            if not all(state.values()):
+                self.invalid_health_seen = True
             self.synthetic_health = Inputs(**state)
             self.last_health_ns = time.monotonic_ns()
         except (TypeError, KeyError, ValueError):
@@ -364,6 +368,10 @@ def run():
                 "CDC bytes written after terminal fault")
         print("M22H_BRIDGE_TERMINAL_CDC_INHIBIT=PASS", flush=True)
 
+        require(all(not packet.startswith(b"set_wheels ")
+                    or packet == STOP
+                    for packet in fake.snapshot()),
+                "real bridge fake CDC received nonzero wheel duty")
         require(all(item["diagnostic_only"] is True
                     and item["physical_device_access"] is False
                     and item["session_id_logged"] is False
