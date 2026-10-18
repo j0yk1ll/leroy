@@ -64,6 +64,7 @@ class M23BMonocularIsolationContract(unittest.TestCase):
     def test_odom_messages_and_command_publishers_denied(self):
         self.assertIn('get_publishers_info_by_topic("/cmd_vel")', REPLAY)
         self.assertIn("self.odom_receipts == 0", REPLAY)
+        self.assertIn("self.dynamic_tf_receipts == 0", REPLAY)
         self.assertIn("not any(self.validity)", REPLAY)
         self.assertIn('"xrslam_tracking_validated": False', REPLAY)
 
