@@ -215,7 +215,7 @@ class SignedSessionTests(unittest.TestCase):
                     expires_ns=BASE + expires_offset)
                 result = cycle(gate, session, 0, BASE, rearm=rearm)
                 self.assert_blocked(result, "BLOCKED_REARM_FRESHNESS")
-                self.assertEqual(fake.writes[-1], b"set_wheels 0 0 0 0\\n")
+                self.assertEqual(fake.writes[-1], b"set_wheels 0 0 0 0\n")
 
     def test_signed_packet_fields_are_bound_by_mac(self):
         for change in (
@@ -231,7 +231,7 @@ class SignedSessionTests(unittest.TestCase):
                 tampered = replace(original, **change)
                 result = cycle(gate, session, 11, now, envelope=tampered)
                 self.assert_blocked(result, "BLOCKED_MOTION_AUTH")
-                self.assertEqual(fake.writes[-1], b"set_wheels 0 0 0 0\\n")
+                self.assertEqual(fake.writes[-1], b"set_wheels 0 0 0 0\n")
 
     def test_old_operator_grant_from_other_session_rejected(self):
         _old_gate, _old_fake, old_session = setup_gate()
