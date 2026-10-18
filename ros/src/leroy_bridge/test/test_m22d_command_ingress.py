@@ -60,6 +60,8 @@ class FakeBridge:
     def __init__(self, send_command):
         self._serial = MemorySerial()
         self._serial_lock = threading.Lock()
+        self._transport_fault = threading.Event()
+        self._stop_event = threading.Event()
         self._logger = FakeLogger()
         self._method = send_command
 

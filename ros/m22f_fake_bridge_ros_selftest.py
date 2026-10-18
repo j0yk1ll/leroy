@@ -86,7 +86,7 @@ def run():
     preflight()
     real_serial_constructor = module.serial.Serial
     instances = []
-    bridge = probe = executor = None
+    bridge = probe = executor = fresh_bridge = None
     initialized = False
 
     def fake_factory(*args, **kwargs):
@@ -168,7 +168,19 @@ def run():
               "fake write failure not surfaced")
         check(len(fake.snapshot()) == earlier,
               "failed fake write was counted")
+        check(bridge._transport_fault.is_set(),
+              "CDC fault was not terminally latched")
+        check(bridge._stop_event.is_set(),
+              "CDC fault did not quiesce bridge reader")
+        check(bridge._send_command("keepalive") is False,
+              "post-fault keepalive unexpectedly accepted")
+        check(bridge._send_command("set_wheels 0 0 0 0") is False,
+              "post-fault STOP write unexpectedly attempted")
+        bridge._send_keepalive()
+        check(len(fake.snapshot()) == earlier,
+              "post-fault CDC log changed")
         print("M22F_FAKE_WRITE_ERROR_DETECTED=PASS", flush=True)
+        print("M22F_TERMINAL_TRANSPORT_FAULT=PASS", flush=True)
 
         executor.remove_node(probe)
         probe.destroy_node()
@@ -178,14 +190,35 @@ def run():
         bridge = None
         check(fake.is_open is False, "fake CDC not closed on shutdown")
         packets = fake.snapshot()
-        check(packets[-3:] == [
-            STOP, b"set_imu_stream_hz 0\n",
-            b"set_encoder_stream_hz 0\n"],
-            "shutdown did not send zero and disable streams")
+        check(len(packets) == earlier,
+              "CDC wrote after terminal fault during shutdown")
         check(all(not packet.startswith(b"set_wheels ")
                   or packet == STOP for packet in packets),
               "nonzero wheel output after shutdown")
-        print("M22F_BRIDGE_STOP_ON_SHUTDOWN=PASS", flush=True)
+        print("M22G_SHUTDOWN_NO_CDC_AFTER_FAULT=PASS", flush=True)
+
+        # Fresh node construction is the only permitted transport-fault
+        # recovery in this milestone; this is not operator rearming.
+        fresh_bridge = module.LeroyBridgeNode()
+        check(len(instances) == 2, "fresh bridge did not create new fake CDC")
+        fresh_fake = instances[-1]
+        check(fresh_bridge._serial is fresh_fake,
+              "fresh bridge inherited old fake CDC")
+        check(not fresh_bridge._transport_fault.is_set(),
+              "fresh bridge incorrectly inherited terminal CDC latch")
+        fresh_bridge.destroy_node()
+        fresh_bridge = None
+        check(fresh_fake.is_open is False,
+              "fresh fake CDC not closed")
+        fresh_log = fresh_fake.snapshot()
+        check(fresh_log[-3:] == [
+            STOP, b"set_imu_stream_hz 0\n",
+            b"set_encoder_stream_hz 0\n",
+        ], "fault-free shutdown did not send stop and streams-off")
+        check(all(not item.startswith(b"set_wheels ")
+                  or item == STOP for item in fresh_log),
+              "fresh instance emitted nonzero fake wheel duty")
+        print("M22G_FRESH_BRIDGE_SHUTDOWN_ZERO=PASS", flush=True)
 
         print("M22F_BRIDGE_REPORT_JSON=" + json.dumps({
             "milestone": "M22F", "evidence_type": "FAKE_ROS_LIFECYCLE",
@@ -195,7 +228,8 @@ def run():
             "nonzero_fake_wheel_writes": 0,
             "serial_port": URI, "physical_device_access": False,
             "motion_ingress_enabled": False,
-            "transport_failure_terminal_latch_validated": False,
+            "transport_failure_terminal_latch_validated": True,
+            "fresh_bridge_shutdown_stop_validated": True,
             "physical_stop_acknowledgement_validated": False,
         }, sort_keys=True), flush=True)
         print("M22F_ROS_BRIDGE_SELFTEST=PASS", flush=True)
@@ -213,6 +247,8 @@ def run():
             probe.destroy_node()
         if bridge is not None:
             bridge.destroy_node()
+        if fresh_bridge is not None:
+            fresh_bridge.destroy_node()
         if initialized and rclpy.ok():
             rclpy.shutdown()
         module.serial.Serial = real_serial_constructor

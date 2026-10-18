@@ -68,6 +68,32 @@ PYTHONPATH="$PWD/src/leroy_bridge:$PWD" PYTHONDONTWRITEBYTECODE=1 \
   python3 -u src/leroy_bridge/test/test_m22d_command_ingress.py
 ```
 
+## M22G terminal serial transport fault behavior
+
+The production bridge now **terminally latches** unexpected serial
+read errors, write errors, flush errors and short writes. It refuses
+all later CDC writes (including keepalives and zero-wheel shutdown
+packets) until the bridge process is restarted. The serial reader is
+quiesced on fault. A normal reader exit after shutdown does not create
+a new fault. A rejected unsafe command does not independently count as
+a serial transport failure. The earlier M22D zero-wheel-only command
+allowlist remains unchanged, and the signed M22E candidate is still
+not wired into production. No ROS `/cmd_vel` subscriber is present.
+
+**A latched fault is NOT proof of an MCU stop.** A write may have been
+partially delivered, or a real MCU could retain a previous command.
+The software stops transmitting keepalives after detecting failure
+but no physical stop timing/ACK has been established. The physical
+serial port may energize wheels/manipulator on open regardless of
+this mechanism. Do not use this code change as authorization for
+physical bridge/robot launch.
+
+Validation: `ros/src/leroy_bridge/test/test_m22g_transport_fault.py`
+extracts and executes actual bridge write/read methods against
+in-memory serial failures. `ros/m22f_fake_bridge_ros_selftest.py`
+runs the entire actual ROS bridge against a fake serial device in
+an isolated no-device container. See
+`ros/M22G_TERMINAL_CDC_FAULT_LATCH.md`.
 ## MCU-to-ROS timestamp mapping
 
 The STM32F401 generates uint32 microsecond timestamps using SysTick, derived
