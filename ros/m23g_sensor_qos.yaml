@@ -1,0 +1,18 @@
+# M23G planning artifact ONLY. Never automatically run on physical robot.
+# M20 imu source uses best-effort QoS; camera may also offer best-effort.
+# The recorder must match the offered publisher QoS to avoid empty bags.
+/camera/image_rect:
+  history: keep_last
+  depth: 20
+  reliability: best_effort
+  durability: volatile
+/camera/camera_info:
+  history: keep_last
+  depth: 20
+  reliability: best_effort
+  durability: volatile
+/imu/data_raw:
+  history: keep_last
+  depth: 100
+  reliability: best_effort
+  durability: volatile
