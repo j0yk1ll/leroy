@@ -1,0 +1,27 @@
+# M22F: no-device lifecycle runner for the actual ROS 2 bridge node
+ARG LEROY_M22F_BASE_IMAGE=localhost/leroy-sensors:m22b-authority-selftest
+FROM ${LEROY_M22F_BASE_IMAGE}
+
+ENV LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    M22F_FAKE_SERIAL_ONLY=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Explicitly overlay newest source; inherited bridge binaries may predate M22D.
+# No real serial devices or bind mounts are used by this image.
+COPY src/leroy_bridge/leroy_bridge/ /opt/m22f/leroy_bridge/
+COPY m22f_fake_bridge_ros_selftest.py /opt/m22f/m22f_fake_bridge_ros_selftest.py
+COPY m22f_no_device_run.sh /usr/local/bin/leroy-m22f-selftest-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m22f-selftest-run \
+    && bash -n /usr/local/bin/leroy-m22f-selftest-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m22f:${PYTHONPATH:-}" \
+    && python3 -m py_compile /opt/m22f/leroy_bridge/node.py \
+       /opt/m22f/leroy_bridge/command_ingress.py \
+       /opt/m22f/m22f_fake_bridge_ros_selftest.py \
+    && python3 -c 'import leroy_bridge.node as b; assert b.__file__.startswith("/opt/m22f/"), b.__file__; print("M22F_REAL_BRIDGE_IMPORT_SELFTEST=PASS")'
+
+CMD ["/usr/local/bin/leroy-m22f-selftest-run"]
