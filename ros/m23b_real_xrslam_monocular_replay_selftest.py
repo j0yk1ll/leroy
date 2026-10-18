@@ -24,6 +24,7 @@ from rclpy.qos import (
 )
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Bool, String
+from tf2_msgs.msg import TFMessage
 from tf2_ros import StaticTransformBroadcaster
 
 from m23a_xrslam_rosbag_preflight import inspect_bag
@@ -60,6 +61,7 @@ class ReplayNode(Node):
         self.status = []
         self.validity = []
         self.odom_receipts = 0
+        self.dynamic_tf_receipts = 0
         status_qos = QoSProfile(
             depth=10, durability=DurabilityPolicy.TRANSIENT_LOCAL,
             reliability=ReliabilityPolicy.RELIABLE)
@@ -71,9 +73,14 @@ class ReplayNode(Node):
             lambda msg: self.validity.append(msg.data), status_qos)
         self.odom_sub = self.create_subscription(
             Odometry, "/odom", self._on_odom, 10)
+        self.tf_sub = self.create_subscription(
+            TFMessage, "/tf", self._on_dynamic_tf, 10)
 
     def _on_odom(self, _msg):
         self.odom_receipts += 1
+
+    def _on_dynamic_tf(self, msg):
+        self.dynamic_tf_receipts += len(msg.transforms)
 
     def publish_synthetic_tf(self):
         # Identity only in the synthetic isolated test. NEVER robot calibration.
@@ -89,6 +96,8 @@ class ReplayNode(Node):
                 "unexpected raw cmd_vel publisher")
         require(self.odom_receipts == 0,
                 "XRSLAM published odom despite pose_convention_validated=false")
+        require(self.dynamic_tf_receipts == 0,
+                "XRSLAM published dynamic TF with unvalidated pose")
         require(not any(self.validity),
                 "XRSLAM published a true localization flag")
         # The adapter advertises /odom but intentionally does not emit any
@@ -268,6 +277,7 @@ def run():
                 "xrslam_camera_submission_observed": True,
                 "status_receipts": len(node.status),
                 "odom_messages": node.odom_receipts,
+                "dynamic_tf_messages": node.dynamic_tf_receipts,
                 "cmd_vel_publishers": 0,
                 "imu_used": False,
                 "pose_convention_validated": False,
