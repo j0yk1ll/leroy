@@ -1,0 +1,33 @@
+# M22H: signed ROS commands and live-node lifecycle, all DIAGNOSTIC/FAKE.
+ARG LEROY_M22H_BASE_IMAGE=localhost/leroy-sensors:m22g-terminal-fault-selftest
+FROM ${LEROY_M22H_BASE_IMAGE}
+
+ENV LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    M22F_FAKE_SERIAL_ONLY=1 \
+    M22H_FAKE_SIGNED_ROS_ONLY=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Overlay current exact bridge source, but never execute its real serial factory.
+COPY src/leroy_bridge/leroy_bridge/ /opt/m22h/leroy_bridge/
+COPY m22a_diagnostic_authority.py /opt/m22h/m22a_diagnostic_authority.py
+COPY m22c_fake_serial_boundary.py /opt/m22h/m22c_fake_serial_boundary.py
+COPY m22e_fake_signed_ingress.py /opt/m22h/m22e_fake_signed_ingress.py
+COPY m22f_fake_bridge_ros_selftest.py /opt/m22h/m22f_fake_bridge_ros_selftest.py
+COPY m22h_signed_ros_fake_bridge_selftest.py /opt/m22h/m22h_signed_ros_fake_bridge_selftest.py
+COPY m22h_no_device_run.sh /usr/local/bin/leroy-m22h-selftest-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m22h-selftest-run \
+    && bash -n /usr/local/bin/leroy-m22h-selftest-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m22h:${PYTHONPATH:-}" \
+    && python3 -m py_compile /opt/m22h/leroy_bridge/node.py \
+       /opt/m22h/leroy_bridge/authorized_session.py \
+       /opt/m22h/m22h_signed_ros_fake_bridge_selftest.py \
+       /opt/m22h/m22e_fake_signed_ingress.py \
+       /opt/m22h/m22f_fake_bridge_ros_selftest.py \
+    && python3 -c 'import leroy_bridge.node as b; from m22h_signed_ros_fake_bridge_selftest import SignedDiagnosticGate; assert b.__file__.startswith("/opt/m22h/"), b.__file__; print("M22H_SIGNED_ROS_IMPORT_SELFTEST=PASS")'
+
+CMD ["/usr/local/bin/leroy-m22h-selftest-run"]
