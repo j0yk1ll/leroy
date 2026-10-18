@@ -89,15 +89,23 @@ class M23AReplayInputTests(unittest.TestCase):
 
     def test_image_before_camera_info_is_matched(self):
         seq = records()
-        for i in range(len(seq) - 1):
-            if seq[i][0] == "info" and seq[i+1][0] == "image":
-                item_info = seq.pop(i)
-                # CameraInfo can arrive after its image in bag write
-                # order while keeping bag receipt timestamps monotonic.
-                after_image_ns = seq[i][1] + 1
-                seq.insert(i+1, (item_info[0], after_image_ns,
-                                 item_info[2]))
-                break
+        # The IMU event has the same bag timestamp as CameraInfo,
+        # so Image and CameraInfo are never adjacent in this fixture.
+        # Select their matching acquisition stamps instead of looking
+        # for adjacent records (which silently skipped the test).
+        original_info_index = next(
+            i for i, event in enumerate(seq) if event[0] == "info")
+        info_event = seq.pop(original_info_index)
+        image_index = next(
+            i for i, event in enumerate(seq)
+            if event[0] == "image"
+            and event[2].header.stamp == info_event[2].header.stamp)
+        after_image_ns = seq[image_index][1] + 1
+        seq.insert(image_index + 1, ("info", after_image_ns, info_event[2]))
+        # Prove the intended late CameraInfo order really happened.
+        self.assertEqual(seq[image_index][0], "image")
+        self.assertEqual(seq[image_index + 1][0], "info")
+        self.assertLess(seq[image_index][1], seq[image_index + 1][1])
         self.assertEqual(evaluate(seq)["verdict"], "REPLAY_INPUT_CONTRACT_PASS")
 
     def test_missing_imu_blocks_vio(self):
