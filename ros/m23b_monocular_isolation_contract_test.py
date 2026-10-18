@@ -73,6 +73,17 @@ class M23BMonocularIsolationContract(unittest.TestCase):
         self.assertIn("/dev/video2", RUNNER)
         self.assertIn("M23B_SYNTHETIC_XRSLAM_ONLY", RUNNER)
         self.assertIn("ROS_AUTOMATIC_DISCOVERY_RANGE", RUNNER)
+        # The Docker build executes THIS very test at /opt/m23b.
+        # Both inspected source files must be present in that directory.
+        self.assertIn(
+            "COPY m23b_no_device_run.sh /opt/m23b/m23b_no_device_run.sh",
+            DOCKER)
+        self.assertIn(
+            "COPY Dockerfile.m23b-selftest /opt/m23b/Dockerfile.m23b-selftest",
+            DOCKER)
+        self.assertIn(
+            "COPY m23b_no_device_run.sh /usr/local/bin/leroy-m23b-test-run",
+            DOCKER)
 
     def test_no_production_bridge_or_robot_launch_used(self):
         self.assertNotIn("leroy_bridge.node", REPLAY)
