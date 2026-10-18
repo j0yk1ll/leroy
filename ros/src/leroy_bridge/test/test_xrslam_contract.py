@@ -97,4 +97,5 @@ def test_clock_discontinuity_latches_and_withholds_keepalives():
     assert "if self._clock_fault:" in SOURCE
     assert "self._send_command('set_wheels 0 0 0 0')" in SOURCE
     assert "def _send_keepalive(self)" in SOURCE
-    assert "if self._clock_fault:\n            return\n        self._send_command('keepalive')" in SOURCE
+    assert ("if self._clock_fault or self._transport_fault.is_set():\n"
+            "            return\n        self._send_command('keepalive')") in SOURCE
