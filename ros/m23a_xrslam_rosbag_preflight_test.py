@@ -92,7 +92,11 @@ class M23AReplayInputTests(unittest.TestCase):
         for i in range(len(seq) - 1):
             if seq[i][0] == "info" and seq[i+1][0] == "image":
                 item_info = seq.pop(i)
-                seq.insert(i+1, item_info)
+                # CameraInfo can arrive after its image in bag write
+                # order while keeping bag receipt timestamps monotonic.
+                after_image_ns = seq[i][1] + 1
+                seq.insert(i+1, (item_info[0], after_image_ns,
+                                 item_info[2]))
                 break
         self.assertEqual(evaluate(seq)["verdict"], "REPLAY_INPUT_CONTRACT_PASS")
 
