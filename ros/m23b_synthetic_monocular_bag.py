@@ -27,7 +27,7 @@ def synthetic_pixels(frame_index):
         raise ValueError("fixture index out of bounds")
     # Slight translation to prevent every frame being byte-identical.
     line = bytes(
-        (255 if (((x + frame_index * 2) // 16 + (y // 16)) & 1)
+        (255 if (((x + frame_index * 2) // 16 + (y // 8)) & 1)
          else 0)
         for y in range(16) for x in range(WIDTH))
     return line * (HEIGHT // 16)
