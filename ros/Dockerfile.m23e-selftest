@@ -1,0 +1,31 @@
+# M23E: read-only existing rosbag SHA256 + camera/IMU evidence snapshot.
+# Base is operator-tested LOCAL M23D image; no network operations.
+ARG M23E_BASE=localhost/leroy-sensors:m23d-offline-bag-readiness
+FROM ${M23E_BASE}
+
+ENV LEROY_NAV2_DRY_RUN=1 \
+    M23E_OFFLINE_EVIDENCE_ONLY=1 \
+    ROS_DOMAIN_ID=175 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23e_offline_evidence_snapshot.py /opt/m23e/m23e_offline_evidence_snapshot.py
+COPY m23e_offline_evidence_snapshot_test.py /opt/m23e/m23e_offline_evidence_snapshot_test.py
+COPY m23e_synthetic_cdr_evidence_selftest.py /opt/m23e/m23e_synthetic_cdr_evidence_selftest.py
+COPY m23e_no_device_run.sh /opt/m23e/m23e_no_device_run.sh
+COPY Dockerfile.m23e-selftest /opt/m23e/Dockerfile.m23e-selftest
+COPY m23e_no_device_run.sh /usr/local/bin/leroy-m23e-test-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m23e-test-run \
+    && bash -n /usr/local/bin/leroy-m23e-test-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m23e:/opt/m23d:/opt/m23b:/opt/m23a:${PYTHONPATH:-}" \
+    && python3 -m py_compile \
+         /opt/m23e/m23e_offline_evidence_snapshot.py \
+         /opt/m23e/m23e_offline_evidence_snapshot_test.py \
+         /opt/m23e/m23e_synthetic_cdr_evidence_selftest.py \
+    && python3 -u /opt/m23e/m23e_offline_evidence_snapshot_test.py \
+    && python3 -c 'import yaml, rosbag2_py; from sensor_msgs.msg import Imu; print("M23E_JAZZY_EVIDENCE_IMPORT=PASS")'
+
+CMD ["/usr/local/bin/leroy-m23e-test-run"]
