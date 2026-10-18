@@ -89,7 +89,8 @@ M23D_BUILD_EXIT=${PIPESTATUS[0]}
 echo "M23D_BUILD_EXIT_CODE=$M23D_BUILD_EXIT"
 ~~~
 
-Require M23D_JAZZY_ROSBAG_IMPORT=PASS and build exit 0.
+Require M23D_JAZZY_ROSBAG_IMPORT=PASS and
+M23D_BUILD_EXIT_CODE=0.
 Do NOT pull images or install dependencies from the network.
 
 ## Phase C: Synthetic Jazzy CDR smoke (NO devices)
