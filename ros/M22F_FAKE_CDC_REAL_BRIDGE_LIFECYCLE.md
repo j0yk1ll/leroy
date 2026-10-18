@@ -34,14 +34,16 @@ The test exercises:
 - Canonical zero-wheel CDC packet allowed
 - Clock-fault keepalive withholding
 - Injected fake CDC write exception is surfaced as failure
-- Actual ROS node `destroy_node()` sends zero and disables streams,
-  closes fake serial, and joins the fake reader thread
+- Healthy ROS node `destroy_node()` sends zero and disables streams
+- After a terminal fault, shutdown closes fake serial and joins the fake
+  reader thread WITHOUT attempting any additional CDC writes
 - After the run, require zero nonzero wheel packets and no physical
   stop or ACK claims
 
-The current bridge's transport write exceptions are **reported**,
-but its command writer does NOT yet terminal-latch all transport
-failures. M22F documents this gap explicitly. No signed M22E motion
+M22G adds terminal latching of read/write/flush/short-write faults
+to the production bridge source and this test now asserts those
+consequences. The original M22F host result did NOT validate the latch;
+new acceptance requires a fresh M22G run. No signed M22E motion
 protocol is connected to the bridge in this milestone; **real
 nonzero motion remains disabled by the M22D allowlist**.
 
@@ -105,7 +107,8 @@ M22F_RAW_ROS_BYPASS_INHIBIT=PASS
 M22F_CDC_ZERO_WHEELS_ONLY=PASS
 M22F_CLOCK_FAULT_KEEPALIVE_INHIBIT=PASS
 M22F_FAKE_WRITE_ERROR_DETECTED=PASS
-M22F_BRIDGE_STOP_ON_SHUTDOWN=PASS
+M22G_SHUTDOWN_NO_CDC_AFTER_FAULT=PASS
+M22G_FRESH_BRIDGE_SHUTDOWN_ZERO=PASS
 M22F_ROS_BRIDGE_SELFTEST=PASS
 M22F_VERDICT=REAL_ROS_NODE_FAKE_CDC_ZERO_ONLY
 M22F_DEVICE_ACCESS=NONE
