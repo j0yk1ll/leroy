@@ -126,6 +126,19 @@ def run():
     require(os.access(EXECUTABLE, os.X_OK), "XRSLAM binary not executable")
 
     with tempfile.TemporaryDirectory(prefix="m23b-synthetic-monocular-") as temp:
+        # The upstream EuRoC example begins with an OpenCV-specific
+        # %YAML:1.0 directive, which standard yaml-cpp may reject.
+        # Make a separate *test-only* copy; never alter the input asset
+        # or present this sample as Leroy-calibrated sensor values.
+        example = TEMPLATE.read_text(encoding="utf-8")
+        if example.startswith("%YAML:1.0"):
+            example = example.split("\n", 1)[1]
+        require("cam0:" in example and "imu:" in example,
+                "unexpected upstream synthetic fixture format")
+        fixture_template = Path(temp) / "uncalibrated_euroc_example.yaml"
+        fixture_template.write_text(
+            "# TEST-ONLY EXAMPLE, NOT LEROY CALIBRATION\n" + example,
+            encoding="utf-8")
         bag = write_synthetic_bag(Path(temp) / "frames")
         report = inspect_bag(
             bag, storage_id="sqlite3", mode="monocular",
@@ -160,7 +173,7 @@ def run():
             cmd = [
                 str(EXECUTABLE), "--ros-args",
                 "-p", "slam_yaml:=" + str(SLAM),
-                "-p", "device_template_yaml:=" + str(TEMPLATE),
+                "-p", "device_template_yaml:=" + str(fixture_template),
                 "-p", "image_topic:=/camera/image_rect",
                 "-p", "camera_info_topic:=/camera/camera_info",
                 "-p", "camera_optical_frame:=camera_optical_frame",
