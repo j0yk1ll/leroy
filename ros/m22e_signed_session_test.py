@@ -99,7 +99,7 @@ class SignedSessionTests(unittest.TestCase):
         r = cycle(_new_gate, new_session, 0, BASE + 1_100_000_000,
                   envelope=past)
         self.assert_blocked(r, "BLOCKED_SESSION_OR_OWNER")
-        self.assertFalse(_new_fake.writes[-1] != b"set_wheels 0 0 0 0\n")
+        self.assertEqual(_new_fake.writes[-1], b"set_wheels 0 0 0 0\n")
 
     def test_motion_hmac_tamper_blocks_writes(self):
         gate, fake, session = armed()
@@ -201,6 +201,38 @@ class SignedSessionTests(unittest.TestCase):
         self.assert_blocked(r1, "BLOCKED_REARM_REPLAY")
         self.assertEqual(fake.writes[-1], b"set_wheels 0 0 0 0\n")
 
+    def test_expired_or_future_operator_grant_fails_closed(self):
+        for generated_offset, expires_offset in (
+            (-250_000_000, -1),
+            (1, 100_000_000),
+            (-10_000_000, 300_000_000),
+        ):
+            with self.subTest(offsets=(generated_offset, expires_offset)):
+                gate, fake, session = setup_gate()
+                rearm = sign_test_rearm(
+                    key=OPERATOR_KEY, session_id=session.session_id,
+                    counter=0, generated_ns=BASE + generated_offset,
+                    expires_ns=BASE + expires_offset)
+                result = cycle(gate, session, 0, BASE, rearm=rearm)
+                self.assert_blocked(result, "BLOCKED_REARM_FRESHNESS")
+                self.assertEqual(fake.writes[-1], b"set_wheels 0 0 0 0\\n")
+
+    def test_signed_packet_fields_are_bound_by_mac(self):
+        for change in (
+            {"sequence": 12},
+            {"expires_ns": BASE + 1_100_000_001},
+            {"wz": 0.12},
+            {"generated_ns": BASE + 1_090_000_001},
+        ):
+            with self.subTest(change=change):
+                gate, fake, session = armed()
+                now = BASE + 1_100_000_000
+                original = packet(session, 11, now)
+                tampered = replace(original, **change)
+                result = cycle(gate, session, 11, now, envelope=tampered)
+                self.assert_blocked(result, "BLOCKED_MOTION_AUTH")
+                self.assertEqual(fake.writes[-1], b"set_wheels 0 0 0 0\\n")
+
     def test_old_operator_grant_from_other_session_rejected(self):
         _old_gate, _old_fake, old_session = setup_gate()
         gate, fake, session = setup_gate()
@@ -292,9 +324,9 @@ class SignedSessionTests(unittest.TestCase):
             self.assertFalse(imports & {
                 "serial", "rclpy", "subprocess", "socket", "os",
             })
-        self.assertFalse(
-            (HERE / "m22e_fake_signed_ingress.py").read_text().find(
-                "FakeSerialTransport") < 0)
+        self.assertIn(
+            "FakeSerialTransport",
+            (HERE / "m22e_fake_signed_ingress.py").read_text())
 
 
 if __name__ == "__main__":
