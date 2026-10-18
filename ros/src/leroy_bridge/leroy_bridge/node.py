@@ -320,8 +320,11 @@ class LeroyBridgeNode(Node):
             except (serial.SerialException, serial.SerialTimeoutException,
                     OSError) as exc:
                 if not self._stop_event.is_set():
-                    self._transport_fault.set()
-                    self._stop_event.set()
+                    # Serialize the fault transition with the sole CDC
+                    # writer; no subsequent write may pass the lock guard.
+                    with self._serial_lock:
+                        self._transport_fault.set()
+                        self._stop_event.set()
                     self.get_logger().error(
                         f'Terminal MCU read fault; CDC inhibited until '
                         f'bridge restart: {exc}'
