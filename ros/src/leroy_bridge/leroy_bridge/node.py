@@ -17,6 +17,7 @@ from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
 from leroy_bridge.command_ingress import command_to_bytes, CommandRejected
 from leroy_bridge.bridge_signed_audit import BridgeSignedAudit
+from leroy_bridge.bridge_diagnostic_supervisor import BridgeDiagnosticSupervisor
 
 import serial
 
@@ -285,6 +286,22 @@ class LeroyBridgeNode(Node):
         if type(audit) is not BridgeSignedAudit:
             raise TypeError('M22J requires an exact bridge diagnostic auditor')
         return audit.inspect(motion=motion, rearm=rearm, now_ns=now_ns)
+
+    def _supervise_signed_diagnostic(
+            self, supervisor, *, motion, rearm=None, now_ns,
+            health, publishers):
+        # M22K: diagnostic-only, no ROS command subscriber/serial write.
+        # Real local clock/CDC failures override all synthetic claims.
+        # The caller cannot override these bridge-owned fault flags.
+        if type(supervisor) is not BridgeDiagnosticSupervisor:
+            raise TypeError('M22K requires exact diagnostic supervisor')
+        return supervisor.evaluate(
+            motion=motion, rearm=rearm, now_ns=now_ns,
+            health=health, publishers=publishers,
+            transport_healthy=not self._transport_fault.is_set(),
+            clock_healthy=not self._clock_fault,
+            bridge_running=not self._stop_event.is_set(),
+        )
 
     def _send_command(self, command: str) -> bool:
         try:
