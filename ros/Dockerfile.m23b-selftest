@@ -1,0 +1,33 @@
+# M23B: synthetic ROS 2 monocular rosbag into actual XRSLAM executable.
+# Parent image was accepted for M23A synthetic CDR, includes XRSLAM.
+ARG LEROY_M23B_BASE_IMAGE=localhost/leroy-sensors:m23a-xrslam-rosbag-preflight
+FROM ${LEROY_M23B_BASE_IMAGE}
+
+ENV LEROY_NAV2_DRY_RUN=1 \
+    M23B_SYNTHETIC_XRSLAM_ONLY=1 \
+    ROS_DOMAIN_ID=172 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23b_synthetic_monocular_bag.py /opt/m23b/m23b_synthetic_monocular_bag.py
+COPY m23b_real_xrslam_monocular_replay_selftest.py /opt/m23b/m23b_real_xrslam_monocular_replay_selftest.py
+COPY m23b_monocular_isolation_contract_test.py /opt/m23b/m23b_monocular_isolation_contract_test.py
+COPY m23b_no_device_run.sh /usr/local/bin/leroy-m23b-test-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m23b-test-run \
+    && bash -n /usr/local/bin/leroy-m23b-test-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m23b:/opt/m23a:${PYTHONPATH:-}" \
+    && python3 -m py_compile \
+       /opt/m23b/m23b_synthetic_monocular_bag.py \
+       /opt/m23b/m23b_real_xrslam_monocular_replay_selftest.py \
+       /opt/m23b/m23b_monocular_isolation_contract_test.py \
+    && python3 -u /opt/m23b/m23b_monocular_isolation_contract_test.py \
+    && python3 -c 'import rosbag2_py, rclpy; from tf2_ros import StaticTransformBroadcaster; print("M23B_JAZZY_SYNTHETIC_REPLAY_IMPORT=PASS")' \
+    && test -x /leroy_ws/install/leroy_xrslam/lib/leroy_xrslam/leroy_xrslam_node \
+    && test -s /opt/xrslam/configs/visual_only_slam.yaml \
+    && test -s /opt/xrslam/configs/euroc_sensor.yaml \
+    && ! ldd /leroy_ws/install/leroy_xrslam/lib/leroy_xrslam/leroy_xrslam_node | grep -q 'not found'
+
+CMD ["/usr/local/bin/leroy-m23b-test-run"]
