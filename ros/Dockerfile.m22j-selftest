@@ -1,0 +1,31 @@
+# M22J: bridge-owned signed audit; remains ZERO-WHEELS-only on fake CDC.
+ARG LEROY_M22J_BASE_IMAGE=localhost/leroy-sensors:m22h-signed-ros-selftest
+FROM ${LEROY_M22J_BASE_IMAGE}
+
+ENV LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    M22F_FAKE_SERIAL_ONLY=1 \
+    M22J_BRIDGE_AUDIT_ONLY=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Current exact production bridge source is overlayed, never started
+# via its normal ROS executable and never given device mappings.
+COPY src/leroy_bridge/leroy_bridge/ /opt/m22j/leroy_bridge/
+COPY m22i_isolated_role_signing.py /opt/m22j/m22i_isolated_role_signing.py
+COPY m22f_fake_bridge_ros_selftest.py /opt/m22j/m22f_fake_bridge_ros_selftest.py
+COPY m22j_real_bridge_signed_audit_ros_selftest.py /opt/m22j/m22j_real_bridge_signed_audit_ros_selftest.py
+COPY m22j_no_device_run.sh /usr/local/bin/leroy-m22j-selftest-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m22j-selftest-run \
+    && bash -n /usr/local/bin/leroy-m22j-selftest-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m22j:${PYTHONPATH:-}" \
+    && python3 -m py_compile /opt/m22j/leroy_bridge/node.py \
+       /opt/m22j/leroy_bridge/bridge_signed_audit.py \
+       /opt/m22j/m22i_isolated_role_signing.py \
+       /opt/m22j/m22j_real_bridge_signed_audit_ros_selftest.py \
+    && python3 -c 'import leroy_bridge.node as b; from leroy_bridge.bridge_signed_audit import BridgeSignedAudit; assert b.__file__.startswith("/opt/m22j/"), b.__file__; print("M22J_REAL_BRIDGE_AUDIT_IMPORT_SELFTEST=PASS")'
+
+CMD ["/usr/local/bin/leroy-m22j-selftest-run"]
