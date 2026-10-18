@@ -16,6 +16,7 @@ from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
 from leroy_bridge.command_ingress import command_to_bytes, CommandRejected
+from leroy_bridge.bridge_signed_audit import BridgeSignedAudit
 
 import serial
 
@@ -274,6 +275,16 @@ class LeroyBridgeNode(Node):
     def _yaw_quaternion(yaw: float):
         half = 0.5 * yaw
         return 0.0, 0.0, math.sin(half), math.cos(half)
+
+    def _inspect_signed_diagnostic(self, audit, *, motion, rearm=None,
+                                   now_ns):
+        # M22J is not a ROS subscriber or motor ingress. This method
+        # reports HMAC/session verification ONLY and deliberately never
+        # calls _send_command, motor PWM conversion or any serial method.
+        # In production no verifier or audit is constructed by this node.
+        if type(audit) is not BridgeSignedAudit:
+            raise TypeError('M22J requires an exact bridge diagnostic auditor')
+        return audit.inspect(motion=motion, rearm=rearm, now_ns=now_ns)
 
     def _send_command(self, command: str) -> bool:
         try:
