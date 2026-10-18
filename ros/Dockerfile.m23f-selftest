@@ -1,0 +1,31 @@
+# M23F: enumerate EXISTING offline rosbag directories; never hardware.
+# Inherits the operator-accepted LOCAL M23E evidence image.
+ARG M23F_BASE=localhost/leroy-sensors:m23e-evidence-snapshot
+FROM ${M23F_BASE}
+
+ENV LEROY_NAV2_DRY_RUN=1 \
+    M23F_EXISTING_DATA_ONLY=1 \
+    ROS_DOMAIN_ID=176 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23f_existing_recording_inventory.py /opt/m23f/m23f_existing_recording_inventory.py
+COPY m23f_existing_recording_inventory_test.py /opt/m23f/m23f_existing_recording_inventory_test.py
+COPY m23f_synthetic_inventory_selftest.py /opt/m23f/m23f_synthetic_inventory_selftest.py
+COPY m23f_no_device_run.sh /opt/m23f/m23f_no_device_run.sh
+COPY Dockerfile.m23f-selftest /opt/m23f/Dockerfile.m23f-selftest
+COPY m23f_no_device_run.sh /usr/local/bin/leroy-m23f-test-run
+
+RUN chmod 0755 /usr/local/bin/leroy-m23f-test-run \
+    && bash -n /usr/local/bin/leroy-m23f-test-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m23f:/opt/m23e:/opt/m23d:/opt/m23b:/opt/m23a:${PYTHONPATH:-}" \
+    && python3 -m py_compile \
+         /opt/m23f/m23f_existing_recording_inventory.py \
+         /opt/m23f/m23f_existing_recording_inventory_test.py \
+         /opt/m23f/m23f_synthetic_inventory_selftest.py \
+    && python3 -u /opt/m23f/m23f_existing_recording_inventory_test.py \
+    && python3 -c 'import yaml, rosbag2_py; from sensor_msgs.msg import Imu; print("M23F_JAZZY_INVENTORY_IMPORT=PASS")'
+
+CMD ["/usr/local/bin/leroy-m23f-test-run"]
