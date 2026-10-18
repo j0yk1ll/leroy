@@ -148,6 +148,7 @@ class LeroyBridgeNode(Node):
         # ingress is enabled in this milestone.
 
         self._serial_lock = threading.Lock()
+        self._transport_fault = threading.Event()
         self._clock_mapper = McuClock(self)
         self._clock_fault = False
         self._stop_event = threading.Event()
@@ -280,19 +281,35 @@ class LeroyBridgeNode(Node):
         except CommandRejected as exc:
             self.get_logger().error(f'M22D blocked unsafe CDC command: {exc}')
             return False
-        try:
-            with self._serial_lock:
-                self._serial.write(payload)
-                self._serial.flush()
-            return True
-        except (serial.SerialException, serial.SerialTimeoutException) as exc:
-            self.get_logger().error(f'Serial write failed: {exc}')
+        # M22G: once a serial write/flush/short-write/read error occurs,
+        # this process cannot resume CDC writes, even for a STOP packet.
+        # No physical stopping or MCU acknowledgement is asserted here.
+        if self._transport_fault.is_set():
             return False
+        with self._serial_lock:
+            if self._transport_fault.is_set():
+                return False
+            try:
+                written = self._serial.write(payload)
+                if written != len(payload):
+                    raise serial.SerialException(
+                        f'short CDC write: {written}/{len(payload)} bytes')
+                self._serial.flush()
+            except (serial.SerialException, serial.SerialTimeoutException,
+                    OSError) as exc:
+                self._transport_fault.set()
+                self._stop_event.set()
+                self.get_logger().error(
+                    f'Terminal MCU transport fault; CDC inhibited until '
+                    f'bridge restart: {exc}'
+                )
+                return False
+        return True
 
     def _send_keepalive(self) -> None:
         # On a clock fault, withhold keepalives so the MCU's independent
         # watchdog stops motion even if the immediate stop packet is lost.
-        if self._clock_fault:
+        if self._clock_fault or self._transport_fault.is_set():
             return
         self._send_command('keepalive')
 
@@ -300,9 +317,15 @@ class LeroyBridgeNode(Node):
         while not self._stop_event.is_set():
             try:
                 raw = self._serial.readline()
-            except serial.SerialException as exc:
+            except (serial.SerialException, serial.SerialTimeoutException,
+                    OSError) as exc:
                 if not self._stop_event.is_set():
-                    self.get_logger().error(f'Serial read failed: {exc}')
+                    self._transport_fault.set()
+                    self._stop_event.set()
+                    self.get_logger().error(
+                        f'Terminal MCU read fault; CDC inhibited until '
+                        f'bridge restart: {exc}'
+                    )
                 return
 
             if self._stop_event.is_set() or not rclpy.ok():
@@ -535,6 +558,9 @@ class LeroyBridgeNode(Node):
 
     def destroy_node(self):
         # Stop asynchronous telemetry before ROS context teardown.
+        # After a transport fault the zero/stream-disable writes below
+        # are intentionally refused by _send_command. This does NOT
+        # establish a physical stop and relies on independent protection.
         self._stop_event.set()
         try:
             self._send_command('set_wheels 0 0 0 0')
