@@ -12,6 +12,10 @@ ENV LEROY_NAV2_DRY_RUN=1 \
 COPY m23b_synthetic_monocular_bag.py /opt/m23b/m23b_synthetic_monocular_bag.py
 COPY m23b_real_xrslam_monocular_replay_selftest.py /opt/m23b/m23b_real_xrslam_monocular_replay_selftest.py
 COPY m23b_monocular_isolation_contract_test.py /opt/m23b/m23b_monocular_isolation_contract_test.py
+# The offline contract reads the original runner and Dockerfile from HERE.
+# Keep those source snapshots beside the test, as well as installing the runner.
+COPY m23b_no_device_run.sh /opt/m23b/m23b_no_device_run.sh
+COPY Dockerfile.m23b-selftest /opt/m23b/Dockerfile.m23b-selftest
 COPY m23b_no_device_run.sh /usr/local/bin/leroy-m23b-test-run
 
 RUN chmod 0755 /usr/local/bin/leroy-m23b-test-run \
