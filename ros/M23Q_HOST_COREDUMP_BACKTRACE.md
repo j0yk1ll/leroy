@@ -561,8 +561,9 @@ with the same two libc-relative offsets. Across both runs:
 This is a recurring **relative-address crash signature**.
 ASLR changes absolute addresses; the second apparent frame is
 unsymbolized and must not be promoted to a verified caller.
-The prior PID 46312 has **not** yet independently shown its kernel
-`NT_SIGINFO si_addr` or unmapped-PC ELF metadata.
+The earlier PID 46312 **subsequently did independently confirm**
+its `NT_SIGINFO si_addr` and unmapped fault-PC metadata; see the
+operator's completed Phase H result below.
 
 **Device-free, postmortem-only next step:** two new scripts
 `ros/m23q_extract_prior_core.sh` and
@@ -587,8 +588,8 @@ defect in the newly authored script: `BASE="\${HOME}/..."` and the
 directory guard check a nonexistent **literal** path. The existing
 M23Q evidence directory was not shown to be missing. Both offending
 backslashes have been removed, and a seventh synthetic source-contract
-test prevents their reintroduction. This fix has **not yet been
-operator-tested**; no prior core was extracted during the failed trial.
+test prevents their reintroduction. The fix was subsequently operator-tested successfully; no prior core
+was extracted during the first blocked trial.
 
 From the M23Q branch's `ros` directory:
 
@@ -622,6 +623,65 @@ If the notes are missing/inconsistent, retain the current
 No new process is started, no camera/STM32 is accessed, no
 robot motion or production change is authorized. Both
 M23P lifecycle and VIO/motion acceptance remain BLOCKED.
+
+## Phase H verified result — recurring unmapped instruction target
+
+**Operator successfully ran the corrected Phase H script on the
+already-retained historical core, without new device or ROS action.**
+The identity checks passed for host PID **46312** and a private core
+of **109,924,352 bytes** was exported. The stdlib ELF inspector
+observed:
+
+```text
+M23Q_PRIOR_JOURNAL_IDENTITY_VERIFIED=TRUE
+M23Q_PRIOR_CORE_EXTRACTION=SUCCESS
+M23Q_PRIOR_NT_FILE_NOTES=1
+M23Q_PRIOR_NT_SIGINFO_NOTES=1
+M23Q_PRIOR_PC=0x00007fa7214bdf5b
+M23Q_PRIOR_PC_FILE_MATCHES=0
+M23Q_PRIOR_PC_LOAD_MATCHES=0
+M23Q_PRIOR_SIGINFO_SIGNAL=11
+M23Q_PRIOR_SIGINFO_ERRNO=0
+M23Q_PRIOR_SIGINFO_CODE=1
+M23Q_PRIOR_SIGINFO_FAULT_ADDRESS=0x00007fa7214bdf5b
+M23Q_PRIOR_SIGINFO_EQUALS_PC=TRUE
+M23Q_PRIOR_UNMAPPED_EXECUTION_HYPOTHESIS=SUPPORTED
+M23Q_CROSS_CORE_PAGE_OFFSET_MATCH=TRUE
+M23Q_CROSS_CORE_RELATIVE_FRAME_DELTA_MATCH=TRUE
+M23Q_CROSS_CORE_DELTA=0x801a
+M23Q_PRIOR_FAULTING_LIBRARY_IDENTIFIED=FALSE
+M23Q_PRIOR_CAUSE_VERIFIED=FALSE
+M23Q_DEVICE_ACTION=NONE
+```
+
+The earlier fault PC has `0xf5b` page offset, as does the
+independently verified later PID **48349** PC
+`0x00007f56a4912f5b`. In both core-journal traces the second
+**unverified** address is exactly `0x801a` above the first.
+The two **independent kernel `NT_SIGINFO` records** now confirm
+`SIGSEGV/SEGV_MAPERR` and `si_addr == RIP`; neither core
+has an ELF `NT_FILE` or `PT_LOAD` mapping covering its fault PC.
+
+**Engineering conclusion:** Repeated unmapped-instruction-target
+shutdown mechanism **SUPPORTED IN BOTH HISTORICAL CORES**.
+Image-to-image address equality cannot be assumed under ASLR, and
+the `0x801a` journal-frame relation does not validate a C++
+caller. Neither `librectify.so`, Fast DDS, a specific destructor,
+nor a prior `dlclose` is proven responsible. Earlier matched-image
+library staging (93/93 files) did not resolve the later core's
+unwind, and no more speculative bulk dependencies or unverified
+caller reconstruction are warranted.
+
+**Stop point for M23Q:** device-free postmortem evidence is complete
+for this mechanism, but **the software defect is not fixed**.
+Leave this PR draft/unmerged, preserve the existing private binary
+cores, keep M23P shutdown/lifecycle **BLOCKED** and the strict M23A
+`>250 ms` physical image-header-gap gate unchanged. Any further
+lifetime instrumentation or corrected shutdown code should be
+reviewed in a separately scoped, explicitly authorized no-device
+follow-up, **not** implemented as an M23Q production or runtime
+change. VIO/tracking/recorder/physical camera/STM32/motion remain
+blocked.
 
 ## Strict invariant
 
