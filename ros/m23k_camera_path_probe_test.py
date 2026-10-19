@@ -1,12 +1,13 @@
 """M23K pure-Python no-device RAW-vs-RECT observer contracts."""
 from pathlib import Path
+import signal
 from unittest import mock
 import unittest
 
 from m23k_camera_path_probe import (
     CameraStats, DURATION_S, GAP_NS, MAX_MESSAGES, TOPICS,
     _require_live_environment, parse_counter_log,
-    camera_launch_crashed, COUNTER_PATH,
+    camera_launch_crashed, COUNTER_PATH, _stop_session,
 )
 
 N = 1_800_000_000_000_000_000
@@ -171,6 +172,28 @@ class M23KCameraPathContracts(unittest.TestCase):
         self.assertIn('"/camera/image_rect"', source)
         self.assertIn("rclcpp::SensorDataQoS", source)
         self.assertTrue(COUNTER_PATH.endswith("m23k_camera_header_counter"))
+
+
+    def test_requested_sigint_code_130_does_not_fail_cleanup(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        proc.wait.return_value = 130
+        problems = []
+        with mock.patch("m23k_camera_path_probe.os.killpg") as killpg:
+            _stop_session(proc, signal.SIGINT, 10, problems, "CAMERA_LAUNCH")
+        killpg.assert_called_once_with(12345, signal.SIGINT)
+        self.assertEqual(problems, [])
+
+    def test_unexpected_sigsegv_exit_is_reported(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        proc.wait.return_value = -11
+        problems = []
+        with mock.patch("m23k_camera_path_probe.os.killpg"):
+            _stop_session(proc, signal.SIGINT, 10, problems, "CAMERA_LAUNCH")
+        self.assertEqual(problems, ["CAMERA_LAUNCH_EXIT_CODE_-11"])
 
 
 if __name__ == "__main__":
