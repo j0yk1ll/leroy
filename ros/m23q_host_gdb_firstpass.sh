@@ -6,9 +6,17 @@ umask 077
 
 HOST_PID="48349"
 IMAGE="localhost/leroy-sensors:m23p-rectifier-shutdown"
-EXPECTED_IMAGE_ID="8c75cdd760b9aacf65881e12317ec47b6189391356c6f4fa499e6d436fc6a0fa"
+# The older image 8c75... was built before the publisher-first change.
+# 6eeb... is the operator's candidate tag at the time of this failed
+# first pass. Verify creation *before the crash* and embedded source
+# against the exact M23P commit; do not infer historical identity from
+# this tag alone.
+EXPECTED_IMAGE_ID="6eeb8ca08525d451dc0f216f097c1df7e300444d8c8ae551fde576d64a1c48f1"
+M23P_COMMIT="6c300889a2f472c4f8b1bf568334a1254b6d7a03"
+EARLIER_CRASH="2026-10-19 16:11:25 +0200"
+TARGET_CRASH="2026-10-19 16:24:57 +0200"
 
-for bin in coredumpctl podman gdb; do
+for bin in coredumpctl podman gdb git date cmp; do
     command -v "$bin" >/dev/null || {
         echo "M23Q_BLOCKED=MISSING_DEPENDENCY:$bin" >&2
         exit 2
@@ -52,7 +60,23 @@ if [ "${IMAGE_ID#sha256:}" != "$EXPECTED_IMAGE_ID" ]; then
     echo "M23Q_IMAGE_ID=$IMAGE_ID"
     exit 2
 fi
-echo "M23Q_EXACT_IMAGE_ID_VERIFIED=TRUE"
+IMAGE_CREATED="$(podman image inspect "$EXPECTED_IMAGE_ID" --format '{{.Created}}')" || {
+    echo "M23Q_BLOCKED=EXACT_IMAGE_METADATA_INACCESSIBLE"
+    exit 2
+}
+IMAGE_CREATED_EPOCH="$(date -d "$IMAGE_CREATED" +%s)" || {
+    echo "M23Q_BLOCKED=IMAGE_CREATED_TIME_INVALID"
+    exit 2
+}
+EARLIER_EPOCH="$(date -d "$EARLIER_CRASH" +%s)"
+TARGET_EPOCH="$(date -d "$TARGET_CRASH" +%s)"
+echo "M23Q_CANDIDATE_IMAGE_CREATED=$IMAGE_CREATED"
+if [ "$IMAGE_CREATED_EPOCH" -le "$EARLIER_EPOCH" ] ||
+   [ "$IMAGE_CREATED_EPOCH" -gt "$TARGET_EPOCH" ]; then
+    echo "M23Q_BLOCKED=IMAGE_CREATION_OUTSIDE_EXPERIMENT_WINDOW"
+    exit 2
+fi
+echo "M23Q_IMAGE_ID_AND_CHRONOLOGY_VERIFIED=TRUE"
 
 CORE="$RUN_DIR/core.48349"
 coredumpctl --no-pager --output="$CORE" dump "$HOST_PID" \
@@ -78,7 +102,7 @@ cleanup() {
 trap cleanup EXIT
 CID="$(podman create --pull=never --network none --ipc private --pid private \
       --cap-drop all --security-opt no-new-privileges \
-      --entrypoint /bin/true "$IMAGE")" || {
+      --entrypoint /bin/true "$EXPECTED_IMAGE_ID")" || {
     echo "M23Q_BLOCKED=STOPPED_IMAGE_STAGING_FAILED"
     exit 2
 }
@@ -96,8 +120,31 @@ podman cp "$CID:/opt/ros/jazzy/lib/librectify.so" \
     echo "M23Q_BLOCKED=MATCHING_RECTIFIER_COPY_FAILED"
     exit 2
 }
+# Exact-source validation prevents accepting a similarly named, rebuilt
+# image even if the mutable local tag happens to resolve.
+podman cp "$CID:/opt/m23p/m23p_no_device_rectifier_shutdown.py"     "$RUN_DIR/m23p_runner_from_image.py" || {
+    echo "M23Q_BLOCKED=M23P_RUNNER_COPY_FAILED"
+    exit 2
+}
+podman cp "$CID:/opt/m23p/m23p_qos_graph.py"     "$RUN_DIR/m23p_graph_from_image.py" || {
+    echo "M23Q_BLOCKED=M23P_GRAPH_COPY_FAILED"
+    exit 2
+}
+if ! git show "$M23P_COMMIT:ros/m23p_no_device_rectifier_shutdown.py" |
+     cmp -s - "$RUN_DIR/m23p_runner_from_image.py"; then
+    echo "M23Q_BLOCKED=M23P_RUNNER_SOURCE_MISMATCH"
+    exit 2
+fi
+if ! git show "$M23P_COMMIT:ros/m23p_qos_graph.py" |
+     cmp -s - "$RUN_DIR/m23p_graph_from_image.py"; then
+    echo "M23Q_BLOCKED=M23P_GRAPH_SOURCE_MISMATCH"
+    exit 2
+fi
+chmod 600 "$RUN_DIR/m23p_runner_from_image.py"           "$RUN_DIR/m23p_graph_from_image.py"
+echo "M23Q_EMBEDDED_SOURCE_MATCHES_M23P_COMMIT=TRUE"
 cleanup
 CID=""
+echo "M23Q_EXACT_IMAGE_ID_VERIFIED=TRUE"
 echo "M23Q_STOPPED_IMAGE_FILES_STAGED=TRUE"
 
 # Use host GDB for a postmortem read only; never attach to a live process.
