@@ -17,7 +17,6 @@ from m23k_camera_path_probe import (
     camera_crash_context, camera_launch_crashed, parse_counter_log,
     verified_receiver_qos_log,
 )
-from m23l_synthetic_dds_baseline import parse_publisher_log
 
 PROFILES = ("idle", "synthetic")
 REQUIRED_ENV = {
@@ -27,7 +26,48 @@ REQUIRED_ENV = {
     "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
 }
 INSTALL = "/opt/m23m-cpp-install/lib/leroy_m23k_camera_counter/"
-PUBLISHER = INSTALL + "m23l_synthetic_image_publisher"
+PUBLISHER = ("/opt/m23p-cpp-install/lib/leroy_m23p_calibrated_synthetic/"
+             "m23p_calibrated_publisher")
+PUBLISHED_FRAMES = 900
+MIN_RECT_DELIVERY_FRACTION = 0.90
+EXPECTED_PAYLOAD_BYTES = 640 * 480 * 3
+
+
+def parse_m23p_publisher_log(payload):
+    """Demand complete M23P-only publisher evidence and declared fake calibration."""
+    fields = {}
+    required = ("COUNTS", "START_SPAN_NS", "MAX_CALLBACK_NS",
+                "PAYLOAD_BYTES", "SYNTHETIC_CALIBRATION")
+    for line in payload.splitlines():
+        if line.startswith("M23P_PUBLISHER_FATAL="):
+            raise ValueError("M23P synthetic publisher reported fatal")
+        for field in required:
+            marker = "M23P_" + (field if field == "SYNTHETIC_CALIBRATION"
+                                else "PUBLISHER_" + field) + "="
+            if line.startswith(marker):
+                if field in fields:
+                    raise ValueError("duplicate M23P publisher marker")
+                fields[field] = line[len(marker):]
+    if set(fields) != set(required):
+        raise ValueError("incomplete M23P fabricated publisher output")
+    if fields["SYNTHETIC_CALIBRATION"] != "FABRICATED_NONZERO_DISTORTION":
+        raise ValueError("publisher calibration fixture unverified")
+    try:
+        counts = [int(x) for x in fields["COUNTS"].split(",")]
+        span = int(fields["START_SPAN_NS"])
+        callback = int(fields["MAX_CALLBACK_NS"])
+        payload_bytes = int(fields["PAYLOAD_BYTES"])
+    except ValueError as exc:
+        raise ValueError("M23P publisher invalid numeric fields") from exc
+    if counts != [PUBLISHED_FRAMES, PUBLISHED_FRAMES]:
+        raise ValueError("publisher count not exactly 900")
+    if not 0 < span <= 37_000_000_000 or callback < 0:
+        raise ValueError("publisher callback timing invalid")
+    if payload_bytes != EXPECTED_PAYLOAD_BYTES:
+        raise ValueError("publisher payload size incorrect")
+    return {"image": counts[0], "info": counts[1],
+            "span_ns": span, "payload_bytes": payload_bytes,
+            "synthetic_calibration": fields["SYNTHETIC_CALIBRATION"]}
 COUNTER = INSTALL + "m23k_camera_header_counter"
 LAUNCH = "/opt/m23p/m23p_rectifier_only.launch.py"
 LAUNCH_LOG = Path("/tmp/m23p-rectifier-launch.log")
@@ -181,22 +221,34 @@ def run():
         issues.append(launch_status)
     if profile == "synthetic":
         try:
-            published = parse_publisher_log(
+            published = parse_m23p_publisher_log(
                 PUBLISHER_LOG.read_text(errors="replace"))
             observer_log = COUNTER_LOG.read_text(errors="replace")
             observed = parse_counter_log(observer_log, require_rect=True)
             verified_receiver_qos_log(observer_log, "reliable_100")
             observations = {
                 "synthetic_published_image_count": published["image"],
+                "synthetic_calibration": published["synthetic_calibration"],
                 "synthetic_observer_counts": observed["counts"],
                 "synthetic_observer_faults": observed["faults"],
                 "synthetic_rect_max_header_gap_ms":
                     observed["streams"]["rect"]["header_intervals"]["max_gap_ms"],
+                "raw_rect_identical_header_stamp_pairs":
+                    observed["raw_rect_identical_header_stamp_pairs"],
+                "unmatched_rectified_header_stamps":
+                    observed["rect_only_observed_header_stamps"],
             }
-            if (observed["counts"]["raw"] < 3 or
-                    observed["counts"]["rect"] < 3 or
-                    observed["faults"]):
-                issues.append("SYNTHETIC_RECTIFIED_DATA_NOT_OBSERVED")
+            if (observed["counts"]["raw"] <
+                    MIN_RECT_DELIVERY_FRACTION * PUBLISHED_FRAMES
+                    or observed["counts"]["rect"] <
+                    MIN_RECT_DELIVERY_FRACTION * PUBLISHED_FRAMES
+                    or observed["raw_rect_identical_header_stamp_pairs"] <
+                    MIN_RECT_DELIVERY_FRACTION * observed["counts"]["rect"]
+                    or observed["rect_only_observed_header_stamps"] != 0
+                    or observed["streams"]["rect"]["header_intervals"][
+                        "gaps_over_250ms"] != 0
+                    or observed["faults"]):
+                issues.append("SYNTHETIC_RECTIFIED_DELIVERY_INSUFFICIENT")
             if counter_code != 0:
                 issues.append("COUNTER_EXIT_" + str(counter_code))
             if publisher_code != 0:
@@ -221,6 +273,7 @@ def run():
         "crash_context": camera_crash_context(launch_text),
         "observations": observations,
         "device_access": "NONE",
+        "synthetic_calibration_only": True,
         "physical_motion_authorized": False,
         "real_camera_continuity_validated": False,
         "camera_imu_calibrated": False,
