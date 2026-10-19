@@ -26,6 +26,35 @@ DURATION_S = 45
 CAMERA_WARMUP_S = 3
 MAX_MESSAGES = 5000
 GAP_NS = 250_000_000
+# M23N opt-in has NO effect on original M23K observer defaults.
+M23N_CAMERA_QOS_PROFILES = ("best_effort_100", "reliable_100")
+M23N_COUNTER_PATH = (
+    "/opt/m23m-cpp-install/lib/leroy_m23k_camera_counter/"
+    "m23k_camera_header_counter"
+)
+
+
+def camera_qos_request(environ, variant):
+    """Return explicit test-only receiver QoS; never silently use a mode."""
+    if environ.get("M23N_CAMERA_QOS_ONLY") != "1":
+        return None
+    if variant != "raw_only_mjpeg":
+        raise ValueError("M23N is restricted to raw_only_mjpeg without rectifier")
+    qos = environ.get("M23N_SUB_QOS")
+    if qos not in M23N_CAMERA_QOS_PROFILES:
+        raise ValueError("M23N QoS must be best_effort_100 or reliable_100")
+    return qos
+
+
+def verified_receiver_qos_log(payload, requested):
+    """Require the actual C++ counter's sole selected QoS marker."""
+    markers = [line.split("=", 1)[1].strip()
+               for line in payload.splitlines()
+               if line.startswith("M23M_COUNTER_QOS_PROFILE=")]
+    if len(markers) != 1 or markers[0] != requested:
+        raise ValueError("missing, duplicate, or mismatched C++ receiver QoS")
+    return markers[0]
+
 PROBE_VARIANTS = {
     "full_mjpeg": ("/opt/m20/m20_camera_only.launch.py", True),
     "raw_only_mjpeg": ("/opt/m23k/m23k_camera_raw_only.launch.py", False),
@@ -224,9 +253,11 @@ def run_camera_only():
     if variant not in PROBE_VARIANTS:
         raise RuntimeError("unrecognized M23K camera probe variant")
     camera_launch_path, require_rect = PROBE_VARIANTS[variant]
+    requested_qos = camera_qos_request(os.environ, variant)
+    counter_binary = M23N_COUNTER_PATH if requested_qos else COUNTER_PATH
     # C++ processes sample headers without transferring full image payloads
     # into Python. The camera launch and exact M20 rectifier are unchanged.
-    if not Path(COUNTER_PATH).is_file():
+    if not Path(counter_binary).is_file():
         raise RuntimeError("offline-built C++ header-only observer absent")
     camera = counter = None
     issues = []
@@ -236,7 +267,9 @@ def run_camera_only():
         try:
             counter_env = dict(os.environ)
             counter_env["M23K_RAW_ONLY"] = "0" if require_rect else "1"
-            counter = subprocess.Popen([COUNTER_PATH], stdout=counter_output,
+            if requested_qos:
+                counter_env["M23M_SUB_QOS"] = requested_qos
+            counter = subprocess.Popen([counter_binary], stdout=counter_output,
                                        stderr=subprocess.STDOUT,
                                        env=counter_env, start_new_session=True)
             time.sleep(1.0)
@@ -261,6 +294,9 @@ def run_camera_only():
             # A component segfault may be masked by a zero ros2 launch code;
             # detect "process has died" explicitly in its saved log.
             _stop_session(camera, signal.SIGINT, 15, issues, "CAMERA_LAUNCH")
+            if requested_qos and counter is not None and counter.poll() is None:
+                # Match M23M's 2s drain window after the producer exits.
+                time.sleep(2.0)
             _stop_session(counter, signal.SIGINT, 10, issues, "CPP_COUNTER")
             camera_output.flush()
             counter_output.flush()
@@ -282,6 +318,8 @@ def run_camera_only():
     try:
         stats_report = parse_counter_log(counter_text,
                                          require_rect=require_rect)
+        if requested_qos:
+            verified_receiver_qos_log(counter_text, requested_qos)
     except (ValueError, TypeError, KeyError) as exc:
         issues.append(type(exc).__name__ + ": " + str(exc))
         required = ("raw", "rect", "info") if require_rect else ("raw", "info")
@@ -290,6 +328,14 @@ def run_camera_only():
 
     # Preserve measurements even if only camera cleanup failed. A crash
     # cannot produce the original misleading clean diagnostic verdict.
+    if requested_qos:
+        stats_report["milestone"] = "M23N"
+        stats_report["receiver_qos_profile"] = requested_qos
+        stats_report["receiver_qos_verified"] = not any(
+            "receiver QoS" in issue for issue in issues)
+        stats_report["subscriber_drain_window_s"] = 2.0
+        stats_report["camera_publisher_rate_verified"] = False
+        stats_report["actual_publisher_offered_qos_verified"] = False
     stats_report["camera_probe_variant"] = variant
     stats_report["rectifier_enabled"] = require_rect
     stats_report["pixel_format"] = (
@@ -303,6 +349,11 @@ def run_camera_only():
     print("M23K_CAMERA_PROBE_JSON=" +
           json.dumps(stats_report, sort_keys=True), flush=True)
     print("M23K_VERDICT=" + stats_report["verdict"], flush=True)
+    if requested_qos:
+        print("M23N_CAMERA_QOS_JSON=" +
+              json.dumps(stats_report, sort_keys=True), flush=True)
+        print("M23N_CAMERA_QOS_VERDICT=" + stats_report["verdict"],
+              flush=True)
     print("M23K_MCU_DEVICE_ACCESS=NONE", flush=True)
     return 0 if stats_report["verdict"] == "CAMERA_PATH_DIAGNOSTIC_ONLY" else 2
 
