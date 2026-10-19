@@ -19,6 +19,7 @@ ENV M23K_PROBE_MODE=selftest \
 COPY m23p_cpp /opt/m23p/m23p_cpp
 COPY m23p_rectifier_only.launch.py /opt/m23p/m23p_rectifier_only.launch.py
 COPY m23p_no_device_rectifier_shutdown.py /opt/m23p/m23p_no_device_rectifier_shutdown.py
+COPY m23p_qos_graph.py /opt/m23p/m23p_qos_graph.py
 COPY m23p_no_device_rectifier_shutdown_test.py /opt/m23p/m23p_no_device_rectifier_shutdown_test.py
 COPY M23P_NO_DEVICE_RECTIFIER_SHUTDOWN.md /opt/m23p/M23P_NO_DEVICE_RECTIFIER_SHUTDOWN.md
 COPY Dockerfile.m23p-rectifier-shutdown /opt/m23p/Dockerfile.m23p-rectifier-shutdown
@@ -28,6 +29,7 @@ RUN . /opt/ros/jazzy/setup.sh \
     && python3 -m py_compile \
        /opt/m23p/m23p_no_device_rectifier_shutdown.py \
        /opt/m23p/m23p_no_device_rectifier_shutdown_test.py \
+       /opt/m23p/m23p_qos_graph.py \
        /opt/m23p/m23p_rectifier_only.launch.py \
     && python3 -u /opt/m23p/m23p_no_device_rectifier_shutdown_test.py \
     && colcon --log-base /tmp/m23p-cpp-build-logs build \
