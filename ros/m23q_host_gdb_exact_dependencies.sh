@@ -104,7 +104,13 @@ while IFS= read -r mapped_file; do
             exit 2 ;;
     esac
     target="$SYSROOT$mapped_file"
-    if [ -e "$target" ]; then
+    # Do not accept symlinks here: an absolute link can resolve into
+    # the Arch HOST filesystem and create misleading GDB attribution.
+    if [ -L "$target" ]; then
+        failed=$((failed + 1))
+        continue
+    fi
+    if [ -f "$target" ]; then
         skipped=$((skipped + 1))
         continue
     fi
@@ -112,7 +118,7 @@ while IFS= read -r mapped_file; do
     # Source is exact path inside a STOPPED container. Refuse any directory,
     # symlink lacking a staged target, or failed copy; do not traverse /dev.
     if podman cp "$CID:$mapped_file" "$target" >/dev/null 2>&1 &&
-       [ -f "$target" ]; then
+       [ -f "$target" ] && [ ! -L "$target" ]; then
         chmod u+rw -- "$target" || true
         copied=$((copied + 1))
     else
