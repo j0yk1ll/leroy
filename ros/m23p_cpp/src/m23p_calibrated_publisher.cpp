@@ -64,8 +64,17 @@ class M23PSyntheticCalibratedPublisher final : public rclcpp::Node {
 
     std::cout << "M23P_SYNTHETIC_CALIBRATION=FABRICATED_NONZERO_DISTORTION"
               << std::endl;
-    timer_ = create_wall_timer(std::chrono::nanoseconds(kPeriodNs),
-                               [this]() { on_frame(); });
+    // Camera publisher endpoints must be graph-discoverable BEFORE the
+    // downstream rectified observer triggers RectifyNode's lazy raw/Info
+    // subscriptions. Jazzy chooses the input QoS at that moment.
+    // Hold fabricated frame publication until downstream graph audit.
+    std::cout << "M23P_PUBLISHER_GRAPH_READY=YES" << std::endl;
+    startup_timer_ = create_wall_timer(std::chrono::seconds(8), [this]() {
+      startup_timer_->cancel();
+      std::cout << "M23P_PUBLISHER_FRAMES_STARTED=YES" << std::endl;
+      timer_ = create_wall_timer(std::chrono::nanoseconds(kPeriodNs),
+                                 [this]() { on_frame(); });
+    });
   }
 
  private:
@@ -95,6 +104,7 @@ class M23PSyntheticCalibratedPublisher final : public rclcpp::Node {
 
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
+  rclcpp::TimerBase::SharedPtr startup_timer_;
   rclcpp::TimerBase::SharedPtr timer_;
   sensor_msgs::msg::Image image_;
   sensor_msgs::msg::CameraInfo info_;
