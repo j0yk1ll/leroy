@@ -1,0 +1,27 @@
+# M23R: instrument image_proc shutdown in the previously verified M23P
+# device-free synthetic harness. NO production, USB, serial, IMU or motors.
+FROM localhost/leroy-sensors:m23p-rectifier-shutdown
+
+ENV M23R_TRACE_ONLY=1 \
+    M23P_PROFILE=idle \
+    M23P_SYNTHETIC_ONLY=1 \
+    M23K_PROBE_MODE=selftest \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20
+
+COPY m23r_loader_trace.c /opt/m23r/m23r_loader_trace.c
+COPY m23r_rectifier_trace.launch.py /opt/m23r/m23r_rectifier_trace.launch.py
+COPY m23r_shutdown_trace_runner.py /opt/m23r/m23r_shutdown_trace_runner.py
+COPY m23r_shutdown_trace_test.py /opt/m23r/m23r_shutdown_trace_test.py
+COPY M23R_NO_DEVICE_SHUTDOWN_TRACE.md /opt/m23r/M23R_NO_DEVICE_SHUTDOWN_TRACE.md
+
+RUN cc -std=c11 -O1 -Wall -Wextra -Werror -fPIC -shared \
+      -o /opt/m23r/libm23r_loader_trace.so \
+      /opt/m23r/m23r_loader_trace.c -ldl \
+    && PYTHONDONTWRITEBYTECODE=1 python3 -u /opt/m23r/m23r_shutdown_trace_test.py \
+    && echo M23R_NO_DEVICE_TRACE_IMAGE_CONTRACT=PASS
+
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && python3 -u /opt/m23r/m23r_shutdown_trace_runner.py"]
