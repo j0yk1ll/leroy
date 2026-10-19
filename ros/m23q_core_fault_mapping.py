@@ -16,6 +16,7 @@ NEARBY_PC = 0x00007F56A491AF75
 PT_LOAD = 1
 PT_NOTE = 4
 NT_FILE = 0x46494C45
+NT_SIGINFO = 0x53494749  # Linux ELF note type SIGI
 MAX_NOTE_BYTES = 64 * 1024 * 1024
 MAX_MAPS = 100000
 MAX_PHDRS = 8192
@@ -39,7 +40,7 @@ def inspect_elf(path):
     """Return selected filename mappings and all PT_LOAD ranges, not memory."""
     path = Path(path)
     total = path.stat().st_size
-    file_maps, load_maps = [], []
+    file_maps, load_maps, siginfo_notes = [], [], []
     with path.open("rb") as stream:
         hdr = read_at(stream, 0, 64, total)
         if (hdr[:4] != b"\x7fELF" or hdr[4] != 2 or hdr[5] != 1
@@ -77,7 +78,25 @@ def inspect_elf(path):
                         if namesz <= 64 else b"")
                 descpos = pos + name_pad
                 pos = descpos + desc_pad
-                if note_type != NT_FILE or name.rstrip(b"\0") != b"CORE":
+                if name.rstrip(b"\0") != b"CORE":
+                    continue
+                if note_type == NT_SIGINFO:
+                    # Linux x86_64 siginfo_t: signo, errno, code are
+                    # int32 at bytes 0,4,8; _sifields starts at 16.
+                    # For SIGSEGV, si_addr is an unsigned 64-bit pointer
+                    # at byte 16. It is NOT necessarily the instruction PC.
+                    if descsz < 24 or descsz > 4096:
+                        raise InvalidCore("malformed NT_SIGINFO descriptor")
+                    raw_siginfo = read_at(stream, descpos, 24, total)
+                    signo, errno, code = struct.unpack_from(
+                        "<iii", raw_siginfo)
+                    address = struct.unpack_from(
+                        "<Q", raw_siginfo, 16)[0]
+                    siginfo_notes.append((signo, errno, code, address))
+                    if len(siginfo_notes) > 1:
+                        raise InvalidCore("duplicate NT_SIGINFO")
+                    continue
+                if note_type != NT_FILE:
                     continue
                 notes_found += 1
                 if descsz < 16:
@@ -108,13 +127,28 @@ def inspect_elf(path):
                 for i, start, end, offset in relevant:
                     filename = names[i].decode("utf-8", "backslashreplace")
                     file_maps.append((start, end, offset, filename))
-    return notes_found, file_maps, load_maps
+    return notes_found, file_maps, load_maps, siginfo_notes
 
 
 def render(path):
-    notes, mapped, loads = inspect_elf(path)
+    notes, mapped, loads, signal_notes = inspect_elf(path)
     lines = [f"M23Q_NT_FILE_NOTES={notes}",
-             "M23Q_MAPPING_SOURCE=ELF_CORE_NT_FILE_AND_PT_LOAD"]
+             "M23Q_MAPPING_SOURCE=ELF_CORE_NT_FILE_AND_PT_LOAD",
+             f"M23Q_NT_SIGINFO_NOTES={len(signal_notes)}"]
+    if signal_notes:
+        signo, errno, code, fault_address = signal_notes[0]
+        lines.extend((
+            f"M23Q_SIGINFO_SIGNAL={signo}",
+            f"M23Q_SIGINFO_CODE={code}",
+            f"M23Q_SIGINFO_ERRNO={errno}",
+            f"M23Q_SIGINFO_FAULT_ADDRESS=0x{fault_address:016x}",
+            f"M23Q_SIGINFO_EQUALS_FAULT_PC={'TRUE' if fault_address == PC else 'FALSE'}",
+        ))
+    else:
+        lines.extend((
+            "M23Q_SIGINFO_FAULT_ADDRESS=UNAVAILABLE",
+            "M23Q_SIGINFO_EQUALS_FAULT_PC=UNKNOWN",
+        ))
     for name, pc in (("FAULT", PC), ("NEARBY", NEARBY_PC)):
         matched = [(s, e, o, p) for s, e, o, p in mapped if s <= pc < e]
         segments = [(s, e, flags, size) for s, e, flags, size in loads
@@ -133,6 +167,17 @@ def render(path):
             lines.append(f"M23Q_{name}_CORE_SEGMENT="
                          f"0x{start:016x}-0x{end:016x} "
                          f"permissions={perms} core_bytes={size}")
+    if signal_notes:
+        signo, _, code, fault_address = signal_notes[0]
+        if signo == 11 and code == 1 and fault_address == PC:
+            lines.append("M23Q_UNMAPPED_EXECUTION_HYPOTHESIS=" +
+                         ("SUPPORTED" if not any(
+                             s <= PC < e for s, e, *_ in mapped + loads)
+                          else "NOT_ESTABLISHED"))
+        else:
+            lines.append("M23Q_UNMAPPED_EXECUTION_HYPOTHESIS=NOT_ESTABLISHED")
+    else:
+        lines.append("M23Q_UNMAPPED_EXECUTION_HYPOTHESIS=UNKNOWN")
     lines.append("M23Q_MODULE_BUILD_ID_VERIFIED=FALSE")
     lines.append("M23Q_FAULTING_FUNCTION_IDENTIFIED=FALSE")
     return "\n".join(lines)
