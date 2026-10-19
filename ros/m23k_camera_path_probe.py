@@ -196,7 +196,13 @@ def _stop_session(proc, sig, grace, issues, name):
         except subprocess.TimeoutExpired:
             issues.append(name + "_STILL_RUNNING")
             return
-    if code != 0:
+    # ros2 launch can report 130 or -SIGINT for a normal requested
+    # interrupt; that is not equivalent to a child-process crash.
+    # Child failures (including the observed component SIGSEGV) are
+    # identified separately from the launch output log.
+    expected_interrupt_exit = (
+        sig == signal.SIGINT and code in (130, -int(signal.SIGINT)))
+    if code != 0 and not expected_interrupt_exit:
         issues.append(name + "_EXIT_CODE_" + str(code))
 
 
