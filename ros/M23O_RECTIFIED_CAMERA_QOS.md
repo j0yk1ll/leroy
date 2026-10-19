@@ -1,6 +1,9 @@
 # M23O — isolated camera + image_proc reliable rectified image diagnostic
 
-**DRAFT / NOT TESTED ON OPERATOR HARDWARE.** Stacked on M23N draft PR #108,
+**DRAFT. First operator-run camera experiment completed on 2026-10-19; overall
+INCOMPLETE (SIGSEGV). A post-run diagnostic patch now requires fresh offline
+validation before any separately authorized physical repeat.**
+Stacked on M23N draft PR #108,
 which itself depends on M23M #107, M23L #106, M23K #105. No production merge.
 
 ## Why this experiment exists
@@ -21,6 +24,39 @@ appears, choosing camera input QoS by graph inspection (with a possible
 sensor-data best-effort fallback when no upstream publisher is known).
 M23O checks the actual discovered QoS at runtime rather than assuming
 an override was effective.
+
+## First M23O physical run — result and independent blocker
+
+**Operator log from 2026-10-19: overall INCOMPLETE, exit 2.**
+
+- Raw Image: **1411**, **29.812Hz**, **0 header gaps >250ms**,
+  longest header interval **36.114ms**.
+- Rect Image: **1410**, **29.830Hz**, **0 header gaps >250ms**,
+  longest header interval **36.114ms**.
+- **1410/1410** rect timestamps matched raw timestamps; one
+  unmatched raw and zero unmatched rect timestamps.
+- CameraInfo: **1411**, **29.812Hz**, zero large header gaps.
+- ROS graph: `rmw_fastrtps_cpp`, camera/rectifier/receiver observed
+  `RELIABLE/VOLATILE`; depth/history appeared as 0/UNKNOWN, not
+  authenticated queue depths.
+- **BLOCKER:** `component_container` child exited **-11/SIGSEGV**;
+  `CAMERA_CHILD_PROCESS_CRASHED`, `shutdown_clean=false`.
+- No STM32/IMU/recorder access and no motion authorization.
+
+This establishes the observed continuity of both subscriber streams in
+this one run but does **not** validate the complete camera lifecycle or
+declare VIO readiness. The original `--rm` container's internal launch
+log was not preserved outside the container; the available operator tee
+log includes only the reported child exit.
+
+**Post-run patch on the same M23O draft branch:** suppress duplicate
+`M23N_CAMERA_QOS_JSON` / `M23N_CAMERA_QOS_VERDICT` in M23O runs,
+and add bounded `M23O_CAMERA_CRASH_CONTEXT` excerpts around a future
+ROS launch child failure (at most 21 lines, each line capped).
+These additions are not yet operator-tested. Re-run offline Phases A–C
+after pulling the new branch head. Do not immediately repeat the
+physical run; any repeat requires fresh explicit authorization after
+offline acceptance, robot immobilization and inhibited motor power.
 
 ## Diagnostic-only acceptance
 
@@ -138,7 +174,8 @@ Collect:
 - `graph_endpoints`, actual `rmw_implementation`, verified C++ QoS.
 - Raw, rect and CameraInfo counts, observed rates, >250ms timestamp gaps,
   maximum header/receipt gaps, matching header stamps.
-- `shutdown_clean`, faults and any `M23K_CAMERA_CHILD_EXIT`.
+- `shutdown_clean`, faults and any `M23K_CAMERA_CHILD_EXIT`,
+  including `M23O_CAMERA_CRASH_CONTEXT` lines if child process crashes.
 
 If the image_proc container crashes with SIGSEGV during shutdown,
 keep the run INCOMPLETE even if it had continuous image headers.
