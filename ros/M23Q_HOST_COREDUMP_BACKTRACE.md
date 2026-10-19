@@ -249,6 +249,59 @@ the next narrowly scoped step is to copy that one module from the
 offsets. **No new ROS or hardware run** is required. Do not upload
 the binary core or post unrelated file paths from its notes.
 
+## Phase D — distinguish unmapped instruction fetch from invalid data access
+
+**Operator's Phase C report:** `M23Q_NT_FILE_NOTES=1`, but
+`M23Q_FAULT_FILE_MATCHES=0`, `M23Q_FAULT_LOAD_MATCHES=0`,
+`M23Q_NEARBY_FILE_MATCHES=0`, and
+`M23Q_NEARBY_LOAD_MATCHES=0`. The ELF core's mapping tables do
+**not** associate the faulting PC `0x00007f56a4912f5b` with
+any file or `PT_LOAD` range. This suggests a possible jump into
+unmapped code during teardown, but **does not prove** that a library
+was unloaded, that `image_proc` is at fault, or that the fault was
+an instruction-fetch rather than invalid data access.
+
+The existing read-only `m23q_core_fault_mapping.py` has been extended
+to decode Linux x86_64 ELF `NT_SIGINFO` metadata:
+- `si_signo` and `si_code` (kernel-reported signal and subtype).
+- `si_addr` (kernel-reported bad memory address) at byte offset 16
+  of the x86_64 `siginfo_t` descriptor.
+- Whether `si_addr == 0x00007f56a4912f5b`, and whether that
+  address has a core file/LOAD mapping. This is an inference only:
+  even an equal unmapped PC and `SEGV_MAPERR` cannot prove the
+  specific lifetime or destructor bug without a fuller stack.
+
+**Source patch is not yet operator-tested**; no new core is created.
+From the same M23Q `ros` branch and existing private core path:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_core_fault_mapping_test.py
+
+CORE="$HOME/.local/state/leroy-m23q/gdb-firstpass.sXKTfoQL/core.48349"
+test -f "$CORE" || exit 2
+
+PYTHONDONTWRITEBYTECODE=1 python3 -u \
+  m23q_core_fault_mapping.py "$CORE"
+```
+
+The offline suite has **11 synthetic fixture tests** (up from five).
+Relevant outputs:
+`M23Q_NT_SIGINFO_NOTES`,
+`M23Q_SIGINFO_SIGNAL`, `M23Q_SIGINFO_CODE`,
+`M23Q_SIGINFO_FAULT_ADDRESS`, `M23Q_SIGINFO_EQUALS_FAULT_PC`,
+and `M23Q_UNMAPPED_EXECUTION_HYPOTHESIS`.
+
+- If SIGSEGV/SEGV_MAPERR `si_addr` equals unmapped PC, mark
+  `SUPPORTED`: this is **evidence consistent with** executing
+  unmapped code, not fault attribution.
+- If `si_addr` differs, mark `NOT_ESTABLISHED`: seek the memory
+  access target and registers rather than claiming unloaded code.
+- If `NT_SIGINFO` is missing, mark `UNKNOWN`. Multiple signal
+  notes or malformed notes fail closed.
+
+Do not share the whole core; report only these bounded metadata
+markers. Remain device-free, and preserve all prior blocked gates.
+
 ## Strict invariant
 
 M23Q is a **postmortem-only investigation**. No motion, Nav2, XRSLAM,
