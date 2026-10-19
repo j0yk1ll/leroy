@@ -37,6 +37,7 @@ def summarize_trace(log):
     counts = {name: 0 for name in STAGES}
     process_ids = set()
     last_event = None
+    constructor_status = None
     for line in log.splitlines():
         if "M23R_TRACE_EVENT=" not in line:
             continue
@@ -50,6 +51,8 @@ def summarize_trace(log):
         if not (handle.startswith("0x") or handle == "(nil)"):
             raise ValueError("malformed traced loader handle")
         counts[stage] += 1
+        if stage == "CONSTRUCTOR":
+            constructor_status = int(status)
         process_ids.add(pid)
         last_event = {
             "stage": stage,
@@ -59,6 +62,8 @@ def summarize_trace(log):
         }
     if len(process_ids) != 1 or counts["CONSTRUCTOR"] != 1:
         raise ValueError("missing or duplicate component-only preload trace")
+    if constructor_status != 0:
+        raise ValueError("loader trace interposition not fully installed")
     if counts["DLCLOSE_RETURN"] > counts["DLCLOSE_BEGIN"]:
         raise ValueError("dlclose return without corresponding begin")
     if (counts["DLOPEN_RETURN"] == 0
@@ -99,11 +104,27 @@ def run():
     status = m23p.run()
     trace_summary = {}
     faults = []
+    raw_log = ""
     try:
-        trace_summary = summarize_trace(
-            m23p.LAUNCH_LOG.read_text(errors="replace"))
+        raw_log = m23p.LAUNCH_LOG.read_text(errors="replace")
+        trace_summary = summarize_trace(raw_log)
     except (OSError, ValueError) as exc:
         faults.append("TRACE_NOT_VERIFIED:" + str(exc)[:150])
+
+    # Preserve a bounded final trace window outside the ephemeral container.
+    # These are diagnostic strings from the isolated component process,
+    # not raw memory. Do not infer causality from the final dlclose event.
+    if raw_log:
+        trace_lines = [
+            line[line.find("M23R_TRACE_EVENT="):].strip()
+            for line in raw_log.splitlines()
+            if "M23R_TRACE_EVENT=" in line
+        ]
+        print("M23R_TRACE_CAPTURED_TOTAL=" + str(len(trace_lines)),
+              flush=True)
+        print("M23R_TRACE_CAPTURED_WINDOW=LAST_80", flush=True)
+        for line in trace_lines[-80:]:
+            print("M23R_TRACE_CAPTURED=" + line, flush=True)
 
     verdict = (
         "BLOCKED_COMPONENT_LIFECYCLE" if status != 0
