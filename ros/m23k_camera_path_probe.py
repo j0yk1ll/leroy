@@ -4,8 +4,9 @@
 Operator-invoked live mode opens ONLY the verified front USB camera via
 M20's isolated camera-only launch. No STM32, serial port, IMU stream,
 bridge, XRSLAM, cmd_vel, motors, recorder or physical calibration.
-Subscription/deserialization adds CPU/DDS load; results are diagnostic,
-not proof of which processing stage is at fault.
+A separately built C++ node reads only image headers; results are
+still affected by DDS transfer and image-message deserialization, and
+are diagnostic rather than proof of any specific processing bottleneck.
 """
 import json
 import os
@@ -133,85 +134,141 @@ def _require_live_environment():
         raise RuntimeError("front camera calibration missing")
 
 
+COUNTER_PATH = (
+    "/opt/m23k-cpp-install/lib/leroy_m23k_camera_counter/"
+    "m23k_camera_header_counter"
+)
+COUNTER_LOG = Path("/tmp/m23k-cpp-counter.log")
+CAMERA_LAUNCH_LOG = Path("/tmp/m23k-camera-launch.log")
+
+
+def parse_counter_log(payload):
+    """Never claim a complete measurement from absent/truncated C++ logs."""
+    stats = CameraStats()
+    summary = None
+    faults = []
+    for line in payload.splitlines():
+        if line.startswith("M23K_COUNTER_FATAL="):
+            faults.append(line[:240])
+        elif line.startswith("M23K_COUNTER_COUNTS="):
+            if summary is not None:
+                raise ValueError("duplicate C++ counter summary")
+            fields = line.split("=", 1)[1].split(",")
+            if len(fields) != 3:
+                raise ValueError("malformed C++ counts")
+            summary = {k: int(n) for k, n in zip(TOPICS, fields)}
+        elif line.startswith("M23K_SAMPLE "):
+            fields = line.split()
+            if len(fields) != 4:
+                raise ValueError("malformed header sample line")
+            _marker, kind, header_ns, receipt_ns = fields
+            stats.add(kind, int(header_ns), int(receipt_ns))
+    if faults:
+        raise ValueError("counter failure: " + ", ".join(faults[:3]))
+    if summary is None:
+        raise ValueError("C++ counter did not finalize")
+    if summary != {k: len(v) for k, v in stats.stamps.items()}:
+        raise ValueError("C++ sample counts disagree with final summary")
+    result = stats.report()
+    result["observer_implementation"] = "CPP_HEADER_ONLY_NO_PIXEL_ACCESS"
+    return result
+
+
+def _stop_session(proc, sig, grace, issues, name):
+    """Bounded graceful exit, never silently claim a clean shutdown."""
+    if proc is None:
+        return
+    if proc.poll() is None:
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            pass
+    try:
+        code = proc.wait(timeout=grace)
+    except subprocess.TimeoutExpired:
+        issues.append(name + "_SHUTDOWN_TIMEOUT")
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            code = proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            issues.append(name + "_STILL_RUNNING")
+            return
+    if code != 0:
+        issues.append(name + "_EXIT_CODE_" + str(code))
+
+
 def run_camera_only():
     _require_live_environment()
-    import rclpy
-    from rclpy.node import Node
-    from rclpy.qos import qos_profile_sensor_data
-    from sensor_msgs.msg import Image, CameraInfo
-
-    rclpy.init(args=[])
-    node = None
-    camera = None
-    stats = CameraStats()
+    # C++ processes sample headers without transferring full image payloads
+    # into Python. The camera launch and exact M20 rectifier are unchanged.
+    if not Path(COUNTER_PATH).is_file():
+        raise RuntimeError("offline-built C++ header-only observer absent")
+    camera = counter = None
     issues = []
+    stats_report = None
+    with CAMERA_LAUNCH_LOG.open("xb") as camera_output, \
+            COUNTER_LOG.open("xb") as counter_output:
+        try:
+            counter = subprocess.Popen([COUNTER_PATH], stdout=counter_output,
+                                       stderr=subprocess.STDOUT,
+                                       start_new_session=True)
+            time.sleep(1.0)
+            if counter.poll() is not None:
+                raise RuntimeError("C++ header counter startup failed")
+            camera = subprocess.Popen(
+                ["ros2", "launch", "/opt/m20/m20_camera_only.launch.py"],
+                stdout=camera_output, stderr=subprocess.STDOUT,
+                start_new_session=True)
+            # Includes a bounded warm-up; 45-second timing observation.
+            deadline = time.monotonic() + CAMERA_WARMUP_S + DURATION_S
+            while time.monotonic() < deadline:
+                if camera.poll() is not None:
+                    raise RuntimeError("camera launch exited early")
+                if counter.poll() is not None:
+                    raise RuntimeError("C++ header counter exited early")
+                time.sleep(0.2)
+        except (OSError, RuntimeError, KeyboardInterrupt) as exc:
+            issues.append(type(exc).__name__ + ": " + str(exc))
+        finally:
+            # Stop camera first and wait for actual ROS launch children.
+            # A component segfault may be masked by a zero ros2 launch code;
+            # detect "process has died" explicitly in its saved log.
+            _stop_session(camera, signal.SIGINT, 15, issues, "CAMERA_LAUNCH")
+            _stop_session(counter, signal.SIGINT, 10, issues, "CPP_COUNTER")
+            camera_output.flush()
+            counter_output.flush()
+
+    camera_text = CAMERA_LAUNCH_LOG.read_text(errors="replace")
+    counter_text = COUNTER_LOG.read_text(errors="replace")
+    if ("process has died" in camera_text
+            or "Segmentation fault" in camera_text):
+        issues.append("CAMERA_CHILD_PROCESS_CRASHED")
+    if "M23K_COUNTER_FATAL=" in counter_text:
+        issues.append("CPP_COUNTER_REPORTED_FATAL")
+
     try:
-        node = Node("m23k_raw_rect_timing_probe",
-                    enable_rosout=False, start_parameter_services=False)
-        for name in ("/cmd_vel", "/odom", "/tf", "/depthart/depth"):
-            if node.count_publishers(name):
-                raise RuntimeError("forbidden ROS graph publisher: " + name)
-
-        def subscriber(kind):
-            def callback(msg):
-                try:
-                    stats.add(kind, _stamp(msg.header), time.monotonic_ns())
-                except ValueError as exc:
-                    if "BAD_" + kind.upper() not in stats.faults:
-                        stats.faults.append("BAD_" + kind.upper())
-                    issues.append(str(exc))
-            return callback
-
-        subscriptions = [
-            node.create_subscription(
-                Image, TOPICS["raw"], subscriber("raw"), qos_profile_sensor_data),
-            node.create_subscription(
-                Image, TOPICS["rect"], subscriber("rect"), qos_profile_sensor_data),
-            node.create_subscription(
-                CameraInfo, TOPICS["info"], subscriber("info"),
-                qos_profile_sensor_data),
-        ]
-        camera = subprocess.Popen(
-            ["ros2", "launch", "/opt/m20/m20_camera_only.launch.py"],
-            start_new_session=True)
-        end = time.monotonic() + CAMERA_WARMUP_S + DURATION_S
-        while time.monotonic() < end:
-            if camera.poll() is not None:
-                raise RuntimeError("camera launch exited before probe complete")
-            for name in ("/cmd_vel", "/odom", "/tf", "/depthart/depth"):
-                if node.count_publishers(name):
-                    raise RuntimeError("forbidden ROS graph publisher: " + name)
-            rclpy.spin_once(node, timeout_sec=0.05)
-        del subscriptions
-    except (OSError, RuntimeError, KeyboardInterrupt) as exc:
+        stats_report = parse_counter_log(counter_text)
+    except (ValueError, TypeError, KeyError) as exc:
         issues.append(type(exc).__name__ + ": " + str(exc))
-    finally:
-        if camera is not None and camera.poll() is None:
-            try:
-                os.killpg(camera.pid, signal.SIGINT)
-                camera.wait(timeout=15)
-            except (subprocess.TimeoutExpired, ProcessLookupError):
-                issues.append("CAMERA_LAUNCH_SHUTDOWN_UNVERIFIED")
-                if camera.poll() is None:
-                    os.killpg(camera.pid, signal.SIGTERM)
-                    try:
-                        camera.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        issues.append("CAMERA_LAUNCH_STILL_RUNNING")
-        if node is not None:
-            node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        stats_report = CameraStats().report()
+        stats_report["observer_implementation"] = "CPP_HEADER_ONLY_NO_PIXEL_ACCESS"
 
-    result = stats.report()
+    # Preserve measurements even if only camera cleanup failed. A crash
+    # cannot produce the original misleading clean diagnostic verdict.
+    stats_report["camera_launch_log"] = str(CAMERA_LAUNCH_LOG)
+    stats_report["cpp_observer_log"] = str(COUNTER_LOG)
+    stats_report["shutdown_clean"] = not issues
     if issues:
-        result["faults"] += issues[:5]
-        result["verdict"] = "INCOMPLETE_CAMERA_PATH_OBSERVATION"
-    print("M23K_CAMERA_PROBE_JSON=" + json.dumps(result, sort_keys=True),
-          flush=True)
-    print("M23K_VERDICT=" + result["verdict"], flush=True)
+        stats_report["faults"] += issues[:8]
+        stats_report["verdict"] = "INCOMPLETE_CAMERA_PATH_OBSERVATION"
+    print("M23K_CAMERA_PROBE_JSON=" +
+          json.dumps(stats_report, sort_keys=True), flush=True)
+    print("M23K_VERDICT=" + stats_report["verdict"], flush=True)
     print("M23K_MCU_DEVICE_ACCESS=NONE", flush=True)
-    return 0 if result["verdict"] == "CAMERA_PATH_DIAGNOSTIC_ONLY" else 2
+    return 0 if stats_report["verdict"] == "CAMERA_PATH_DIAGNOSTIC_ONLY" else 2
 
 
 if __name__ == "__main__":
