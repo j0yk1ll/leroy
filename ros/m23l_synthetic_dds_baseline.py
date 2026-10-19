@@ -17,10 +17,15 @@ import time
 
 from m23k_camera_path_probe import parse_counter_log
 
-PUB_BINARY = ("/opt/m23l-cpp-install/lib/leroy_m23k_camera_counter/"
+# M23M builds its QoS-capable counter at a separate isolated prefix.
+# With no override the original accepted M23L path remains intact.
+CPP_INSTALL_ROOT = os.environ.get(
+    "M23M_CPP_INSTALL_ROOT", "/opt/m23l-cpp-install")
+PUB_BINARY = (CPP_INSTALL_ROOT + "/lib/leroy_m23k_camera_counter/"
               "m23l_synthetic_image_publisher")
-COUNTER_BINARY = ("/opt/m23l-cpp-install/lib/leroy_m23k_camera_counter/"
+COUNTER_BINARY = (CPP_INSTALL_ROOT + "/lib/leroy_m23k_camera_counter/"
                   "m23k_camera_header_counter")
+M23M_QOS_PROFILES = ("best_effort_5", "best_effort_100", "reliable_100")
 PUB_LOG = Path("/tmp/m23l-synthetic-publisher.log")
 COUNTER_LOG = Path("/tmp/m23l-synthetic-subscriber.log")
 PUBLISHED_FRAMES = 900
@@ -117,6 +122,16 @@ def interpret(publisher, observer):
     }
 
 
+def read_counter_qos_profile(output):
+    """Require exactly one C++-reported receiver QoS profile marker."""
+    rows = [line.split("=", 1)[1].strip()
+            for line in output.splitlines()
+            if line.startswith("M23M_COUNTER_QOS_PROFILE=")]
+    if len(rows) != 1 or rows[0] not in M23M_QOS_PROFILES:
+        raise ValueError("missing, duplicate or invalid receiver QoS marker")
+    return rows[0]
+
+
 def _stop_counter(proc):
     if proc is None:
         return "not-started"
@@ -137,6 +152,9 @@ def _stop_counter(proc):
 
 
 def run():
+    requested_qos = os.environ.get("M23M_SUB_QOS", "best_effort_5")
+    if requested_qos not in M23M_QOS_PROFILES:
+        raise ValueError("M23M receiver QoS profile must be allowlisted")
     for name, value in REQUIRED_ENV.items():
         if os.environ.get(name) != value:
             raise ValueError("isolation precondition: " + name)
@@ -154,6 +172,7 @@ def run():
         try:
             env = dict(os.environ)
             env["M23K_RAW_ONLY"] = "1"
+            env["M23M_SUB_QOS"] = requested_qos
             counter = subprocess.Popen([COUNTER_BINARY], env=env,
                 stdout=subscriber_out, stderr=subprocess.STDOUT,
                 start_new_session=True)
@@ -165,6 +184,12 @@ def run():
             pub_exit = pub.wait(timeout=75)
             if pub_exit != 0:
                 issues.append("SYNTHETIC_PUBLISHER_EXIT_" + str(pub_exit))
+            else:
+                # Allow DDS delivery to drain after the final synthetic
+                # publisher callback rather than cutting off in-flight
+                # frames immediately. Rerun the baseline with this same
+                # drain window before comparing QoS profiles.
+                time.sleep(2.0)
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
             issues.append(type(exc).__name__ + ": " + str(exc))
         finally:
@@ -182,8 +207,11 @@ def run():
 
     try:
         publisher = parse_publisher_log(PUB_LOG.read_text(errors="replace"))
-        observer = parse_counter_log(COUNTER_LOG.read_text(errors="replace"),
-                                     require_rect=False)
+        counter_output = COUNTER_LOG.read_text(errors="replace")
+        observer = parse_counter_log(counter_output, require_rect=False)
+        actual_qos = read_counter_qos_profile(counter_output)
+        if actual_qos != requested_qos:
+            raise ValueError("receiver QoS output differs from requested mode")
         result = interpret(publisher, observer)
         if observer["faults"]:
             issues.extend(observer["faults"])
@@ -197,7 +225,14 @@ def run():
                   "physical_motion_authorized": False}
     if issues:
         result["verdict"] = "BLOCKED_SYNTHETIC_INCOMPLETE"
+    result["receiver_qos_profile"] = requested_qos
+    result["publisher_qos_profile"] = "reliable_100"
+    result["subscriber_drain_window_s"] = 2.0
+    result["rmw_implementation"] = os.environ.get(
+        "RMW_IMPLEMENTATION", "unspecified_default")
     result["faults"] = issues[:12]
+    print("M23M_QOS_JSON=" + json.dumps(result, sort_keys=True), flush=True)
+    print("M23M_QOS_VERDICT=" + result["verdict"], flush=True)
     print("M23L_SYNTHETIC_DDS_JSON=" + json.dumps(result, sort_keys=True),
           flush=True)
     print("M23L_VERDICT=" + result["verdict"], flush=True)
