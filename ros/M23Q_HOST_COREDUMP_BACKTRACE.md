@@ -79,27 +79,79 @@ Interpret `COREFILE` carefully:
 - No candidate: no retained journal *match was visible to this user*;
   do not say the segmentation fault never occurred.
 
-## Phase B — if a retained suitable core exists
+## Phase A evidence — operator verified historical crash
 
-**Do not do this phase until inspecting Phase A's host PID,
-COREFILE status and process metadata.** Prefer a symbolized backtrace
-from the prior core before another process run. Host Arch GDB may
-be unable to resolve Linux/ROS symbols from the Ubuntu/Jazzy container
-once its `--rm` rootfs is gone. If so, extract *matching exact*
-executable, shared libraries and debug symbols from the **local
-offline image** into a private sysroot; set GDB `sysroot` accordingly.
-Do not accidentally attribute symbols from Arch host libraries to
-Jazzy component frames.
+The operator's read-only `coredumpctl info 48349` confirmed:
+- Host PID **48349**, process executable
+  `/opt/ros/jazzy/lib/rclcpp_components/component_container`.
+- Command line names `__node:=m23p_image_proc_container`.
+- **SIGSEGV**, `si_code=SEGV_MAPERR`.
+- October 19, 2026 at **16:24:57 CEST**, matching latest M23P
+  899/900 synthetic rectified-image experiment.
+- `Storage` is a **present** retained systemd .zst core; size on disk
+  1.9 MB (not a claim about decompressed size).
+- Host journal's crashing stack thread 89 has unsymbolized frames at
+  `0x00007f56a4912f5b` and `0x00007f56a491af75`, plus libc
+  frames; the faulting module remains unknown.
 
-A systemd `coredumpctl debug` command can invoke the installed host
-GDB for a selected core, but only after matching the correct host PID
-and core status. The resulting GDB `thread apply all bt` / faulting
-thread should be reported with module build IDs and symbol-resolution
-limits, not just `SIGSEGV`.
+Other historical core host PIDs were 19636, 21771, 39260, 41267,
+46312; this step chooses only **48349**. `SEGV_MAPERR` is an
+unmapped-memory access classification, not proof of use-after-free
+or an image_proc destructor bug.
 
-No GDB capability is added to the production or M23P container.
-No `--privileged`, host networking, mapped camera/STM32, or interactive
-live process attach is authorized by M23Q.
+## Phase B — guarded first-pass GDB analysis of retained core
+
+**Phase A's process-identity and COREFILE checks are now satisfied.**
+M23Q provides a new optional host-only script for a **postmortem**
+first pass, not a fully symbolized diagnosis:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+git fetch origin
+git switch feature/m23q-host-coredump-backtrace
+git pull --ff-only origin feature/m23q-host-coredump-backtrace
+cd ros
+
+bash -n m23q_host_gdb_firstpass.sh
+bash ./m23q_host_gdb_firstpass.sh
+```
+
+The script **requires** the exact historical host crash identity,
+SIGSEGV and `Storage=(present)`, and verifies the local M23P image ID
+`8c75cdd760b9aacf65881e12317ec47b6189391356c6f4fa499e6d436fc6a0fa`.
+A different image ID blocks rather than silently resolving unrelated
+symbols. It calls `coredumpctl dump 48349 --output=...` to extract
+the existing core to a private mode-0700 directory (core mode-0600)
+under `~/.local/state/leroy-m23q/gdb-firstpass.*`.
+
+The script calls `podman create` but **never `podman start/run`**.
+The created container is never executed; it exists solely to copy
+the exact Jazzy `component_container` binary and `librectify.so`
+from the already-built local image into a private partial sysroot,
+then is removed. It runs host GDB **in batch on the saved core**,
+without live attachment, disables debuginfod and GDB auto-load,
+uses `set sysroot` to avoid falsely loading Arch shared libraries,
+and writes private first-pass `info threads`, `bt 30`,
+`info symbol $pc`, `info sharedlibrary` and `info proc mappings`
+to a log.
+
+**The first-pass result is intentionally `PRELIMINARY_SYMBOLS_UNVERIFIED`.**
+Only two files are initially staged. Missing shared libraries and
+debug symbols may still leave frames as unknown. Examine the GDB
+fault address and mapping path first, then stage **only exact mapped
+libraries** from that same image for further backtrace analysis.
+A faulting-thread GDB stack still requires matching build IDs and
+symbol resolution before naming a responsible package.
+
+The extracted core may contain private memory. **Do not upload it,
+paste its contents, or copy it to a public directory.** Provide only
+sanitized GDB backtrace/module mapping text and status markers. The
+script never opens a device and never enables networking or debugger
+attachment.
+
+No GDB capability is added to the production or M23P runtime image.
+No `--privileged`, host networking, mapped camera/STM32, or
+new ROS process is authorized by M23Q.
 
 ## Strict invariant
 
