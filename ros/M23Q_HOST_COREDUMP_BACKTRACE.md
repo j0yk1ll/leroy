@@ -356,6 +356,61 @@ experiment may need executable-module lifetime instrumentation,
 address registration history or a symbolized valid return path;
 do not authorize new experiments or alter production in Phase E.
 
+## Phase F — bounded host GDB reinspection of thread 89 (saved core only)
+
+**Operator Phase E observation:** The closest surviving file-backed
+region below the unmapped PC ends at `0x00007f56a40a9000`
+(`libsensor_msgs__rosidl_generator_c.so`, 8,822,619 bytes away),
+and the nearest above begins at `0x00007f56a5116000`
+(`libz.so.1.3`, 8,401,061 bytes away). The nearest executable
+`PT_LOAD` boundaries are similarly distant, around 8.9 and
+8.4 MB. **Neither neighboring library is evidence of ownership of
+the unmapped address or of a specific library unload.** The
+`NT_SIGINFO` observation remains that `SEGV_MAPERR si_addr == RIP`.
+
+The next useful postmortem step is a **targeted host GDB reinspection**
+of previously extracted core 48349, using the same pinned Jazzy
+binary from the already-verified private sysroot. The new
+`ros/m23q_host_gdb_thread89.sh` operates only on the existing
+`~/.local/state/leroy-m23q/gdb-firstpass.sXKTfoQL` directory.
+It neither starts a ROS/container process nor attaches to a live
+process, accesses hardware, writes to the original core, downloads
+symbols or prints raw stack memory.
+
+From the M23Q branch:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+git fetch origin
+git switch feature/m23q-host-coredump-backtrace
+git pull --ff-only origin feature/m23q-host-coredump-backtrace
+cd ros
+
+bash -n m23q_host_gdb_thread89.sh
+bash ./m23q_host_gdb_thread89.sh
+```
+
+The script verifies a private directory and existing regular
+core/executable, then runs **host GDB in batch** with auto-load and
+debuginfod disabled. The private log contains bounded diagnostics
+for `info threads`, `thread 1` (historically LWP 89),
+`info registers rip rsp rbp`, `info frame`, `bt 18`,
+`p $_siginfo` and `info sharedlibrary`.
+
+**Status: source written to draft PR, not yet operator-tested.**
+A clean GDB batch exit and confirmed LWP 89 constitute a
+`PRELIMINARY_FAULT_THREAD_CONFIRMED` result only. They do not
+resolve the faulting module or validate an unwind through missing
+symbols. If the output remains `??`, a later step may require
+copying *only* the exact matching mapped dependencies and
+checking build IDs; do not substitute host Arch libraries.
+
+The log remains private. Share only the script's status markers
+and a short reviewed excerpt around `info frame`, `rip/rsp/rbp`
+and the first few `bt` frames; do not post the full core or any
+unrelated private mappings. An existing output log causes the
+script to block rather than overwrite it.
+
 ## Strict invariant
 
 M23Q is a **postmortem-only investigation**. No motion, Nav2, XRSLAM,
