@@ -102,8 +102,30 @@ or an image_proc destructor bug.
 ## Phase B — guarded first-pass GDB analysis of retained core
 
 **Phase A's process-identity and COREFILE checks are now satisfied.**
-M23Q provides a new optional host-only script for a **postmortem**
-first pass, not a fully symbolized diagnosis:
+M23Q provides a guarded host-only script for a **postmortem**
+first pass, not a fully symbolized diagnosis.
+
+**First operator execution BLOCKED safely at image identity.**
+The initial script pinned the **older** corrected-fixture M23P
+image `8c75cdd760b9...`, but the user reported the newer local image
+ID `6eeb8ca08525...` after the publisher-first M23P rebuild.
+The old image ID was documented before the 16:24:57 publisher-first
+crash and therefore was the wrong assumption for this crash. No
+core extraction, image staging or GDB execution occurred.
+A matching tag alone is *not* proof that `6eeb...` made the core.
+
+The revised script pins immutable candidate image
+`6eeb8ca08525d451dc0f216f097c1df7e300444d8c8ae551fde576d64a1c48f1`
+and **fails closed** unless its Podman-created timestamp is **after**
+the earlier 16:11:25 M23P SIGSEGV and **no later** than the selected
+16:24:57 core. It stages the binary and exact Python runner and
+read-only graph probe via a *stopped* container, compares the two
+embedded Python sources against M23P Git commit
+`6c300889a2f472c4f8b1bf568334a1254b6d7a03`,
+and **only then** exports the retained core to private storage for
+preliminary host GDB analysis. Source and chronology matching
+cannot by themselves authenticate loaded module build IDs; later
+symbol verification must still be explicit.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -116,13 +138,14 @@ bash -n m23q_host_gdb_firstpass.sh
 bash ./m23q_host_gdb_firstpass.sh
 ```
 
-The script **requires** the exact historical host crash identity,
-SIGSEGV and `Storage=(present)`, and verifies the local M23P image ID
-`8c75cdd760b9aacf65881e12317ec47b6189391356c6f4fa499e6d436fc6a0fa`.
-A different image ID blocks rather than silently resolving unrelated
-symbols. It calls `coredumpctl dump 48349 --output=...` to extract
-the existing core to a private mode-0700 directory (core mode-0600)
-under `~/.local/state/leroy-m23q/gdb-firstpass.*`.
+The script verifies exact host crash identity, `SIGSEGV`,
+`Storage=(present)`, immutable candidate image ID and experiment-time
+chronology, plus exact embedded Python files. Any mismatch is
+BLOCKED rather than permitting accidental wrong-binary symbolization.
+It calls `coredumpctl dump 48349 --output=...` **only after those
+image/source checks**, extracting the existing core to a private
+mode-0700 directory (core mode-0600) under
+`~/.local/state/leroy-m23q/gdb-firstpass.*`.
 
 The script calls `podman create` but **never `podman start/run`**.
 The created container is never executed; it exists solely to copy
