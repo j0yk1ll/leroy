@@ -6,6 +6,7 @@ from pathlib import Path
 
 from m23q_core_fault_mapping import (
     PC, NT_FILE, NT_SIGINFO, InvalidCore, render, validated_historical_core_path,
+    closest_surviving_neighbors, emit_fault_neighbors,
 )
 
 
@@ -98,6 +99,44 @@ class M23QCoreMappingContracts(unittest.TestCase):
     def test_duplicate_siginfo_is_rejected(self):
         with self.assertRaises(InvalidCore):
             self.run_fixture(fake_core(duplicate_siginfo=True))
+
+    def test_unmapped_nearest_file_and_executable_segments_are_bounded(self):
+        out = self.run_fixture(fake_core(mapped=False))
+        self.assertIn("M23Q_FAULT_NEAREST_FILE_LOWER=NONE", out)
+        self.assertIn("M23Q_FAULT_NEAREST_EXEC_LOAD_LOWER=NONE", out)
+        self.assertIn("distance_bytes=12288", out)
+        self.assertIn("M23Q_FAULT_NEAREST_FILE_UPPER_LABEL='librectify.so'", out)
+        self.assertIn("M23Q_NEAREST_MAPPING_PROVES_UNLOAD=FALSE", out)
+
+    def test_no_nearest_neighbors_when_fault_pc_is_mapped(self):
+        out = self.run_fixture(fake_core(mapped=True))
+        self.assertIn("M23Q_FAULT_NEAREST=NOT_APPLICABLE_PC_MAPPED", out)
+        self.assertNotIn("M23Q_FAULT_NEAREST_FILE_UPPER=", out)
+
+    def test_both_sides_distances_are_exact(self):
+        lower = (PC - 0x3000, PC - 0x1000, 0,
+                 "/opt/ros/jazzy/lib/liblower.so")
+        upper = (PC + 0x1000, PC + 0x3000, 0,
+                 "/opt/ros/jazzy/lib/libupper.so")
+        got_lower, got_upper = closest_surviving_neighbors(
+            PC, [upper, lower])
+        self.assertEqual(got_lower, lower)
+        self.assertEqual(got_upper, upper)
+        lines = emit_fault_neighbors(PC, [upper, lower], [])
+        self.assertTrue(any(
+            "M23Q_FAULT_NEAREST_FILE_LOWER=" in line and
+            "distance_bytes=4096" in line for line in lines))
+        self.assertTrue(any(
+            "M23Q_FAULT_NEAREST_FILE_UPPER=" in line and
+            "distance_bytes=4096" in line for line in lines))
+
+    def test_nearest_mapping_does_not_expose_private_full_path(self):
+        lines = emit_fault_neighbors(
+            PC, [(PC + 0x1000, PC + 0x2000, 0,
+                  "/home/secret-user/private/hidden-module.so")], [])
+        text = "\n".join(lines)
+        self.assertNotIn("/home/secret-user", text)
+        self.assertIn("'hidden-module.so' provenance=OTHER", text)
 
     def test_arbitrary_file_is_forbidden_as_live_inspection_input(self):
         with tempfile.TemporaryDirectory() as tmp:
