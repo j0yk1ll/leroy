@@ -7,6 +7,7 @@ exposure-to-MCU time offset, authenticate recording origin, or authorize
 motor motion. No serial/USB/ROS graph/node APIs are used.
 """
 import argparse
+from collections import OrderedDict
 import json
 import math
 from pathlib import Path
@@ -54,7 +55,8 @@ class ReplayInputAudit:
         self.last = {}
         self.largest_gap = {"image": 0, "info": 0, "imu": 0}
         self.last_bag_ns = None
-        self.info_by_stamp = {}
+        self.info_by_stamp = OrderedDict()
+        self.camera_info_cache_evictions = 0
         self.pending_image = {}
         self.matched = 0
         self.faults = []
@@ -135,15 +137,23 @@ class ReplayInputAudit:
         geometry = (msg.width, msg.height)
         if key in self.info_by_stamp and self.info_by_stamp[key] != geometry:
             self.fault("BLOCKED_CHANGED_CAMERA_INFO")
+        # Sliding bounded cache: a normal multi-minute recording contains
+        # thousands of CameraInfo messages. Retaining ALL historical stamps
+        # would falsely block even perfectly matched complete recordings.
+        # Evict the oldest *info cache* entries only. Never silently mark an
+        # unmatched Image as valid: pending_image retains that evidence and
+        # finish() still requires a match for EVERY image.
         self.info_by_stamp[key] = geometry
+        self.info_by_stamp.move_to_end(key)
         outstanding = self.pending_image.pop(key, [])
         for expected in outstanding:
             if expected != geometry:
                 self.fault("BLOCKED_IMAGE_INFO_DIMENSION_MISMATCH")
             else:
                 self.matched += 1
-        if len(self.info_by_stamp) > MAX_PENDING:
-            self.fault("BLOCKED_UNBOUNDED_CAMERA_INFO")
+        while len(self.info_by_stamp) > MAX_PENDING:
+            self.info_by_stamp.popitem(last=False)
+            self.camera_info_cache_evictions += 1
 
     def _image(self, msg, stamp):
         key = (stamp, msg.header.frame_id)
@@ -192,6 +202,8 @@ class ReplayInputAudit:
             "imu_frame": self.imu_frame,
             "counts": dict(self.counts),
             "matched_image_info_pairs": self.matched,
+            "camera_info_cache_evictions": self.camera_info_cache_evictions,
+            "camera_info_cache_peak_entries": len(self.info_by_stamp),
             "max_header_gap_ms": {
                 kind: round(gap / 1_000_000, 3)
                 for kind, gap in self.largest_gap.items()

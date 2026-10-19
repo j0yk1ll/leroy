@@ -203,7 +203,11 @@ def inspect_recorded_candidate(bag, *, declared_origin):
             profile.fault("INVALID_" + kind.upper() + "_CDR")
             continue
         profile.consume(kind, receipt, msg)
-    return profile.finish(base, declared_origin=declared_origin)
+    result = profile.finish(base, declared_origin=declared_origin)
+    # Retain exact M23A input faults for forensic diagnosis. The original
+    # generic M23D failure stays fail-closed and is never promoted to PASS.
+    result["m23a_preflight"] = base
+    return result
 
 
 def main(argv=None):

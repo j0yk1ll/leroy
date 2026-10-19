@@ -1,0 +1,37 @@
+# M23I: diagnose FIRST real bag failures without changing evidence bytes.
+# Base is locally accepted M23F read-only image; no network/devices.
+ARG M23I_BASE=localhost/leroy-sensors:m23f-existing-recording-inventory
+FROM ${M23I_BASE}
+
+ENV M23I_FORENSICS_ONLY=1 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=177 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Overlay only read-only offline audit code. No physical sensor source
+# and no recorder/robot launch tools are changed or invoked.
+COPY m23a_xrslam_rosbag_preflight.py /opt/m23a/m23a_xrslam_rosbag_preflight.py
+COPY m23d_recorded_bag_readiness.py /opt/m23d/m23d_recorded_bag_readiness.py
+COPY m23f_existing_recording_inventory.py /opt/m23f/m23f_existing_recording_inventory.py
+COPY m23i_long_bag_diagnostics_test.py /opt/m23i/m23i_long_bag_diagnostics_test.py
+COPY m23i_no_device_run.sh /usr/local/bin/leroy-m23i-forensics
+COPY Dockerfile.m23i-forensics /opt/m23i/Dockerfile.m23i-forensics
+
+RUN chmod 0755 /usr/local/bin/leroy-m23i-forensics \
+    && bash -n /usr/local/bin/leroy-m23i-forensics \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m23i:/opt/m23f:/opt/m23e:/opt/m23d:/opt/m23b:/opt/m23a:${PYTHONPATH:-}" \
+    && python3 -m py_compile \
+         /opt/m23a/m23a_xrslam_rosbag_preflight.py \
+         /opt/m23d/m23d_recorded_bag_readiness.py \
+         /opt/m23f/m23f_existing_recording_inventory.py \
+         /opt/m23i/m23i_long_bag_diagnostics_test.py \
+    && python3 -u /opt/m23i/m23i_long_bag_diagnostics_test.py \
+    && python3 -u /opt/m23a/m23a_xrslam_rosbag_preflight_test.py \
+    && python3 -u /opt/m23d/m23d_recorded_bag_readiness_test.py \
+    && python3 -u /opt/m23f/m23f_existing_recording_inventory_test.py \
+    && python3 -c 'import rosbag2_py; print("M23I_JAZZY_FORENSICS_IMPORT=PASS")'
+
+CMD ["/usr/local/bin/leroy-m23i-forensics"]
