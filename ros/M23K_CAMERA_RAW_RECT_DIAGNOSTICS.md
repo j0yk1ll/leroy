@@ -1,6 +1,7 @@
 # M23K — Isolated RAW vs RECT camera path diagnosis
 
-**Draft: operator runtime and image build not yet tested.**
+**Revised after the first operator camera-only run. New C++ observer and
+container rebuild NOT YET TESTED.**
 This branch is independently based on merged main
 c05b126226249657635c050d48ceeba1b3415ee6.
 No dependency on the unmerged M23I/M23J PRs #103/#104.
@@ -28,6 +29,53 @@ This matches M20's intentional camera-first + 9s wait; it
 requires a future M23H recorder-window alignment change, but
 cannot account for the 158 mid-run camera stalls.
 
+## Evidence from the initial 45-second M23K Python observation
+
+The operator's first M23K live camera-only run **completed**, but its
+single Python executor reported raw 121 (2.606Hz), rect 450 (9.538Hz),
+CameraInfo 1411 (29.811Hz). Only 83 raw/rect image headers matched;
+**367 rectified headers were never observed by the raw subscriber**.
+Because rectification normally retains source header stamps, this
+strongly indicates that raw subscriber *observations* were lost or
+unfairly scheduled; it is NOT proof the USB camera only published
+2.606Hz, nor proof image_proc generated extra frames.
+
+Raw max header gap 4260.056ms, rect 1140.052ms, CameraInfo 36.158ms.
+Both raw and rect probes reported 41 >250ms gaps, versus zero
+CameraInfo gaps. The exact stage dropping frames remains unresolved.
+
+At shutdown the \`image_proc\` component container died with
+**SIGSEGV (exit -11)**, despite M23K reporting an empty fault list.
+A graceful camera stop must not hide this. The original run's
+CAMERA_PATH_DIAGNOSTIC_ONLY verdict was therefore incomplete.
+
+### Corrective instrumentation on this same draft PR
+
+The revised observer is a **dedicated C++ rclcpp SingleThreadedExecutor**
+rather than the Python \`spin_once\` loop. Its callbacks access only
+\`sensor_msgs::msg::Image::header\` and \`CameraInfo::header\`
+(no copying pixels into Python, no image processing and no publication).
+Full DDS image message deserialization still occurs in rclcpp, so it
+is LOWER-OVERHEAD, not a guaranteed lossless publisher counter.
+
+M23K's Python parent supervises the unmodified camera launch and
+the standalone compiled C++ subscriber as separate process groups,
+captures sample lines to bounded /tmp logs and refuses incomplete
+or mismatched C++ counter totals. It also scans the camera launch log
+for child crash messages such as \`process has died ... exit code -11\`.
+A SIGSEGV during shutdown now causes
+\`INCOMPLETE_CAMERA_PATH_OBSERVATION\`, even if the image counts are
+sufficient; ROS launch's normal SIGINT exit code 130 is distinguished
+from a child crash.
+
+The new C++ source lives under \`ros/m23k_cpp/\` and is built ONLY
+inside the disconnected M23K image as the standalone ament package
+\`leroy_m23k_camera_counter\`, separate from the production workspace.
+Its executable must exist at
+\`/opt/m23k-cpp-install/lib/leroy_m23k_camera_counter/m23k_camera_header_counter\`.
+The observer and launch logs are written under /tmp in the ephemeral
+container and are not modified on the host.
+
 ## M23K purpose
 
 M23K compares in one isolated ROS 2 Jazzy graph:
@@ -35,7 +83,7 @@ M23K compares in one isolated ROS 2 Jazzy graph:
 - /camera/image_rect (from image_proc rectifier)
 - /camera/camera_info (from usb_cam)
 
-It reports per-topic count/rate; header and monotonic receipt
+It reports per-topic count/rate using compiled header-only callbacks; header and monotonic receipt
 interval max/mean and gaps >250ms; raw/rect ratio and matching
 exact header stamps across separately subscribed topics.
 This is a **diagnostic observation only**. Python subscribing
@@ -64,7 +112,7 @@ PYTHONDONTWRITEBYTECODE=1 \
   python3 -u m23k_camera_path_probe_test.py
 ~~~
 
-Require 13/13 tests PASS,
+Require 21/21 tests PASS,
 M23K_RAW_RECT_OBSERVER_OFFLINE=PASS, M23K_DEVICE_ACCESS=NONE.
 
 ## Phase B — disconnected camera-only image build
@@ -85,7 +133,7 @@ echo "M23K_BUILD_EXIT_CODE=$M23K_BUILD_EXIT"
 ~~~
 
 Require M23K_JAZZY_CAMERA_PROBE_IMPORT=PASS,
-M23K_RAW_RECT_OBSERVER_OFFLINE=PASS and build exit 0.
+M23K_RAW_RECT_OBSERVER_OFFLINE=PASS, compiled C++ counter present, and build exit 0.
 
 ## Phase C — no-device container self-test
 
