@@ -278,6 +278,50 @@ an originating library or causal `dlclose`.
 All M23P lifecycle, production-camera, VIO, recorder and
 robot-motion gates remain BLOCKED. Keep M23R draft/unmerged.
 
+## Existing-log child-exit classification (operator report)
+
+A read-only JSON extraction from the **same saved synthetic run**
+subsequently reported:
+
+```text
+component_exit_class=BLOCKED_RECTIFIER_CHILD_CRASH
+component_launch_exit_code=0
+m23p_faults=["BLOCKED_RECTIFIER_CHILD_CRASH"]
+graph_qos_verified=true
+observer_counts={"info":900,"raw":899,"rect":899}
+matching_header_pairs=899
+rect_max_gap_ms=33.524
+publisher_exit=0
+observer_exit=0
+```
+
+This confirms the synthetic rectifier continued to deliver well
+within the **synthetic** observed continuity requirement and with
+matching raw/rectified stamps. It **does not** promote the
+real-camera M23A physical gap threshold or VIO acceptance.
+
+M23P's `camera_launch_crashed` helper classifies the component
+child as crashed if its ROS launch text contains either
+`process has died` or `Segmentation fault`. Therefore the
+M23P child-crash class is confirmed, but the exact signal and
+numerical child exit status of this **new instrumented run** are
+not yet included in the selected output. The `component_launch_exit_code=0`
+belongs to the launch **parent**, not the component child. The
+operator's original `crash_context` selection included only the
+first eight leading lines, not the actual death message. Neither
+this result nor the last successful loader close establishes a
+particular faulting library or unloaded function.
+
+**Follow-up: analyze the existing synthetic log only, no rerun.**
+A short host-local read-only parser may extract the
+`[component_container-1]: process has died` line's numerical
+`exit code` or the explicit `Segmentation fault` line,
+without printing the full child command. If no unique code
+appears, retain **exact synthetic-run signal UNKNOWN**.
+Maintain `BLOCKED_COMPONENT_LIFECYCLE` in all cases. No
+additional no-device workload run is required to close the
+basic lifecycle classification.
+
 ## Exit conditions / nonclaims
 
 M23R can supply temporally ordered loader events that help
