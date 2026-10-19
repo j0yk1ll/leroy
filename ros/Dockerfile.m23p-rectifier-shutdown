@@ -1,5 +1,5 @@
 # M23P: no-device ROS 2 Jazzy image_proc shutdown repro.
-# Only fabricated M23L RGB frames; NO usb_cam, STM32, IMU, recorder or motors.
+# Uses M23P-specific fabricated calibrated RGB8 publisher; the M23L binary is untouched. NO camera, STM32, IMU, recorder or motors.
 FROM localhost/leroy-sensors:m23o-rect-camera-qos
 
 ENV M23K_PROBE_MODE=selftest \
@@ -16,6 +16,7 @@ ENV M23K_PROBE_MODE=selftest \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20
 
+COPY m23p_cpp /opt/m23p/m23p_cpp
 COPY m23p_rectifier_only.launch.py /opt/m23p/m23p_rectifier_only.launch.py
 COPY m23p_no_device_rectifier_shutdown.py /opt/m23p/m23p_no_device_rectifier_shutdown.py
 COPY m23p_no_device_rectifier_shutdown_test.py /opt/m23p/m23p_no_device_rectifier_shutdown_test.py
@@ -29,7 +30,13 @@ RUN . /opt/ros/jazzy/setup.sh \
        /opt/m23p/m23p_no_device_rectifier_shutdown_test.py \
        /opt/m23p/m23p_rectifier_only.launch.py \
     && python3 -u /opt/m23p/m23p_no_device_rectifier_shutdown_test.py \
-    && test -x /opt/m23m-cpp-install/lib/leroy_m23k_camera_counter/m23l_synthetic_image_publisher \
+    && colcon --log-base /tmp/m23p-cpp-build-logs build \
+       --base-paths /opt/m23p/m23p_cpp \
+       --build-base /tmp/m23p-cpp-build \
+       --install-base /opt/m23p-cpp-install \
+       --merge-install \
+       --packages-select leroy_m23p_calibrated_synthetic \
+    && test -x /opt/m23p-cpp-install/lib/leroy_m23p_calibrated_synthetic/m23p_calibrated_publisher \
     && test -x /opt/m23m-cpp-install/lib/leroy_m23k_camera_counter/m23k_camera_header_counter \
     && echo M23P_JAZZY_NO_DEVICE_IMPORT=PASS
 
