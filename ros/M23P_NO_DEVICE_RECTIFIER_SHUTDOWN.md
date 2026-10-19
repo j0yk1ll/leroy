@@ -1,11 +1,13 @@
 # M23P — no-device image_proc shutdown isolation
 
-**Draft / idle and first synthetic runs completed on 2026-10-19.**
-The idle test passed; the first synthetic run was correctly BLOCKED
-because the M23L generic fabricated CameraInfo has K[0]==0 and Jazzy
-image_proc refuses to rectify uncalibrated input. The updated M23P
-synthetic fixture has NOT been validated yet; fresh offline checks and
-a disconnected rebuild are required. This milestone is stacked
+**Draft / idle and two synthetic runs reported on 2026-10-19.**
+Idle shut down cleanly. The first synthetic run was BLOCKED because
+M23L's fabricated CameraInfo had K[0]==0 and rect produced zero images.
+The second synthetic run used calibrated-shaped fabricated CameraInfo
+and observed 166 rectified images of 887 raw, but it reproduced the
+component-container exit -11/SIGSEGV after SIGINT. The new
+publisher-first/actual-QoS audit patch is NOT YET OPERATOR VALIDATED;
+fresh source tests, disconnected rebuild and no-device run are required. This milestone is stacked
 on M23O draft PR #109. It deliberately uses the existing ROS 2 Jazzy
 `image_proc::RectifyNode` plugin without modifying ROS libraries,
 production launch or live devices. No robot motion is authorized.
@@ -43,6 +45,14 @@ Original bag and M23A strict 250ms gap gate are unchanged.
   `RectifyNode` exercises actual OpenCV rectification rather than
   rejecting an uncalibrated K or passing through zero-distortion images.
   The existing accepted M23L/M23M synthetic publisher is unmodified.
+  M23P registers synthetic image and CameraInfo RELIABLE publishers
+  **before** it launches the downstream rectified-image C++ observer.
+  A bounded 8-second initial publisher timer delay allows the lazy
+  rectifier input subscriptions to initialize. A separate read-only
+  ROS graph inspector verifies the actual publisher, rectifier and
+  observer endpoints are RELIABLE/VOLATILE and records the active RMW.
+  This startup-order correction tests a **QoS hypothesis**, not an
+  established cause of the SIGSEGV or low rectified delivery.
   Stop the rectifier after the synthetic publisher terminates and a
   2-second drain. Require at least **810/900 observed raw AND rect**
   samples, no >250ms rect image-header gaps, at least 90% matching
@@ -50,18 +60,31 @@ Original bag and M23A strict 250ms gap gate are unchanged.
   valid complete publication markers and clean component shutdown.
   A missing/insufficient rect stream remains BLOCKED.
 
-**Observed initial evidence:** operator's first `idle` profile
-returned `CLEAN_COMPONENT_SHUTDOWN`, exit 0, no devices. The first
-`synthetic` profile reported 900 images published; 897 raw, 897
-CameraInfo, **0 rect** observed; component exited cleanly, but the
-overall verdict was `BLOCKED_NO_DEVICE_RECTIFIER_LIFECYCLE`, exit 2.
-This is explained by the accepted M23L synthetic publisher setting
-P but not K: see
-https://github.com/ros-perception/image_pipeline/blob/jazzy/image_proc/src/rectify.cpp
-(`imageCb` rejects CameraInfo with `K[0] == 0.0`).
-The new M23P-local calibrated-shaped fabricated publisher addresses
-that test-fixture problem; it does **not** modify real camera
-calibration or certify actual robot calibration.
+**Observed M23P history:**
+- Idle: `CLEAN_COMPONENT_SHUTDOWN`, exit0, no devices.
+- Initial M23L-based synthetic: 900 published, 897 raw, 897 CameraInfo,
+  **0 rect**; clean shutdown but verdict BLOCKED/exit2 because
+  `image_proc` rejects CameraInfo with `K[0] == 0.0`.
+- Revised nonzero-distortion M23P synthetic: 900 published,
+  887 raw, 887 CameraInfo, **166 rect**, 166/166 header stamps
+  matched, maximum rect header gap **3233.276ms**.
+  After shutdown SIGINT, `component_container` exited **-11/SIGSEGV**,
+  while `ros2 launch` parent returned 0. The result is BLOCKED/exit2.
+  `image_transport` log warned of only 0–2 Image versus 30 CameraInfo
+  messages within successive windows.
+- **A credible separate explanation for low rectified delivery** is
+  startup-order-dependent rectifier subscriber QoS. Before this patch,
+  M23P started the downstream observer before the image publisher;
+  upstream Jazzy issue
+  https://github.com/ros-perception/image_pipeline/issues/1121
+  reports that this may choose BEST_EFFORT input QoS despite a RELIABLE
+  camera publisher and cause similar synchronization warnings. M23P
+  had not captured the actual rectifier QoS, so this is a hypothesis,
+  not a proven explanation.
+
+The revised M23P-only publisher-first startup and graph audit are an
+**unexecuted experimental correction**, not a fix for the SIGSEGV.
+The fake CameraInfo does not certify real camera calibration.
 
 Both variants: separate ephemeral rootless Podman container,
 `--network none`, private IPC/PID, no privilege elevation, isolated
@@ -97,8 +120,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -u m23m_dds_qos_matrix_test.py
 PYTHONDONTWRITEBYTECODE=1 python3 -u m23l_synthetic_dds_baseline_test.py
 ```
 
-Require M23P 12/12 + M23O 10/10 + M23N 10/10 +
-M23M 9/9 + M23L 16/16 = **57/57 PASS**.
+Require M23P 14/14 + M23O 10/10 + M23N 10/10 +
+M23M 9/9 + M23L 16/16 = **59/59 PASS**.
 New marker: `M23P_NO_DEVICE_SHUTDOWN_SOURCE_CONTRACT=PASS`.
 
 ## Phase B — disconnected build
@@ -157,7 +180,12 @@ echo "M23P_SYNTHETIC_EXIT_CODE=${PIPESTATUS[0]}"
 ```
 
 Collect the same JSON, child exit classification, synthetic
-publisher/observer count markers, and bounded crash context.
+publisher/observer count markers, bounded crash context and
+`actual_graph_qos_verified` / `graph_endpoints`. A graph with any
+missing or BEST_EFFORT RectifyNode input must fail closed. The publisher
+announces `M23P_PUBLISHER_GRAPH_READY=YES` and delays frame generation
+until after graph establishment; an audit performed after frames begin
+must be reported as incomplete.
 
 Interpretation: if idle crashes, a reproducer exists without sensor
 traffic; if only synthetic crashes, the failure likely depends on
