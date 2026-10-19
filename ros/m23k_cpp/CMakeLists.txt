@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.8)
+project(leroy_m23k_camera_counter LANGUAGES CXX)
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+add_executable(m23k_camera_header_counter src/m23k_camera_header_counter.cpp)
+target_compile_features(m23k_camera_header_counter PUBLIC cxx_std_17)
+target_compile_options(m23k_camera_header_counter PRIVATE -Wall -Wextra -Wpedantic)
+ament_target_dependencies(m23k_camera_header_counter rclcpp sensor_msgs)
+install(TARGETS m23k_camera_header_counter DESTINATION lib/${PROJECT_NAME})
+ament_package()
