@@ -1,6 +1,6 @@
 """M23P: device-free standalone image_proc rectifier component lifecycle.
 
-No usb_cam or physical sensor node is launched here. A separate synthetic
+No physical sensor node is launched here. A separate synthetic
 publisher can connect to the same camera topics in synthetic mode.
 """
 from launch import LaunchDescription
