@@ -63,7 +63,17 @@ IMAGE_CREATED="$(podman image inspect "$EXPECTED_IMAGE_ID" --format '{{.Created}
     echo "M23Q_BLOCKED=EXACT_IMAGE_METADATA_INACCESSIBLE"
     exit 2
 }
-IMAGE_CREATED_EPOCH="$(date -d "$IMAGE_CREATED" +%s)" || {
+# Podman sometimes emits a Go timestamp ending in both a numeric
+# offset and a redundant zone name, for example:
+#   2026-10-19 14:23:21.51374453 +0000 UTC
+# GNU date rejects "+0000 UTC" together. Remove ONLY the redundant
+# literal UTC suffix when the numeric +0000 offset is already present.
+# Keep the numeric offset authoritative; never infer host local time.
+IMAGE_CREATED_FOR_DATE="$IMAGE_CREATED"
+case "$IMAGE_CREATED" in
+    *" +0000 UTC") IMAGE_CREATED_FOR_DATE="${IMAGE_CREATED% UTC}" ;;
+esac
+IMAGE_CREATED_EPOCH="$(date -d "$IMAGE_CREATED_FOR_DATE" +%s)" || {
     echo "M23Q_BLOCKED=IMAGE_CREATED_TIME_INVALID"
     exit 2
 }
