@@ -1,0 +1,38 @@
+# M23L synthetic full-frame DDS throughput baseline. NO physical device.
+# Locally built accepted M23K camera path image; this PR is stacked.
+ARG M23L_BASE=localhost/leroy-sensors:m23k-camera-path-probe
+FROM ${M23L_BASE}
+
+ENV M23L_SYNTHETIC_DDS_ONLY=1 \
+    M23K_PROBE_MODE=selftest \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23k_cpp /opt/m23k_cpp
+COPY m23l_synthetic_dds_baseline.py /opt/m23l/m23l_synthetic_dds_baseline.py
+COPY m23l_synthetic_dds_baseline_test.py /opt/m23l/m23l_synthetic_dds_baseline_test.py
+COPY m23l_no_device_run.sh /usr/local/bin/leroy-m23l-no-device-run
+COPY Dockerfile.m23l-dds /opt/m23l/Dockerfile.m23l-dds
+
+RUN chmod 0755 /usr/local/bin/leroy-m23l-no-device-run \
+    && bash -n /usr/local/bin/leroy-m23l-no-device-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m23l:/opt/m23k:/opt/m20:${PYTHONPATH:-}" \
+    && python3 -m py_compile \
+         /opt/m23l/m23l_synthetic_dds_baseline.py \
+         /opt/m23l/m23l_synthetic_dds_baseline_test.py \
+    && python3 -u /opt/m23l/m23l_synthetic_dds_baseline_test.py \
+    && colcon --log-base /tmp/m23l-cpp-build-logs build \
+         --base-paths /opt/m23k_cpp \
+         --build-base /tmp/m23l-cpp-build \
+         --install-base /opt/m23l-cpp-install \
+         --merge-install \
+         --packages-select leroy_m23k_camera_counter \
+    && test -x /opt/m23l-cpp-install/lib/leroy_m23k_camera_counter/m23l_synthetic_image_publisher \
+    && test -x /opt/m23l-cpp-install/lib/leroy_m23k_camera_counter/m23k_camera_header_counter \
+    && echo M23L_JAZZY_SYNTHETIC_CPP_BUILD=PASS
+
+CMD ["/usr/local/bin/leroy-m23l-no-device-run"]
