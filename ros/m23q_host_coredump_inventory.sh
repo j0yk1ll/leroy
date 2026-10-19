@@ -17,7 +17,7 @@ ROOT="${HOME}/.local/state/leroy-m23q"
 mkdir -p -m 700 "$ROOT" || exit 2
 RUN_DIR="$(mktemp -d "$ROOT/inventory.XXXXXXXX")" || exit 2
 chmod 700 "$RUN_DIR"
-echo "M23Q_HOST_CREDUMP_LOG_DIR=$RUN_DIR"
+echo "M23Q_HOST_COREDUMP_LOG_DIR=$RUN_DIR"
 echo "M23Q_CORE_SINCE=$SINCE"
 echo "M23Q_NO_DEVICE_ACTION=TRUE"
 
@@ -73,7 +73,7 @@ fi
 echo "M23Q_SELECTED_HOST_PID=$HOST_PID"
 echo "M23Q_CORE_INFO_FILE=$RUN_DIR/core-info.txt"
 echo "M23Q_INFO_RELEVANT_BEGIN"
-grep -E '^( *Timestamp:| *PID:| *Signal:| *Executable:| *Command Line:| *Storage:| *Size on Disk:| *Stack trace:| *[0-9]+[[:space:]])' \
+grep -E '(Timestamp:|PID:|Signal:|Executable:|Command Line:|Storage:|Size on Disk:|Stack trace|#[0-9]+|^[[:space:]]*[0-9]+[[:space:]])' \
     "$RUN_DIR/core-info.txt" | head -n 100 || true
 echo "M23Q_INFO_RELEVANT_END"
 echo "M23Q_NEXT=CLASSIFY_CORE_PRESENT_JOURNAL_MISSING_OR_TRUNCATED"
