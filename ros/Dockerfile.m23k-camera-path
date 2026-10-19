@@ -9,6 +9,7 @@ ENV M23K_PROBE_MODE=selftest \
     ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
     PYTHONDONTWRITEBYTECODE=1
 
+COPY m23k_cpp /opt/m23k_cpp
 COPY m23k_camera_path_probe.py /opt/m23k/m23k_camera_path_probe.py
 COPY m23k_camera_path_probe_test.py /opt/m23k/m23k_camera_path_probe_test.py
 COPY m23k_no_device_run.sh /usr/local/bin/leroy-m23k-camera-probe
@@ -23,6 +24,12 @@ RUN chmod 0755 /usr/local/bin/leroy-m23k-camera-probe \
     && python3 -m py_compile \
          /opt/m23k/m23k_camera_path_probe.py \
          /opt/m23k/m23k_camera_path_probe_test.py \
+    && colcon build --base-paths /opt/m23k_cpp \
+         --build-base /tmp/m23k-cpp-build \
+         --install-base /opt/m23k-cpp-install \
+         --log-base /tmp/m23k-cpp-logs \
+         --packages-select leroy_m23k_camera_counter \
+    && test -x /opt/m23k-cpp-install/lib/leroy_m23k_camera_counter/m23k_camera_header_counter \
     && python3 -u /opt/m23k/m23k_camera_path_probe_test.py \
     && python3 -c 'import rclpy; from sensor_msgs.msg import Image, CameraInfo; print("M23K_JAZZY_CAMERA_PROBE_IMPORT=PASS")'
 
