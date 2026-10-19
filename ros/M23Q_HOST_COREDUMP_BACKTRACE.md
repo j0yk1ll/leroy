@@ -302,6 +302,60 @@ and `M23Q_UNMAPPED_EXECUTION_HYPOTHESIS`.
 Do not share the whole core; report only these bounded metadata
 markers. Remain device-free, and preserve all prior blocked gates.
 
+## Phase E — bound the unmapped-PC gap using surviving mappings
+
+**Operator's Phase D result:** The already saved M23Q core has exactly
+one `NT_SIGINFO` note, signal 11/SEGV_MAPERR, with kernel-recorded
+`si_addr=0x00007f56a4912f5b` equal to the faulting PC. That
+address has **no NT_FILE mapping and no PT_LOAD range** in the core.
+`M23Q_UNMAPPED_EXECUTION_HYPOTHESIS=SUPPORTED`.
+
+This is affirmative evidence for an unmapped instruction target at
+the moment of crash. **It does not establish that code was unloaded
+or that a specific library owned the address previously.** The
+unmapped call target may result from a stale function pointer,
+virtual dispatch, torn lifetime, or corruption.
+
+The read-only inspector now also reports the single nearest
+*surviving* file mapping and executable PT_LOAD below and above the
+fault PC, with their exact distances in bytes. It outputs only a
+basename and coarse `JAZZY/OTHER` label for a neighboring file, not
+its full path, to reduce accidental disclosure of host private paths.
+It explicitly prints `M23Q_NEAREST_MAPPING_PROVES_UNLOAD=FALSE`.
+The bounding files are not automatically suspects.
+
+**This Phase E source patch is not yet operator-tested.** Run only
+synthetic offline tests and reread the same existing private core:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+git fetch origin
+git switch feature/m23q-host-coredump-backtrace
+git pull --ff-only origin feature/m23q-host-coredump-backtrace
+cd ros
+
+PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_core_fault_mapping_test.py
+
+CORE="$HOME/.local/state/leroy-m23q/gdb-firstpass.sXKTfoQL/core.48349"
+test -f "$CORE" || exit 2
+
+PYTHONDONTWRITEBYTECODE=1 python3 -u \
+  m23q_core_fault_mapping.py "$CORE"
+```
+
+Expect **15** synthetic mapping tests and
+`M23Q_ELF_MAPPING_SOURCE_CONTRACT=PASS`. Please report only
+`M23Q_FAULT_NEAREST_FILE_*`,
+`M23Q_FAULT_NEAREST_EXEC_LOAD_*`, and
+`M23Q_NEAREST_MAPPING_PROVES_UNLOAD=FALSE`.
+An absence of any neighboring mapping is still a valid observation
+and **not** evidence of a specific unloaded library.
+
+For actual causal attribution a future no-device-only controlled
+experiment may need executable-module lifetime instrumentation,
+address registration history or a symbolized valid return path;
+do not authorize new experiments or alter production in Phase E.
+
 ## Strict invariant
 
 M23Q is a **postmortem-only investigation**. No motion, Nav2, XRSLAM,
