@@ -31,6 +31,8 @@ M23D now retains its exact nested m23a_preflight report. M23F
 reports m23a_faults, m23a_verdict, matched Image/CameraInfo pairs,
 CameraInfo cache evictions, and gaps_over_250ms. The original
 blocked verdict stays blocked.
+The 2,951.988ms image timestamp gap should appear explicitly as
+`BLOCKED_IMAGE_STAMP_GAP` after the improved diagnostic propagation.
 
 ## 1. Offline regression suite — 124 tests, NO devices
 
