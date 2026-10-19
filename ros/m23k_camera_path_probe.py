@@ -258,6 +258,22 @@ def camera_launch_crashed(log_text):
             or "Segmentation fault" in log_text)
 
 
+def camera_crash_context(log_text, before=14, after=6):
+    """Return a bounded, line-numbered window near the first child crash.
+
+    The camera-only container is ephemeral; preserve a small excerpt in the
+    operator's tee log without dumping unbounded ROS launch output.
+    """
+    lines = log_text.splitlines()
+    for i, line in enumerate(lines):
+        if "process has died" in line or "Segmentation fault" in line:
+            start = max(0, i - before)
+            end = min(len(lines), i + after + 1)
+            return [str(n + 1) + ": " + lines[n][-500:]
+                    for n in range(start, end)]
+    return []
+
+
 def run_camera_only():
     _require_live_environment()
     variant = os.environ.get("M23K_PROBE_VARIANT", "full_mjpeg")
@@ -353,6 +369,10 @@ def run_camera_only():
                     or "Segmentation fault" in line):
                 print("M23K_CAMERA_CHILD_EXIT=" + line[-500:],
                       flush=True)
+        if m23o_qos:
+            for line in camera_crash_context(camera_text):
+                print("M23O_CAMERA_CRASH_CONTEXT=" +
+                      json.dumps(line), flush=True)
     if "M23K_COUNTER_FATAL=" in counter_text:
         issues.append("CPP_COUNTER_REPORTED_FATAL")
 
@@ -433,7 +453,7 @@ def run_camera_only():
     print("M23K_CAMERA_PROBE_JSON=" +
           json.dumps(stats_report, sort_keys=True), flush=True)
     print("M23K_VERDICT=" + stats_report["verdict"], flush=True)
-    if requested_qos:
+    if requested_qos and not m23o_qos:
         print("M23N_CAMERA_QOS_JSON=" +
               json.dumps(stats_report, sort_keys=True), flush=True)
         print("M23N_CAMERA_QOS_VERDICT=" + stats_report["verdict"],
