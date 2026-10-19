@@ -17,6 +17,7 @@ COPY m23r_rectifier_trace.launch.py /opt/m23r/m23r_rectifier_trace.launch.py
 COPY m23r_shutdown_trace_runner.py /opt/m23r/m23r_shutdown_trace_runner.py
 COPY m23r_shutdown_trace_test.py /opt/m23r/m23r_shutdown_trace_test.py
 COPY M23R_NO_DEVICE_SHUTDOWN_TRACE.md /opt/m23r/M23R_NO_DEVICE_SHUTDOWN_TRACE.md
+COPY Dockerfile.m23r-shutdown-trace /opt/m23r/Dockerfile.m23r-shutdown-trace
 
 RUN cc -std=c11 -O1 -Wall -Wextra -Werror -fPIC -shared \
       -o /opt/m23r/libm23r_loader_trace.so \
