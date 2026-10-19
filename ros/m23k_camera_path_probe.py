@@ -387,6 +387,10 @@ def run_camera_only():
         stats_report["graph_qos_verified"] = graph_report is not None and not any(
             issue.startswith("M23O_GRAPH_AUDIT_FAILED") for issue in issues)
         stats_report["graph_endpoints"] = graph_report
+        stats_report["actual_publisher_offered_qos_verified"] = (
+            stats_report["graph_qos_verified"])
+        stats_report["rectifier_endpoint_qos_verified"] = (
+            stats_report["graph_qos_verified"])
         stats_report["rmw_implementation"] = (
             graph_report.get("rmw_implementation") if graph_report else None)
         stats_report["camera_publisher_rate_verified"] = False
