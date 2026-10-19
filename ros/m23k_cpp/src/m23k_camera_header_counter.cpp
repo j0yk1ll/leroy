@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <stdexcept>
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
@@ -30,7 +31,22 @@ class HeaderCounter final : public rclcpp::Node {
   HeaderCounter() : rclcpp::Node("m23k_cpp_header_counter",
       rclcpp::NodeOptions().enable_rosout(false)
                            .start_parameter_services(false)) {
-    auto qos = rclcpp::SensorDataQoS(); // best effort, volatile
+    // Synthetic M23M isolated QoS matrix. Unset retains the M23K
+    // production-observer SensorDataQoS baseline: best effort, depth 5.
+    // NEVER alter ROS publisher QoS or device access in this experiment.
+    const char *requested = std::getenv("M23M_SUB_QOS");
+    const std::string profile = requested ? requested : "best_effort_5";
+    rclcpp::QoS qos = rclcpp::SensorDataQoS();
+    if (profile == "best_effort_5") {
+      // Default SensorDataQoS: volatile, best effort, keep last 5.
+    } else if (profile == "best_effort_100") {
+      qos = rclcpp::QoS(rclcpp::KeepLast(100)).best_effort().durability_volatile();
+    } else if (profile == "reliable_100") {
+      qos = rclcpp::QoS(rclcpp::KeepLast(100)).reliable().durability_volatile();
+    } else {
+      throw std::invalid_argument("unsupported M23M synthetic DDS receiver QoS");
+    }
+    std::cout << "M23M_COUNTER_QOS_PROFILE=" << profile << std::endl;
     raw_ = create_subscription<sensor_msgs::msg::Image>(
       "/camera/image_raw", qos,
       [this](sensor_msgs::msg::Image::ConstSharedPtr m) {
