@@ -53,7 +53,7 @@ recorder.** This is a separate overlay that adds only:
   single PID, valid trace fields and plausible dlclose counts.
   It preserves a bounded last-80-event diagnostic window in the
   output; **does not infer causality** from the last event.
-- `m23r_shutdown_trace_test.py` — 12 synthetic, no-device
+- `m23r_shutdown_trace_test.py` — 13 synthetic, no-device
   offline source/behavior contracts.
 - `Dockerfile.m23r-shutdown-trace` — uses only the existing
   local M23P no-device image. Builds a small local interposer
@@ -97,11 +97,37 @@ print("M23R_PYTHON_SYNTAX=PASS")
 PY
 ```
 
-Require M23R **12/12** tests, M23P **14/14**, and unchanged M23Q
-offline contracts **15/15 + 7/7 + 8/8** (56 total), with all respective
+Require M23R **13/13** tests, M23P **14/14**, and unchanged M23Q
+offline contracts **15/15 + 7/7 + 8/8** (57 total), with all respective
 `*_SOURCE_CONTRACT=PASS` or `*_COMPARISON_CONTRACT=PASS` markers.
 Do not continue on a failing test. The new files have not yet been
 tested on operator host.
+
+## Offline build attempt and strict-compiler correction
+
+Operator reported the initial disconnected build stopped at the C
+compiler (exit **1**) before running the M23R Python image contracts:
+
+```text
+error: ignoring return value of 'write' declared with attribute
+       'warn_unused_result' [-Werror=unused-result]
+error: 'nonnull' argument 'handle' compared to NULL [-Werror=nonnull-compare]
+```
+
+The M23R interposer now captures the `write()` return value and
+stops only that trace event on short/error writes (best-effort
+diagnostics; no retries, no process intervention). The redundant
+`handle != NULL` guard has been removed because the system
+`dlclose` function declares its argument nonnull. Existing
+loader-forwarding and device-free behavior are unchanged. A
+new thirteenth offline source regression contract guards the
+two fixes. **The corrected image has not yet been rebuilt
+or validated on the operator's Jazzy image.**
+
+Before proceeding to any runtime test, rerun Gate A (13/13 M23R),
+recheck the exact M23P base image ID and repeat Gate B. Only
+`M23R_NO_DEVICE_TRACE_IMAGE_CONTRACT=PASS` and build exit 0
+permit considering separate no-device idle/synthetic runs.
 
 ## Gate B — disconnected local build (still no ROS execution)
 
