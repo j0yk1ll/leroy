@@ -488,6 +488,58 @@ This phase uses **no** new ROS process, no physical sensors, no
 motor connection, no device mapping, no network and no live GDB
 attachment.
 
+## Phase G observed close-out and optional historical comparison
+
+**Operator result on the retained PID 48349 core:** All 93 missing
+shared-object paths selected from GDB warnings were successfully
+copied from the verified local M23P image; none failed. Host GDB
+batch exited 0, but the resulting unwind was **unchanged** and its
+faulting function remained `??`. The four residual missing-file
+warnings correspond to one unique **ephemeral**
+`/dev/shm/fastrtps_*` shared-memory object; recreating that object
+is not useful or permitted by M23Q. This warning alone does not
+implicate Fast DDS.
+
+Frame-zero GDB metadata reported:
+
+```text
+Stack level 0, frame at 0x7f56827f8ca8:
+ rip = 0x7f56a4912f5b; saved rip = 0x7f56827f8cb8
+ called by frame at 0x7f56827f8cb0
+ Previous frame's sp is 0x7f56827f8ca8
+ Saved registers: rip at 0x7f56827f8ca0
+```
+
+That apparent saved `rip` is in the stack region, not an established
+executable return address. Since the faulting code is unmapped and
+GDB cannot read its unwind directives, **the unwinder's caller
+inference cannot be trusted**. Do not claim a corrupted return pointer
+or a specific caller, unloaded library or destructor bug.
+
+**Close-out:** Device-free saved-core dependency repair **PASS**.
+Unmapped instruction-target mechanism **SUPPORTED**. Specific
+faulting module, valid prior caller, and shutdown root cause
+**UNRESOLVED/BLOCKED**. No further bulk library copying or same-core
+stack speculation is justified.
+
+An optional **read-only cross-core comparison** can use the already
+retained host core candidate PID **46312** (earlier
+2026-10-19 16:11:25 CEST). Revalidate its process identity and
+core status first:
+
+```bash
+cd "$(git rev-parse --show-toplevel)/ros"
+bash -n m23q_host_coredump_inventory.sh
+bash ./m23q_host_coredump_inventory.sh 46312
+```
+
+Provide only `M23Q_INFO_RELEVANT` text. This comparison may indicate
+a recurring shutdown pattern but not causal identity; the earlier
+run used different experiment configuration and executable/address
+mappings may differ because of rebuilding and ASLR. Do not compare
+absolute instruction addresses as if they name identical modules.
+No new ROS or camera experiment is authorized.
+
 ## Strict invariant
 
 M23Q is a **postmortem-only investigation**. No motion, Nav2, XRSLAM,
