@@ -10,6 +10,7 @@ ENV M23K_PROBE_MODE=selftest \
     PYTHONDONTWRITEBYTECODE=1
 
 COPY m23k_cpp /opt/m23k_cpp
+COPY m23k_camera_raw_only.launch.py /opt/m23k/m23k_camera_raw_only.launch.py
 COPY m23k_camera_path_probe.py /opt/m23k/m23k_camera_path_probe.py
 COPY m23k_camera_path_probe_test.py /opt/m23k/m23k_camera_path_probe_test.py
 COPY m23k_no_device_run.sh /usr/local/bin/leroy-m23k-camera-probe
@@ -22,6 +23,7 @@ RUN chmod 0755 /usr/local/bin/leroy-m23k-camera-probe \
     && . /leroy_ws/install/setup.sh \
     && export PYTHONPATH="/opt/m23k:/opt/m20:${PYTHONPATH:-}" \
     && python3 -m py_compile \
+         /opt/m23k/m23k_camera_raw_only.launch.py \
          /opt/m23k/m23k_camera_path_probe.py \
          /opt/m23k/m23k_camera_path_probe_test.py \
     && colcon --log-base /tmp/m23k-cpp-logs build \
