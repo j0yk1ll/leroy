@@ -55,6 +55,17 @@ def verified_receiver_qos_log(payload, requested):
         raise ValueError("missing, duplicate, or mismatched C++ receiver QoS")
     return markers[0]
 
+def rectified_qos_request(environ, variant):
+    """Separate opt-in reliable-only M23O diagnostic; never change M23N."""
+    if environ.get("M23O_RECT_QOS_ONLY") != "1":
+        return None
+    if environ.get("M23N_CAMERA_QOS_ONLY") == "1":
+        raise ValueError("M23N and M23O modes are mutually exclusive")
+    if variant != "full_mjpeg" or environ.get("M23O_SUB_QOS") != "reliable_100":
+        raise ValueError("M23O requires full_mjpeg and reliable_100")
+    return "reliable_100"
+
+
 PROBE_VARIANTS = {
     "full_mjpeg": ("/opt/m20/m20_camera_only.launch.py", True),
     "raw_only_mjpeg": ("/opt/m23k/m23k_camera_raw_only.launch.py", False),
@@ -253,7 +264,8 @@ def run_camera_only():
     if variant not in PROBE_VARIANTS:
         raise RuntimeError("unrecognized M23K camera probe variant")
     camera_launch_path, require_rect = PROBE_VARIANTS[variant]
-    requested_qos = camera_qos_request(os.environ, variant)
+    m23o_qos = rectified_qos_request(os.environ, variant)
+    requested_qos = camera_qos_request(os.environ, variant) or m23o_qos
     counter_binary = M23N_COUNTER_PATH if requested_qos else COUNTER_PATH
     # C++ processes sample headers without transferring full image payloads
     # into Python. The camera launch and exact M20 rectifier are unchanged.
@@ -263,6 +275,8 @@ def run_camera_only():
     issues = []
     stats_report = None
     qos_verified = False
+    graph_report = None
+    graph_sampled = False
     with CAMERA_LAUNCH_LOG.open("xb") as camera_output, \
             COUNTER_LOG.open("xb") as counter_output:
         try:
@@ -281,8 +295,34 @@ def run_camera_only():
                 stdout=camera_output, stderr=subprocess.STDOUT,
                 start_new_session=True)
             # Includes a bounded warm-up; 45-second timing observation.
-            deadline = time.monotonic() + CAMERA_WARMUP_S + DURATION_S
+            started = time.monotonic()
+            deadline = started + CAMERA_WARMUP_S + DURATION_S
             while time.monotonic() < deadline:
+                if m23o_qos and not graph_sampled and time.monotonic() >= started + 8:
+                    graph_sampled = True
+                    try:
+                        from m23o_rect_qos_graph import validate_graph
+                        graph_proc = subprocess.run(
+                            ["python3", "/opt/m23o/m23o_rect_qos_graph.py"],
+                            text=True, capture_output=True, timeout=12,
+                            check=False, env=dict(os.environ),
+                        )
+                        markers = [
+                            line.split("=", 1)[1]
+                            for line in graph_proc.stdout.splitlines()
+                            if line.startswith("M23O_GRAPH_JSON=")
+                        ]
+                        if len(markers) != 1:
+                            raise ValueError("M23O graph snapshot missing or duplicated")
+                        graph_report = json.loads(markers[0])
+                        validate_graph(graph_report)
+                        if graph_proc.returncode != 0:
+                            raise RuntimeError("M23O graph inspector exited " +
+                                               str(graph_proc.returncode))
+                    except (OSError, ValueError, RuntimeError,
+                            subprocess.TimeoutExpired) as exc:
+                        issues.append("M23O_GRAPH_AUDIT_FAILED:" +
+                                      type(exc).__name__ + ":" + str(exc)[:240])
                 if camera.poll() is not None:
                     raise RuntimeError("camera launch exited early")
                 if counter.poll() is not None:
@@ -328,6 +368,9 @@ def run_camera_only():
         stats_report = CameraStats().report(required_streams=required)
         stats_report["observer_implementation"] = "CPP_HEADER_ONLY_NO_PIXEL_ACCESS"
 
+    if m23o_qos and not graph_sampled:
+        issues.append("M23O_GRAPH_AUDIT_NOT_PERFORMED")
+
     # Preserve measurements even if only camera cleanup failed. A crash
     # cannot produce the original misleading clean diagnostic verdict.
     if requested_qos:
@@ -337,6 +380,18 @@ def run_camera_only():
         stats_report["subscriber_drain_window_s"] = 2.0
         stats_report["camera_publisher_rate_verified"] = False
         stats_report["actual_publisher_offered_qos_verified"] = False
+    if m23o_qos:
+        stats_report["milestone"] = "M23O"
+        stats_report["receiver_qos_profile"] = m23o_qos
+        stats_report["receiver_qos_verified"] = qos_verified
+        stats_report["graph_qos_verified"] = graph_report is not None and not any(
+            issue.startswith("M23O_GRAPH_AUDIT_FAILED") for issue in issues)
+        stats_report["graph_endpoints"] = graph_report
+        stats_report["rmw_implementation"] = (
+            graph_report.get("rmw_implementation") if graph_report else None)
+        stats_report["camera_publisher_rate_verified"] = False
+        stats_report["subscriber_drain_window_s"] = 2.0
+        stats_report["rectified_image_continuity_validated"] = False
     stats_report["camera_probe_variant"] = variant
     stats_report["rectifier_enabled"] = require_rect
     stats_report["pixel_format"] = (
@@ -347,6 +402,30 @@ def run_camera_only():
     if issues:
         stats_report["faults"] += issues[:8]
         stats_report["verdict"] = "INCOMPLETE_CAMERA_PATH_OBSERVATION"
+    if m23o_qos and stats_report["verdict"] == "CAMERA_PATH_DIAGNOSTIC_ONLY":
+        # Diagnostic only: do not weaken M23A's existing 250 ms gate.
+        raw = stats_report["streams"]["raw"]
+        rect = stats_report["streams"]["rect"]
+        good = (
+            qos_verified
+            and stats_report["graph_qos_verified"]
+            and all(
+                stream["header_intervals"]["gaps_over_250ms"] == 0
+                and stream["observed_rate_hz"] is not None
+                and stream["observed_rate_hz"] >= 25
+                for stream in (raw, rect)
+            )
+            and stats_report["counts"]["rect"] >= 3
+            and stats_report["rect_only_observed_header_stamps"] == 0
+            and stats_report["raw_rect_identical_header_stamp_pairs"] >=
+                0.95 * stats_report["counts"]["rect"]
+        )
+        if good:
+            stats_report["rectified_image_continuity_validated"] = True
+            stats_report["verdict"] = "RECTIFIED_CAMERA_QOS_DIAGNOSTIC_ONLY"
+        else:
+            stats_report["faults"].append("M23O_RECTIFIED_CONTINUITY_GATE_FAILED")
+            stats_report["verdict"] = "BLOCKED_RECTIFIED_IMAGE_CONTINUITY"
     print("M23K_CAMERA_PROBE_JSON=" +
           json.dumps(stats_report, sort_keys=True), flush=True)
     print("M23K_VERDICT=" + stats_report["verdict"], flush=True)
@@ -355,8 +434,15 @@ def run_camera_only():
               json.dumps(stats_report, sort_keys=True), flush=True)
         print("M23N_CAMERA_QOS_VERDICT=" + stats_report["verdict"],
               flush=True)
+    if m23o_qos:
+        print("M23O_RECT_QOS_JSON=" +
+              json.dumps(stats_report, sort_keys=True), flush=True)
+        print("M23O_RECT_QOS_VERDICT=" + stats_report["verdict"], flush=True)
     print("M23K_MCU_DEVICE_ACCESS=NONE", flush=True)
-    return 0 if stats_report["verdict"] == "CAMERA_PATH_DIAGNOSTIC_ONLY" else 2
+    return 0 if stats_report["verdict"] in (
+        "CAMERA_PATH_DIAGNOSTIC_ONLY",
+        "RECTIFIED_CAMERA_QOS_DIAGNOSTIC_ONLY",
+    ) else 2
 
 
 if __name__ == "__main__":
