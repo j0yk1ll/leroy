@@ -4,12 +4,12 @@
 set -euo pipefail
 umask 077
 
-BASE="\${HOME}/.local/state/leroy-m23q"
+BASE="${HOME}/.local/state/leroy-m23q"
 DIR="$BASE/prior-core-46312"
 CORE="$DIR/core.46312"
 META="$DIR/core-info.txt"
 PID=46312
-SCRIPT_DIR="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 
 for cmd in coredumpctl grep python3; do
     command -v "$cmd" >/dev/null || {
