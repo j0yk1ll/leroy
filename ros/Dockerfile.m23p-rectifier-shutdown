@@ -1,0 +1,45 @@
+# M23P: no-device ROS 2 Jazzy image_proc shutdown repro.
+# Uses M23P-specific fabricated calibrated RGB8 publisher; the M23L binary is untouched. NO camera, STM32, IMU, recorder or motors.
+FROM localhost/leroy-sensors:m23o-rect-camera-qos
+
+ENV M23K_PROBE_MODE=selftest \
+    M23N_CAMERA_QOS_ONLY=0 \
+    M23O_RECT_QOS_ONLY=0 \
+    M23P_SYNTHETIC_ONLY=1 \
+    M23P_PROFILE=idle \
+    M23M_SUB_QOS=reliable_100 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    ROS_LOG_DIR=/tmp/m23p-ros-logs \
+    RCUTILS_LOGGING_DIRECTORY=/tmp/m23p-ros-logs \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20
+
+COPY m23p_cpp /opt/m23p/m23p_cpp
+COPY m23p_rectifier_only.launch.py /opt/m23p/m23p_rectifier_only.launch.py
+COPY m23p_no_device_rectifier_shutdown.py /opt/m23p/m23p_no_device_rectifier_shutdown.py
+COPY m23p_qos_graph.py /opt/m23p/m23p_qos_graph.py
+COPY m23p_no_device_rectifier_shutdown_test.py /opt/m23p/m23p_no_device_rectifier_shutdown_test.py
+COPY M23P_NO_DEVICE_RECTIFIER_SHUTDOWN.md /opt/m23p/M23P_NO_DEVICE_RECTIFIER_SHUTDOWN.md
+COPY Dockerfile.m23p-rectifier-shutdown /opt/m23p/Dockerfile.m23p-rectifier-shutdown
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && python3 -m py_compile \
+       /opt/m23p/m23p_no_device_rectifier_shutdown.py \
+       /opt/m23p/m23p_no_device_rectifier_shutdown_test.py \
+       /opt/m23p/m23p_qos_graph.py \
+       /opt/m23p/m23p_rectifier_only.launch.py \
+    && python3 -u /opt/m23p/m23p_no_device_rectifier_shutdown_test.py \
+    && colcon --log-base /tmp/m23p-cpp-build-logs build \
+       --base-paths /opt/m23p/m23p_cpp \
+       --build-base /tmp/m23p-cpp-build \
+       --install-base /opt/m23p-cpp-install \
+       --merge-install \
+       --packages-select leroy_m23p_calibrated_synthetic \
+    && test -x /opt/m23p-cpp-install/lib/leroy_m23p_calibrated_synthetic/m23p_calibrated_publisher \
+    && test -x /opt/m23m-cpp-install/lib/leroy_m23k_camera_counter/m23k_camera_header_counter \
+    && echo M23P_JAZZY_NO_DEVICE_IMPORT=PASS
+
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && python3 -u /opt/m23p/m23p_no_device_rectifier_shutdown.py"]
