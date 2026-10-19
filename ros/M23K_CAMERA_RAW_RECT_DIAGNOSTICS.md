@@ -112,7 +112,7 @@ PYTHONDONTWRITEBYTECODE=1 \
   python3 -u m23k_camera_path_probe_test.py
 ~~~
 
-Require 21/21 tests PASS,
+Require 27/27 tests PASS,
 M23K_RAW_RECT_OBSERVER_OFFLINE=PASS, M23K_DEVICE_ACCESS=NONE.
 
 ## Phase B — disconnected camera-only image build
@@ -285,3 +285,91 @@ host package rather than running within a motor-capable container.
 - Always preserve the original m23g_live_capture001 forensics bytes
   and M23A 250ms header-gap blocker. No physical camera-IMU
   calibration follows from this benchmark.
+
+## Controlled ROS JPEG decode vs rectification experiment (M23K variants)
+
+The **native USB V4L2 benchmark passed** on the exact external Wed
+camera, negotiating 640x480 MJPG 30fps and sustaining approximately
+29.81fps until the full 900-frame goal completed (exit 0).
+This rules out a *basic direct MJPEG USB frame delivery failure* in
+the native host capture mode. It does NOT validate ROS RGB decode,
+DDS full-frame transport, rectification, or video scheduling under load.
+
+Use the improved existing M23K C++ observer and three explicitly
+allowlisted modes, each mapping ONLY the verified USB camera:
+
+| mode | input format | rectifier | observable streams |
+| --- | --- | --- | --- |
+| `full_mjpeg` (default) | MJPEG to RGB | M20 image_proc ON | RAW/RECT/Info |
+| `raw_only_mjpeg` | MJPEG to RGB | OFF | RAW/Info |
+| `raw_only_yuyv` | YUYV to RGB | OFF | RAW/Info |
+
+The camera-only raw launch preserves M20 device /dev/video2,
+640x480 @ 30Hz, mmap, calibration, camera name and frame_id.
+It intentionally **does not instantiate an image_proc component**
+in raw-only modes. The C++ counter skips the absent rect topic
+instead of treating intentional removal as lost data, but still
+fails if raw or CameraInfo is absent.
+
+**Comparison acceptance before either new operator-run:**
+pull current `feature/m23k-camera-raw-rect-diagnostic`; rerun
+**27/27** in-memory offline tests, disconnected Dockerfile build
+and no-device Podman test. The native V4L2 test did not exercise
+ROS `yuyv2rgb`. If the packaged usb_cam version or the selected
+device rejects `yuyv2rgb`, leave it as a failed/unsupported
+mode rather than silently replacing it with another format.
+
+~~~bash
+# Same host checkout, with current M23K image rebuilt.
+cd "$(git rev-parse --show-toplevel)/ros"
+export M23K_HOST_CAMERA_BY_ID="/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0"
+export M23K_OPERATOR_CAMERA_ONLY_APPROVED=YES
+readlink -f "$M23K_HOST_CAMERA_BY_ID"
+
+# Test #1: camera source plus MJPEG->RGB, rectifier OFF.
+export M23K_PROBE_VARIANT=raw_only_mjpeg
+set +e
+set +o pipefail
+bash ./m23k_operator_camera_probe.sh   2>&1 | tee m23k_raw_only_mjpeg.log
+echo "M23K_RAW_ONLY_MJPEG_EXIT_CODE=${PIPESTATUS[0]}"
+
+# Test #2: YUYV->RGB, still 640x480/30Hz, rectifier OFF.
+# Run only after the first capture has exited and camera is free.
+export M23K_PROBE_VARIANT=raw_only_yuyv
+bash ./m23k_operator_camera_probe.sh   2>&1 | tee m23k_raw_only_yuyv.log
+echo "M23K_RAW_ONLY_YUYV_EXIT_CODE=${PIPESTATUS[0]}"
+
+unset M23K_PROBE_VARIANT
+~~~
+
+Both modes require operator interaction `AUTHORIZE_M23K` and
+the unchanged by-id camera ownership and production-container
+checks. Rootless Podman is still camera-only: **no STM32/ttyACM,
+motor/bridge, IMU, Nav2, ROS bag or recording mount**.
+
+Expected `M23K_CAMERA_PROBE_JSON` now includes
+`camera_probe_variant`, `pixel_format`, and
+`rectifier_enabled=false`, with `counts.rect=0`,
+`rect_over_raw_count_ratio=null`.
+`observer_implementation=CPP_HEADER_ONLY_NO_PIXEL_ACCESS` stays
+true; the full DDS image bytes are *still* received/deserialized
+by rclcpp, even though callbacks only inspect headers.
+
+Interpretation:
+- `raw_only_mjpeg` near 30Hz while `full_mjpeg` only ~2Hz
+  independent RAW and ~10Hz RECT observations: rectifier CPU /
+  extra full-frame DDS fanout and observer contention likely
+  cause much of the ROS throughput issue; not proof by itself.
+- Both MJPEG variants slow, but `raw_only_yuyv` near 30Hz:
+  prioritize MJPEG decoding/format conversion in usb_cam.
+- Both raw-only variants slow despite native MJPEG 29.8fps:
+  investigate ROS publishing/DDS, large-image transfer, QoS,
+  scheduling, or container CPU limits; camera/driver remain
+  supported by direct V4L2 evidence.
+- Full-mode image_proc SIGSEGV (-11) may disappear in raw-only
+  modes simply because image_proc does not launch; that does
+  NOT count as fixing its shutdown crash. Repair/triage
+  image_proc separately before production image_rect playback.
+- Even healthy raw-only results are diagnostic, not accepted
+  rectified VIO input. M23A's 250ms image-header-gap gate and
+  actual Image/CameraInfo/IMU bag requirements are unchanged.
