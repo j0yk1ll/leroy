@@ -1,0 +1,29 @@
+# M23J: closed rosbag read-only timing forensics, no physical devices.
+# Stacked on M23I PR#103; local accepted M23I image required.
+ARG M23J_BASE=localhost/leroy-sensors:m23i-real-bag-forensics
+FROM ${M23J_BASE}
+
+ENV M23J_CLOSED_BAG_ONLY=1 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=178 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23j_real_bag_timeline.py /opt/m23j/m23j_real_bag_timeline.py
+COPY m23j_real_bag_timeline_test.py /opt/m23j/m23j_real_bag_timeline_test.py
+COPY m23j_no_device_run.sh /usr/local/bin/leroy-m23j-timeline
+COPY Dockerfile.m23j-timeline /opt/m23j/Dockerfile.m23j-timeline
+
+RUN chmod 0755 /usr/local/bin/leroy-m23j-timeline \
+    && bash -n /usr/local/bin/leroy-m23j-timeline \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m23j:/opt/m23i:/opt/m23f:/opt/m23e:/opt/m23d:/opt/m23b:/opt/m23a:${PYTHONPATH:-}" \
+    && python3 -m py_compile \
+         /opt/m23j/m23j_real_bag_timeline.py \
+         /opt/m23j/m23j_real_bag_timeline_test.py \
+    && python3 -u /opt/m23j/m23j_real_bag_timeline_test.py \
+    && python3 -u /opt/m23i/m23i_long_bag_diagnostics_test.py \
+    && python3 -c 'import rosbag2_py; from sensor_msgs.msg import Image, Imu; print("M23J_JAZZY_READ_ONLY_IMPORT=PASS")'
+
+CMD ["/usr/local/bin/leroy-m23j-timeline"]
