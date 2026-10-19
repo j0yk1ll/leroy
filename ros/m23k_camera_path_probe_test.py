@@ -250,7 +250,8 @@ class M23KCameraPathContracts(unittest.TestCase):
         self.assertIn('"/dev/video2"', source)
         self.assertIn('"framerate": 30.0', source)
         self.assertIn('"image_width": 640, "image_height": 480', source)
-        self.assertNotIn("image_proc", source)
+        self.assertNotIn("ComposableNode", source)
+        self.assertNotIn("component_container", source)
         self.assertNotIn("create_publisher(", source)
 
 
