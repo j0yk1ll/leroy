@@ -25,6 +25,8 @@ if [[ "${M23H_SELFTEST:-1}" == "1" ]]; then
     exit 2
   fi
   python3 -u /opt/m23h/m23h_bounded_capture_test.py
+  python3 -u /opt/m23h/m23h_synthetic_cli_recorder_selftest.py
+  echo "M23H_SYNTHETIC_CLI_RECORDER_SELFTEST=PASS"
   echo "M23H_SIM_EXIT_CODE=0"
   exit 0
 fi
