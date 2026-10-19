@@ -262,6 +262,7 @@ def run_camera_only():
     camera = counter = None
     issues = []
     stats_report = None
+    qos_verified = False
     with CAMERA_LAUNCH_LOG.open("xb") as camera_output, \
             COUNTER_LOG.open("xb") as counter_output:
         try:
@@ -320,6 +321,7 @@ def run_camera_only():
                                          require_rect=require_rect)
         if requested_qos:
             verified_receiver_qos_log(counter_text, requested_qos)
+            qos_verified = True
     except (ValueError, TypeError, KeyError) as exc:
         issues.append(type(exc).__name__ + ": " + str(exc))
         required = ("raw", "rect", "info") if require_rect else ("raw", "info")
@@ -331,8 +333,7 @@ def run_camera_only():
     if requested_qos:
         stats_report["milestone"] = "M23N"
         stats_report["receiver_qos_profile"] = requested_qos
-        stats_report["receiver_qos_verified"] = not any(
-            "receiver QoS" in issue for issue in issues)
+        stats_report["receiver_qos_verified"] = qos_verified
         stats_report["subscriber_drain_window_s"] = 2.0
         stats_report["camera_publisher_rate_verified"] = False
         stats_report["actual_publisher_offered_qos_verified"] = False
