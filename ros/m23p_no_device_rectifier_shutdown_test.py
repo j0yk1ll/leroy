@@ -117,7 +117,7 @@ class M23PNoDeviceRectifierContracts(unittest.TestCase):
         self.assertNotIn("/dev/ttyACM", pub)
 
     def test_m23p_publisher_evidence_parses_and_invalid_is_blocked(self):
-        good = "\\n".join((
+        good = "\n".join((
             "M23P_SYNTHETIC_CALIBRATION=FABRICATED_NONZERO_DISTORTION",
             "M23P_PUBLISHER_COUNTS=900,900",
             "M23P_PUBLISHER_START_SPAN_NS=29966666667",
@@ -131,7 +131,7 @@ class M23PNoDeviceRectifierContracts(unittest.TestCase):
             good.replace("FABRICATED_NONZERO_DISTORTION", "UNVERIFIED"),
             good.replace("900,900", "899,900"),
             good.replace("921600", "99"),
-            good + "\\nM23P_PUBLISHER_COUNTS=900,900",
+            good + "\nM23P_PUBLISHER_COUNTS=900,900",
             good.replace("M23P_PUBLISHER_START_SPAN_NS=29966666667", ""),
         ):
             with self.subTest(corrupted=corrupted[-65:]):
