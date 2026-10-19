@@ -540,6 +540,77 @@ mappings may differ because of rebuilding and ASLR. Do not compare
 absolute instruction addresses as if they name identical modules.
 No new ROS or camera experiment is authorized.
 
+## Phase H — compare a second already-retained M23P shutdown core
+
+**Operator's read-only journal inventory for host PID 46312**:
+- `component_container` command line names
+  `__node:=m23p_image_proc_container`;
+- `SIGSEGV / SEGV_MAPERR`, core `present`, journal timestamp
+  2026-10-19 **16:11:24 CEST** (list row rounded to 16:11:25);
+- crashing thread 77 first two unsymbolized PCs
+  `0x00007fa7214bdf5b` and `0x00007fa7214c5f75`,
+  followed by libc-relative offsets `+0x9cb84`, `+0x129d6c`.
+
+For the later verified M23P crash, host PID 48349, thread 89,
+the corresponding journal addresses are
+`0x00007f56a4912f5b` and `0x00007f56a491af75`,
+with the same two libc-relative offsets. Across both runs:
+- First-address page offset is **`0xf5b`**.
+- Second apparent address minus first is **`0x801a`**.
+
+This is a recurring **relative-address crash signature**.
+ASLR changes absolute addresses; the second apparent frame is
+unsymbolized and must not be promoted to a verified caller.
+The prior PID 46312 has **not** yet independently shown its kernel
+`NT_SIGINFO si_addr` or unmapped-PC ELF metadata.
+
+**Device-free, postmortem-only next step:** two new scripts
+`ros/m23q_extract_prior_core.sh` and
+`ros/m23q_compare_prior_core.py` can inspect only the retained,
+systemd-managed PID 46312 core. The export script checks exact
+process identity, SIGSEGV/SEGV_MAPERR, 16:11:24–25 CEST timestamp,
+and `Storage=(present)`, refusing to overwrite any earlier export.
+It writes a mode-0600 `core.46312` into a *new* private mode-0700
+`~/.local/state/leroy-m23q/prior-core-46312` directory.
+The stdlib ELF inspector validates this exact private path, then
+reads only the saved `NT_FILE`, `PT_LOAD` and
+`NT_SIGINFO` core metadata at the **earlier**
+`0x00007fa7214bdf5b` PC. It does not perform GDB,
+Podman, lib staging, core-memory printing or ROS execution.
+
+**Not yet operator-tested.** From the M23Q branch's `ros` directory:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+git fetch origin
+git switch feature/m23q-host-coredump-backtrace
+git pull --ff-only origin feature/m23q-host-coredump-backtrace
+cd ros
+
+PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_compare_prior_core_test.py
+bash -n m23q_extract_prior_core.sh
+
+# Only after 6/6 offline tests and shell syntax pass:
+bash ./m23q_extract_prior_core.sh
+```
+
+Require `M23Q_PRIOR_CORE_COMPARISON_CONTRACT=PASS`
+before export. Report bounded `M23Q_PRIOR_*` and
+`M23Q_CROSS_CORE_*` lines, not the binary core or private
+metadata files.
+
+If independent earlier-core signal data show `SEGV_MAPERR`,
+`si_addr==PC`, and absent `NT_FILE/PT_LOAD` mappings at
+that PC, classify unmapped instruction execution as supported
+in **both** crashes, still **without** asserting a particular
+unloaded library, function pointer, destructor or root cause.
+If the notes are missing/inconsistent, retain the current
+**earlier-core mechanism UNRESOLVED** classification.
+
+No new process is started, no camera/STM32 is accessed, no
+robot motion or production change is authorized. Both
+M23P lifecycle and VIO/motion acceptance remain BLOCKED.
+
 ## Strict invariant
 
 M23Q is a **postmortem-only investigation**. No motion, Nav2, XRSLAM,
