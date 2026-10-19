@@ -12,6 +12,11 @@ if [[ "$M23K_HOST_CAMERA_BY_ID" != /dev/v4l/by-id/*-video-index0 ||
   echo "M23K_HOST_PRECONDITION=STABLE_CAMERA_ID_REQUIRED" >&2
   exit 2
 fi
+M23K_VARIANT="${M23K_PROBE_VARIANT:-full_mjpeg}"
+case "$M23K_VARIANT" in
+  full_mjpeg|raw_only_mjpeg|raw_only_yuyv) ;;
+  *) echo "M23K_HOST_PRECONDITION=UNSUPPORTED_VARIANT" >&2; exit 2 ;;
+esac
 CAMERA_DEV="$(readlink -f -- "$M23K_HOST_CAMERA_BY_ID")"
 if [[ ! "$CAMERA_DEV" =~ ^/dev/video[0-9]+$ || ! -c "$CAMERA_DEV" ]]; then
   echo "M23K_HOST_PRECONDITION=INVALID_CAMERA_DEVICE" >&2
@@ -30,6 +35,7 @@ fi
 echo "M23K_CAMERA_BY_ID=$M23K_HOST_CAMERA_BY_ID"
 echo "M23K_CAMERA_SELECTED=$CAMERA_DEV"
 echo "M23K_CAPTURE_PATH=CAMERA_ONLY_NO_MCU"
+echo "M23K_PROBE_VARIANT_SELECTED=$M23K_VARIANT"
 read -r -p "Type AUTHORIZE_M23K for camera-only diagnosis: " ANSWER
 if [[ "$ANSWER" != "AUTHORIZE_M23K" ]]; then
   echo "M23K_HOST_PRECONDITION=OPERATOR_DECLINED" >&2
@@ -43,5 +49,6 @@ exec podman run --rm --name leroy-m23k-camera-probe \
   --group-add keep-groups \
   --device "$CAMERA_DEV":/dev/video2 \
   -e M23K_PROBE_MODE=live \
+  -e M23K_PROBE_VARIANT="$M23K_VARIANT" \
   -e M23K_OPERATOR_CAMERA_ONLY_APPROVED=YES \
   localhost/leroy-sensors:m23k-camera-path-probe
