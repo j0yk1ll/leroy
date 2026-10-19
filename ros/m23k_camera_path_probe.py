@@ -200,6 +200,12 @@ def _stop_session(proc, sig, grace, issues, name):
         issues.append(name + "_EXIT_CODE_" + str(code))
 
 
+def camera_launch_crashed(log_text):
+    """ros2 launch may return zero even when a child exited with SIGSEGV."""
+    return ("process has died" in log_text
+            or "Segmentation fault" in log_text)
+
+
 def run_camera_only():
     _require_live_environment()
     # C++ processes sample headers without transferring full image payloads
@@ -243,8 +249,7 @@ def run_camera_only():
 
     camera_text = CAMERA_LAUNCH_LOG.read_text(errors="replace")
     counter_text = COUNTER_LOG.read_text(errors="replace")
-    if ("process has died" in camera_text
-            or "Segmentation fault" in camera_text):
+    if camera_launch_crashed(camera_text):
         issues.append("CAMERA_CHILD_PROCESS_CRASHED")
     if "M23K_COUNTER_FATAL=" in counter_text:
         issues.append("CPP_COUNTER_REPORTED_FATAL")
