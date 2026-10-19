@@ -257,6 +257,13 @@ def run_camera_only():
     counter_text = COUNTER_LOG.read_text(errors="replace")
     if camera_launch_crashed(camera_text):
         issues.append("CAMERA_CHILD_PROCESS_CRASHED")
+        # The container is ephemeral: expose the exact child exit in
+        # stdout before --rm destroys its /tmp launch log.
+        for line in camera_text.splitlines():
+            if ("process has died" in line
+                    or "Segmentation fault" in line):
+                print("M23K_CAMERA_CHILD_EXIT=" + line[-500:],
+                      flush=True)
     if "M23K_COUNTER_FATAL=" in counter_text:
         issues.append("CPP_COUNTER_REPORTED_FATAL")
 
