@@ -1,0 +1,36 @@
+# M23H: physically authorized capture runner, OFF by default.
+# Requires local M20 sensor-only image. Build/test is no-device, no-network.
+ARG M23H_BASE=localhost/leroy-sensors:m20-camera-imu
+FROM ${M23H_BASE}
+
+ENV LEROY_M20_SENSOR_ONLY=1 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    M23H_SELFTEST=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23g_live_recording_preflight.py /opt/m23g/m23g_live_recording_preflight.py
+COPY m23g_sensor_qos.yaml /opt/m23g/m23g_sensor_qos.yaml
+COPY m23h_bounded_capture.py /opt/m23h/m23h_bounded_capture.py
+COPY m23h_bounded_capture_test.py /opt/m23h/m23h_bounded_capture_test.py
+COPY m23h_no_device_run.sh /opt/m23h/m23h_no_device_run.sh
+COPY m23h_no_device_run.sh /usr/local/bin/leroy-m23h-capture-run
+COPY Dockerfile.m23h-capture /opt/m23h/Dockerfile.m23h-capture
+
+RUN chmod 0755 /usr/local/bin/leroy-m23h-capture-run \
+    && bash -n /usr/local/bin/leroy-m23h-capture-run \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && export PYTHONPATH="/opt/m23h:/opt/m23g:/opt/m20:/opt/m18:/opt/m18/monitor:${PYTHONPATH:-}" \
+    && python3 -m py_compile /opt/m23h/m23h_bounded_capture.py \
+       /opt/m23h/m23h_bounded_capture_test.py \
+       /opt/m23g/m23g_live_recording_preflight.py \
+    && python3 -u /opt/m23h/m23h_bounded_capture_test.py \
+    && ros2 bag record --help > /tmp/m23h-rosbag-help \
+    && grep -F -- '--topics' /tmp/m23h-rosbag-help \
+    && grep -F -- '--qos-profile-overrides-path' /tmp/m23h-rosbag-help \
+    && grep -F -- '--storage' /tmp/m23h-rosbag-help \
+    && python3 -c 'import yaml, sqlite3, rosbag2_py; print("M23H_JAZZY_RECORDER_CLI=PASS")'
+
+CMD ["/usr/local/bin/leroy-m23h-capture-run"]
