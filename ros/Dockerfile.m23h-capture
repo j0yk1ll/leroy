@@ -15,11 +15,13 @@ COPY m23g_sensor_qos.yaml /opt/m23g/m23g_sensor_qos.yaml
 COPY m23h_bounded_capture.py /opt/m23h/m23h_bounded_capture.py
 COPY m23h_bounded_capture_test.py /opt/m23h/m23h_bounded_capture_test.py
 COPY m23h_no_device_run.sh /opt/m23h/m23h_no_device_run.sh
+COPY m23h_operator_host_capture.sh /opt/m23h/m23h_operator_host_capture.sh
 COPY m23h_no_device_run.sh /usr/local/bin/leroy-m23h-capture-run
 COPY Dockerfile.m23h-capture /opt/m23h/Dockerfile.m23h-capture
 
 RUN chmod 0755 /usr/local/bin/leroy-m23h-capture-run \
     && bash -n /usr/local/bin/leroy-m23h-capture-run \
+    && bash -n /opt/m23h/m23h_operator_host_capture.sh \
     && . /opt/ros/jazzy/setup.sh \
     && . /leroy_ws/install/setup.sh \
     && export PYTHONPATH="/opt/m23h:/opt/m23g:/opt/m20:/opt/m18:/opt/m18/monitor:${PYTHONPATH:-}" \
