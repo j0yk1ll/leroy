@@ -132,6 +132,18 @@ class M23RTraceContracts(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
 
+    def test_compiler_warning_regression_in_interposer(self):
+        # Keep the two -Werror fixes tied to the exact affected source.
+        source = (Path(__file__).resolve().parent /
+                  "m23r_loader_trace.c").read_text()
+        self.assertIn("ssize_t written = write(STDERR_FILENO, buffer, length)",
+                      source)
+        self.assertIn("if (written < 0 || (size_t)written != length)", source)
+        self.assertNotIn("(void)write(STDERR_FILENO", source)
+        self.assertNotIn("handle != NULL", source)
+        self.assertIn("if (enabled && !in_trace)", source)
+        self.assertIn("int status = next_dlclose(handle)", source)
+
     def test_offline_container_and_operator_safety_guards(self):
         root = Path(__file__).resolve().parent
         docker = (root / "Dockerfile.m23r-shutdown-trace").read_text()
