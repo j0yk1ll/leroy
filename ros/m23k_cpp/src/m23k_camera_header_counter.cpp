@@ -3,6 +3,7 @@
 // published or used for image processing. No serial or robot motion.
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -35,11 +36,20 @@ class HeaderCounter final : public rclcpp::Node {
       [this](sensor_msgs::msg::Image::ConstSharedPtr m) {
         sample("raw", 0, m->header);
       });
-    rect_ = create_subscription<sensor_msgs::msg::Image>(
-      "/camera/image_rect", qos,
-      [this](sensor_msgs::msg::Image::ConstSharedPtr m) {
-        sample("rect", 1, m->header);
-      });
+    // In isolated raw-only trials, explicitly avoid subscribing to an
+    // absent rectifier. The raw transport still undergoes full DDS
+    // deserialization; this is NOT a publication-side frame counter.
+    const char *raw_only = std::getenv("M23K_RAW_ONLY");
+    if (raw_only && std::string(raw_only) == "1") {
+      std::cout << "M23K_COUNTER_VARIANT=RAW_ONLY" << std::endl;
+    } else {
+      rect_ = create_subscription<sensor_msgs::msg::Image>(
+        "/camera/image_rect", qos,
+        [this](sensor_msgs::msg::Image::ConstSharedPtr m) {
+          sample("rect", 1, m->header);
+        });
+      std::cout << "M23K_COUNTER_VARIANT=FULL" << std::endl;
+    }
     info_ = create_subscription<sensor_msgs::msg::CameraInfo>(
       "/camera/camera_info", qos,
       [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr m) {
