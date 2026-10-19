@@ -53,7 +53,7 @@ recorder.** This is a separate overlay that adds only:
   single PID, valid trace fields and plausible dlclose counts.
   It preserves a bounded last-80-event diagnostic window in the
   output; **does not infer causality** from the last event.
-- `m23r_shutdown_trace_test.py` — 13 synthetic, no-device
+- `m23r_shutdown_trace_test.py` — 14 synthetic, no-device
   offline source/behavior contracts.
 - `Dockerfile.m23r-shutdown-trace` — uses only the existing
   local M23P no-device image. Builds a small local interposer
@@ -97,11 +97,12 @@ print("M23R_PYTHON_SYNTAX=PASS")
 PY
 ```
 
-Require M23R **13/13** tests, M23P **14/14**, and unchanged M23Q
-offline contracts **15/15 + 7/7 + 8/8** (57 total), with all respective
+Require M23R **14/14** tests, M23P **14/14**, and unchanged M23Q
+offline contracts **15/15 + 7/7 + 8/8** (58 total), with all respective
 `*_SOURCE_CONTRACT=PASS` or `*_COMPARISON_CONTRACT=PASS` markers.
-Do not continue on a failing test. The new files have not yet been
-tested on operator host.
+Do not continue on a failing test. The operator reported the initial
+13/13 M23R source-contract result PASS; the 14th packaging regression
+contract has not yet been run on the operator host.
 
 ## Offline build attempt and strict-compiler correction
 
@@ -121,13 +122,38 @@ diagnostics; no retries, no process intervention). The redundant
 `dlclose` function declares its argument nonnull. Existing
 loader-forwarding and device-free behavior are unchanged. A
 new thirteenth offline source regression contract guards the
-two fixes. **The corrected image has not yet been rebuilt
-or validated on the operator's Jazzy image.**
+two fixes. **The C warnings were resolved on the next operator build**, but the
+in-image Python contracts then failed because
+`/opt/m23r/Dockerfile.m23r-shutdown-trace` was missing.
 
-Before proceeding to any runtime test, rerun Gate A (13/13 M23R),
+Before proceeding to any runtime test, rerun Gate A (14/14 M23R),
 recheck the exact M23P base image ID and repeat Gate B. Only
 `M23R_NO_DEVICE_TRACE_IMAGE_CONTRACT=PASS` and build exit 0
 permit considering separate no-device idle/synthetic runs.
+
+## Second build attempt and image-copy correction
+
+The second offline build passed strict C compilation but the
+in-image Python source tests exited **2**:
+
+```text
+FileNotFoundError: [Errno 2] No such file or directory:
+  '/opt/m23r/Dockerfile.m23r-shutdown-trace'
+```
+
+The checkout's M23R tests passed because that Dockerfile exists in
+the checkout, but the diagnostic image did not include its own
+Dockerfile while the safety-contract test expected to read it.
+The build now explicitly copies `Dockerfile.m23r-shutdown-trace`
+into `/opt/m23r`. A 14th offline contract verifies **all six**
+files needed by the in-image tests have corresponding Dockerfile
+`COPY` directives.
+
+This correction has not yet been operator-built. Require M23R
+**14/14** source tests, pinned M23P base-image SHA verification,
+`M23R_NO_DEVICE_TRACE_IMAGE_CONTRACT=PASS` and build exit 0
+before any diagnostic ROS runtime test. No physical device or
+motion operation is authorized.
 
 ## Gate B — disconnected local build (still no ROS execution)
 
