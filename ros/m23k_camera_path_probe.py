@@ -26,6 +26,11 @@ DURATION_S = 45
 CAMERA_WARMUP_S = 3
 MAX_MESSAGES = 5000
 GAP_NS = 250_000_000
+PROBE_VARIANTS = {
+    "full_mjpeg": ("/opt/m20/m20_camera_only.launch.py", True),
+    "raw_only_mjpeg": ("/opt/m23k/m23k_camera_raw_only.launch.py", False),
+    "raw_only_yuyv": ("/opt/m23k/m23k_camera_raw_only.launch.py", False),
+}
 EXPECTED_ENV = {
     "LEROY_M20_SENSOR_ONLY": "1",
     "LEROY_NAV2_DRY_RUN": "1",
@@ -69,9 +74,9 @@ class CameraStats:
                                  if positive else None),
         }
 
-    def report(self):
+    def report(self, *, required_streams=("raw", "rect", "info")):
         counts = {k: len(v) for k, v in self.stamps.items()}
-        if any(n < 3 for n in counts.values()) and "MISSING_CAMERA_STREAM" not in self.faults:
+        if any(counts[k] < 3 for k in required_streams) and "MISSING_CAMERA_STREAM" not in self.faults:
             self.faults.append("MISSING_CAMERA_STREAM")
         ranges = {}
         for kind in TOPICS:
@@ -101,7 +106,7 @@ class CameraStats:
             "rect_only_observed_header_stamps": len(rect - raw),
             "rect_over_raw_count_ratio": (
                 round(counts["rect"] / counts["raw"], 4)
-                if counts["raw"] else None),
+                if counts["raw"] and "rect" in required_streams else None),
             "faults": list(self.faults),
             "independent_best_effort_subscribers_can_drop": True,
             "observer_cpu_and_dds_load_can_affect_rates": True,
@@ -142,7 +147,7 @@ COUNTER_LOG = Path("/tmp/m23k-cpp-counter.log")
 CAMERA_LAUNCH_LOG = Path("/tmp/m23k-camera-launch.log")
 
 
-def parse_counter_log(payload):
+def parse_counter_log(payload, *, require_rect=True):
     """Never claim a complete measurement from absent/truncated C++ logs."""
     stats = CameraStats()
     summary = None
@@ -169,7 +174,8 @@ def parse_counter_log(payload):
         raise ValueError("C++ counter did not finalize")
     if summary != {k: len(v) for k, v in stats.stamps.items()}:
         raise ValueError("C++ sample counts disagree with final summary")
-    result = stats.report()
+    required = ("raw", "rect", "info") if require_rect else ("raw", "info")
+    result = stats.report(required_streams=required)
     result["observer_implementation"] = "CPP_HEADER_ONLY_NO_PIXEL_ACCESS"
     return result
 
@@ -214,6 +220,10 @@ def camera_launch_crashed(log_text):
 
 def run_camera_only():
     _require_live_environment()
+    variant = os.environ.get("M23K_PROBE_VARIANT", "full_mjpeg")
+    if variant not in PROBE_VARIANTS:
+        raise RuntimeError("unrecognized M23K camera probe variant")
+    camera_launch_path, require_rect = PROBE_VARIANTS[variant]
     # C++ processes sample headers without transferring full image payloads
     # into Python. The camera launch and exact M20 rectifier are unchanged.
     if not Path(COUNTER_PATH).is_file():
@@ -224,14 +234,16 @@ def run_camera_only():
     with CAMERA_LAUNCH_LOG.open("xb") as camera_output, \
             COUNTER_LOG.open("xb") as counter_output:
         try:
+            counter_env = dict(os.environ)
+            counter_env["M23K_RAW_ONLY"] = "0" if require_rect else "1"
             counter = subprocess.Popen([COUNTER_PATH], stdout=counter_output,
                                        stderr=subprocess.STDOUT,
-                                       start_new_session=True)
+                                       env=counter_env, start_new_session=True)
             time.sleep(1.0)
             if counter.poll() is not None:
                 raise RuntimeError("C++ header counter startup failed")
             camera = subprocess.Popen(
-                ["ros2", "launch", "/opt/m20/m20_camera_only.launch.py"],
+                ["ros2", "launch", camera_launch_path],
                 stdout=camera_output, stderr=subprocess.STDOUT,
                 start_new_session=True)
             # Includes a bounded warm-up; 45-second timing observation.
@@ -268,14 +280,20 @@ def run_camera_only():
         issues.append("CPP_COUNTER_REPORTED_FATAL")
 
     try:
-        stats_report = parse_counter_log(counter_text)
+        stats_report = parse_counter_log(counter_text,
+                                         require_rect=require_rect)
     except (ValueError, TypeError, KeyError) as exc:
         issues.append(type(exc).__name__ + ": " + str(exc))
-        stats_report = CameraStats().report()
+        required = ("raw", "rect", "info") if require_rect else ("raw", "info")
+        stats_report = CameraStats().report(required_streams=required)
         stats_report["observer_implementation"] = "CPP_HEADER_ONLY_NO_PIXEL_ACCESS"
 
     # Preserve measurements even if only camera cleanup failed. A crash
     # cannot produce the original misleading clean diagnostic verdict.
+    stats_report["camera_probe_variant"] = variant
+    stats_report["rectifier_enabled"] = require_rect
+    stats_report["pixel_format"] = (
+        "yuyv2rgb" if variant == "raw_only_yuyv" else "mjpeg2rgb")
     stats_report["camera_launch_log"] = str(CAMERA_LAUNCH_LOG)
     stats_report["cpp_observer_log"] = str(COUNTER_LOG)
     stats_report["shutdown_clean"] = not issues
