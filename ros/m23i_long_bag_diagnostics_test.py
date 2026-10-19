@@ -4,6 +4,7 @@ Everything is fake/in-memory: these checks neither open bag files nor
 start ROS nodes, serial, cameras, XRSLAM, motion, or the production bridge.
 """
 from pathlib import Path
+from importlib import import_module
 from unittest import mock
 import unittest
 
@@ -147,18 +148,22 @@ class M23ILongBagDiagnosticsTests(unittest.TestCase):
         self.assertIsNone(report["m23a_verdict"])
 
     def test_m23d_preserves_original_base_report_for_forensics(self):
-        text = (Path(__file__).resolve().parent /
-                "m23d_recorded_bag_readiness.py").read_text()
+        # The source lives beside this test on the Arch checkout, but
+        # under /opt/m23d in the isolated Jazzy image.
+        text = Path(
+            import_module("m23d_recorded_bag_readiness").__file__
+        ).read_text()
         self.assertIn('result["m23a_preflight"] = base', text)
         self.assertIn('result = profile.finish(base,', text)
 
     def test_all_modified_sources_remain_non_actuating(self):
-        root = Path(__file__).resolve().parent
-        for name in ("m23a_xrslam_rosbag_preflight.py",
-                     "m23d_recorded_bag_readiness.py",
-                     "m23f_existing_recording_inventory.py"):
+        # Resolve each module's actual imported source location, rather
+        # than assuming all sources were copied beside the M23I test.
+        for name in ("m23a_xrslam_rosbag_preflight",
+                     "m23d_recorded_bag_readiness",
+                     "m23f_existing_recording_inventory"):
             with self.subTest(name=name):
-                source = (root / name).read_text()
+                source = Path(import_module(name).__file__).read_text()
                 for unsafe in ("import serial", "rclpy.init(",
                                "serial.Serial(", "create_publisher(",
                                "set_wheels ", "subprocess.Popen("):
