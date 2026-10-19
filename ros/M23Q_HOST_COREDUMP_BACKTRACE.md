@@ -411,6 +411,83 @@ and the first few `bt` frames; do not post the full core or any
 unrelated private mappings. An existing output log causes the
 script to block rather than overwrite it.
 
+## Phase G — stage exact Jazzy dependency files for saved-core GDB
+
+**Latest operator excerpt:** frame-zero details were absent from the
+bounded extraction, and the private GDB log warned that many
+`/opt/ros/jazzy/lib/*.so` and
+`/usr/lib/x86_64-linux-gnu/*.so*` files could not be opened
+while processing file-backed mappings. The specific ephemeral
+`/dev/shm/fastrtps_...` warning is expected when examining a core
+after the original process has exited; **do not try to recreate it**
+or attribute the SIGSEGV to Fast DDS based on that warning.
+
+The first-pass debugger sysroot contains only the pinned-image
+`component_container` executable and `librectify.so`. **Missing
+matching shared objects can prevent accurate unwinding and source-level
+symbolization**, but restoring them does not guarantee that the
+unmapped PC or its originating call can be identified.
+
+This phase adds:
+- `m23q_missing_core_libraries.py`: a strict, read-only parser for
+  `warning: Can't open file ... during file-backed mapping note
+  processing` lines in the **existing private first-pass GDB log**.
+  Only ROS Jazzy and Ubuntu shared-object paths are allowed.
+  Names with traversal, arbitrary host paths and `/dev/shm` are
+  rejected, and the number of libraries is capped at 400.
+- `m23q_missing_core_libraries_test.py`: **8 synthetic offline
+  source tests**, no hardware or historical-core access.
+- `m23q_host_gdb_exact_dependencies.sh`: checks the immutable
+  candidate image ID and M23P embedded-source provenance again;
+  calls `podman create` only, **never starts the container**;
+  copies only the missing shared-library files into the existing
+  private sysroot, rejects symlinks to avoid accidentally following
+  an absolute link to the Arch host filesystem, and reruns host
+  batch GDB on the already-extracted saved core.
+
+The phase is **not operator-tested yet**. From the M23Q branch:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+git fetch origin
+git switch feature/m23q-host-coredump-backtrace
+git pull --ff-only origin feature/m23q-host-coredump-backtrace
+cd ros
+
+PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_missing_core_libraries_test.py
+bash -n m23q_host_gdb_exact_dependencies.sh
+
+# Only after both offline checks succeed:
+bash ./m23q_host_gdb_exact_dependencies.sh
+```
+
+Expected test marker:
+`M23Q_MISSING_LIBRARY_ALLOWLIST_CONTRACT=PASS` with **8/8 tests**.
+
+The guarded dependency stage reports
+`M23Q_DEPS_WARNED_LIBRARIES`,
+`M23Q_DEPS_COPIED`, `M23Q_DEPS_ALREADY_PRESENT`,
+`M23Q_DEPS_UNRESOLVED`, and
+`M23Q_DEPS_STAGE_STATUS`.
+`PARTIAL` means some requested libraries could not be staged;
+it is **not** a successful symbolization. Some shared-object names
+may be symlinks in the original image, which this initial stage
+deliberately refuses rather than risking host-library substitution.
+The private rerun GDB log is `gdb-with-image-libs.log` in the
+preexisting `gdb-firstpass.sXKTfoQL` directory. The shell script
+will not overwrite any existing log or manifest.
+
+Report only the status markers, first few new backtrace frames and
+any remaining missing-library warning **count**. Do not upload
+core memory, the manifest of full host paths, or unrelated log
+content. A new, resolved caller would still require validated
+source-module build IDs and logical evidence before claiming a
+production shutdown fix.
+
+This phase uses **no** new ROS process, no physical sensors, no
+motor connection, no device mapping, no network and no live GDB
+attachment.
+
 ## Strict invariant
 
 M23Q is a **postmortem-only investigation**. No motion, Nav2, XRSLAM,
