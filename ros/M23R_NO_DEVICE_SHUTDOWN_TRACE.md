@@ -48,7 +48,7 @@ recorder.** This is a separate overlay that adds only:
   `m23p.run()` after replacing only the launch filename, thus reusing
   device-visibility refusal, profile allowlist, synthetic fake
   calibration, publisher-first QoS order, graph audit, counters,
-  strict no->250ms-gap requirement and **component child exit**
+  strict zero-gaps-over-250ms requirement and **component child exit**
   checks. A second fail-closed parser checks loader constructor,
   single PID, valid trace fields and plausible dlclose counts.
   It preserves a bounded last-80-event diagnostic window in the
@@ -81,11 +81,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_core_fault_mapping_test.py
 PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_compare_prior_core_test.py
 PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_missing_core_libraries_test.py
 
-bash -n m23r_shutdown_trace_runner.py 2>/dev/null || true
 ```
 
-The Bash syntax command above is **not** a Python check; instead
-verify all M23R Python files without importing ROS or writing bytecode:
+Also verify all M23R Python files without importing ROS or writing bytecode:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
