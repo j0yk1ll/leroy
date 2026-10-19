@@ -9,9 +9,9 @@ Do NOT merge M23H to main until #101 is merged, then retarget.
 
 ## Engineering scope
 
-Run the existing already-tested M20 \`leroy-m20-sensor-run\`
+Run the existing already-tested M20 `leroy-m20-sensor-run`
 (sensor-only, real front USB camera, image_proc rectification, real
-MCU-sourced /imu/data_raw) and a separate Jazzy \`ros2 bag record\`
+MCU-sourced /imu/data_raw) and a separate Jazzy `ros2 bag record`
 process inside **one** isolated ROS_DOMAIN_ID=170 container.
 
 1. First start the recorder, specifying EXACT topics:
@@ -40,9 +40,9 @@ process inside **one** isolated ROS_DOMAIN_ID=170 container.
    timing. The later M23F/M23E/M23D/M23A audit may still BLOCK.
 
 The runner requires explicit env
-\`M23H_SELFTEST=0\`,
-\`M23H_OPERATOR_CAPTURE_APPROVED=YES\` and
-\`M23H_SESSION_ID=<safe identifier>\` to enable the physical capture
+`M23H_SELFTEST=0`,
+`M23H_OPERATOR_CAPTURE_APPROVED=YES` and
+`M23H_SESSION_ID=<safe identifier>` to enable the physical capture
 path. Otherwise it defaults to hardware-free selftests, and rejects
 mapping devices into a self-test. This environmental opt-in is not
 evidence that motor power has been disabled or that the E-stop works.
@@ -162,20 +162,40 @@ Do not run with stale device numbers.
 
 The operator's eventual Podman invocation uses the reviewed M23H
 container with:
-- \`--network none --ipc private --pid private\`
-- \`--cap-drop all --security-opt no-new-privileges --read-only\`
-- \`--tmpfs /tmp:rw,nosuid,nodev,size=512m --shm-size 512m\`
-- precisely verified camera \`--device host-video:/dev/video2\`
-- precisely verified STM32 CDC \`--device host-tty:/dev/ttyACM0\`
-- offline writable \`--volume host-existing-root:/recordings:rw\`
-- \`-e M23H_SELFTEST=0 -e M23H_OPERATOR_CAPTURE_APPROVED=YES\`
-- \`-e M23H_SESSION_ID=<unique_safe_id>\`
-- base image: \`localhost/leroy-sensors:m23h-bounded-recording\`.
+- `--network none --ipc private --pid private`
+- `--cap-drop all --security-opt no-new-privileges --read-only`
+- `--tmpfs /tmp:rw,nosuid,nodev,size=512m --shm-size 512m`
+- precisely verified camera `--device host-video:/dev/video2`
+- precisely verified STM32 CDC `--device host-tty:/dev/ttyACM0`
+- offline writable `--volume host-existing-root:/recordings:rw`
+- `-e M23H_SELFTEST=0 -e M23H_OPERATOR_CAPTURE_APPROVED=YES`
+- `-e M23H_SESSION_ID=<unique_safe_id>`
+- base image: `localhost/leroy-sensors:m23h-bounded-recording`.
+
+The operator host wrapper `m23h_operator_host_capture.sh` supplies
+these Podman isolation arguments and checks the stopped production
+container, current hardware by-id, and competing device owners.
+After independent physical safe-state and offline build verification:
+
+~~~bash
+cd "$(git rev-parse --show-toplevel)/ros"
+export M23H_HOST_RECORDINGS="/absolute/existing/offline/directory"
+export M23H_HOST_CAMERA="/dev/videoN"  # replace with current verified path
+export M23H_MCU_BY_ID="/dev/serial/by-id/usb-VERIFIED-CURRENT-STM32-ID"
+export M23H_SESSION_ID="capture001"
+export M23H_OPERATOR_CAPTURE_APPROVED=YES
+bash ./m23h_operator_host_capture.sh
+~~~
+
+These camera and MCU values are EXAMPLES, not currently verified
+physical device identities. The host wrapper will refuse invalid
+paths, existing output sessions, concurrent device owners, a running
+production container or missing interactive approval.
 
 Do not run physical capture if production leroy-ros is running.
 Use a session ID unique per attempt. Recorder creates
-\`/recordings/m23g_live_<id>\` and log is
-\`/recordings/m23h_capture_<id>.log\`. No overwrite.
+`/recordings/m23g_live_<id>` and log is
+`/recordings/m23h_capture_<id>.log`. No overwrite.
 Attempted capture failures may leave partial SQLite; they MUST
 be treated as unverified and not replayed as certified data.
 Untrusted names or absent recorder flush result BLOCK acceptance.
@@ -184,7 +204,7 @@ Untrusted names or absent recorder flush result BLOCK acceptance.
 
 Take the CLOSED bag directory, unmount devices, ensure the production
 bridge remains stopped, and run merged M23F against this bag under a
-read-only \`/input/recordings:ro\` mount in a no-network container.
+read-only `/input/recordings:ro` mount in a no-network container.
 M23F should report exact image/CameraInfo/IMU counts and any faults.
 The camera receive gap previously seen in real M20 (1.351s)
 would **FAIL** the strict M23A >250ms gap guard if it appears in
@@ -192,7 +212,7 @@ the final recorded message header sequence. Do not bypass the
 fault to claim VIO readiness.
 
 The permitted provisional M23H success is
-\`CLOSED_SENSOR_BAG_RECORDED_PENDING_M23F\`, not real VIO
+`CLOSED_SENSOR_BAG_RECORDED_PENDING_M23F`, not real VIO
 validation. Full-frame payload, clock alignment, camera intrinsics,
 camera–IMU extrinsics, IMU noise, XRSLAM scale/pose accuracy and
 physical safe stop remain separately unverified.
