@@ -578,7 +578,19 @@ reads only the saved `NT_FILE`, `PT_LOAD` and
 `0x00007fa7214bdf5b` PC. It does not perform GDB,
 Podman, lib staging, core-memory printing or ROS execution.
 
-**Not yet operator-tested.** From the M23Q branch's `ros` directory:
+**First operator trial:** Six synthetic tests PASSED, but the export
+script correctly stopped with `M23Q_PRIOR_BLOCKED=PRIVATE_BASE_MISSING`
+before writing the prior core. Source inspection found a shell-quoting
+defect in the newly authored script: `BASE="\${HOME}/..."` and the
+`SCRIPT_DIR` reference each had a literal backslash before
+`${...}`, which prevented Bash variable expansion and made the
+directory guard check a nonexistent **literal** path. The existing
+M23Q evidence directory was not shown to be missing. Both offending
+backslashes have been removed, and a seventh synthetic source-contract
+test prevents their reintroduction. This fix has **not yet been
+operator-tested**; no prior core was extracted during the failed trial.
+
+From the M23Q branch's `ros` directory:
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -590,7 +602,7 @@ cd ros
 PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_compare_prior_core_test.py
 bash -n m23q_extract_prior_core.sh
 
-# Only after 6/6 offline tests and shell syntax pass:
+# Only after 7/7 offline tests and shell syntax pass:
 bash ./m23q_extract_prior_core.sh
 ```
 
