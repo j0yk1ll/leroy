@@ -189,6 +189,66 @@ No GDB capability is added to the production or M23P runtime image.
 No `--privileged`, host networking, mapped camera/STM32, or
 new ROS process is authorized by M23Q.
 
+## Phase C — inspect the existing core's mapped module, without GDB symbol guesses
+
+**Operator first-pass result (2026-10-19):** historical core `48349` was
+exported (110,616,576 bytes), immutable image ID and embedded M23P
+sources were verified, and GDB completed with exit0. However, GDB's
+faulting LWP **89** unwound mostly `??`, with PC
+`0x00007f56a4912f5b`, nearby apparent frame
+`0x00007f56a491af75`, and `info symbol $pc` returned no symbol.
+The previous text-log regex found no mapping encompassing the PC.
+Therefore no library or culprit has yet been established. The
+unsymbolized stack is not a trustworthy complete call chain.
+
+A small **read-only** stdlib inspector
+`ros/m23q_core_fault_mapping.py` reads the ELF64 `PT_NOTE`
+`NT_FILE` mapping table and `PT_LOAD` virtual memory ranges
+directly from the **already extracted** core. It outputs **only**
+the entries covering those two suspect addresses. It does not scan
+or print core memory contents. Its CLI refuses every path except
+a regular `core.48349` file in a private M23Q `gdb-firstpass.*`
+directory.
+
+From the M23Q branch's `ros` directory:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -u m23q_core_fault_mapping_test.py
+
+CORE="$HOME/.local/state/leroy-m23q/gdb-firstpass.sXKTfoQL/core.48349"
+test -f "$CORE" || exit 2
+
+PYTHONDONTWRITEBYTECODE=1 python3 -u \
+  m23q_core_fault_mapping.py "$CORE"
+```
+
+Expected offline test marker:
+`M23Q_ELF_MAPPING_SOURCE_CONTRACT=PASS` (5 unit tests).
+**The tests have not yet been run by the operator.**
+
+Interpretation:
+- `M23Q_FAULT_FILE_MATCHES=1` and a `M23Q_FAULT_FILE_MAP=...`
+  record name the *mapped-file pathname in the core*, **not** a
+  proven faulting function or genuine same-build local library.
+  The emitted `pc_file_offset` can guide later ELF build-ID and
+  symbol checks against the **pinned immutable M23P image**.
+- `M23Q_FAULT_FILE_MATCHES=0` with a `PT_LOAD` match can mean
+  anonymous/code mappings, missing `NT_FILE` metadata, or another
+  memory mapping state. Do not force an unrelated library name.
+- No match in either table means the required mapping isn't
+  recoverable from this core's parsed metadata; inspect the ELF
+  program headers/notes separately before concluding anything.
+- The `NEARBY` address is from an **unverified stack frame**; treat
+  its mapping as a cross-check, not independent reliable backtrace.
+
+The script deliberately leaves
+`M23Q_MODULE_BUILD_ID_VERIFIED=FALSE` and
+`M23Q_FAULTING_FUNCTION_IDENTIFIED=FALSE`. If a file mapping exists,
+the next narrowly scoped step is to copy that one module from the
+**same pinned image**, compare build IDs and symbolize PC-relative
+offsets. **No new ROS or hardware run** is required. Do not upload
+the binary core or post unrelated file paths from its notes.
+
 ## Strict invariant
 
 M23Q is a **postmortem-only investigation**. No motion, Nav2, XRSLAM,
