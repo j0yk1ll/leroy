@@ -111,7 +111,7 @@ class M23ORectifiedQoSContracts(unittest.TestCase):
         ):
             self.assertIn(token, source)
         # Preserve bounded crash context instead of only the ROS exit line.
-        log = "\\n".join(
+        log = "\n".join(
             ["older log " + str(i) for i in range(40)] +
             ["process has died: component_container exit code -11"] +
             ["later log " + str(i) for i in range(30)])
