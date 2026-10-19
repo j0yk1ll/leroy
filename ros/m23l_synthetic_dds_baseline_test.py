@@ -122,6 +122,11 @@ class M23LSyntheticDDSContracts(unittest.TestCase):
         self.assertIn('"/camera/camera_info"', source)
         self.assertIn("kFrames = 900", source)
         self.assertIn("image_.data.resize(kWidth * kHeight * 3", source)
+        # Jazzy rclcpp::Time has an implicit msg conversion, not to_msg().
+        self.assertNotIn("now().to_msg()", source)
+        self.assertIn("const auto stamp = now();", source)
+        self.assertIn("image_.header.stamp = stamp;", source)
+        self.assertIn("info_.header.stamp = stamp;", source)
 
     def test_python_orchestrator_source_has_no_live_sensor_paths(self):
         root = Path(__file__).resolve().parent
