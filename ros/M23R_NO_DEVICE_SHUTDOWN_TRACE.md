@@ -266,14 +266,13 @@ full M23P child-exit summary and exact process-exit classification
 were not included in the supplied excerpt. TID 89 in a new isolated
 container is not the same identified thread as historical core LWP89.
 
-**Next step is read-only triage of the already-retained host
-`synthetic-trace-1.log`**, not a new ROS/container execution.
-Extract the original `M23P_LIFECYCLE_JSON` values for
-`component_exit_class`, `component_launch_exit_code`,
-`faults`, bounded `crash_context`, and synthetic observations.
-If those do not independently show a child SIGSEGV, classify it
-as **BLOCKED, specific signal still unconfirmed**. Do not assert
-an originating library or causal `dlclose`.
+**Completed subsequent read-only log triage:** M23P child-crash
+class, synthetic delivery, and finally the original ROS launch
+child exit line have been extracted from the **existing private
+synthetic log**. The component child exited `-11` (SIGSEGV)
+during the instrumented synthetic experiment. No further run
+is needed for basic M23R reproduction. Do not assert an
+originating library or causal `dlclose`.
 
 All M23P lifecycle, production-camera, VIO, recorder and
 robot-motion gates remain BLOCKED. Keep M23R draft/unmerged.
@@ -303,24 +302,40 @@ real-camera M23A physical gap threshold or VIO acceptance.
 M23P's `camera_launch_crashed` helper classifies the component
 child as crashed if its ROS launch text contains either
 `process has died` or `Segmentation fault`. Therefore the
-M23P child-crash class is confirmed, but the exact signal and
-numerical child exit status of this **new instrumented run** are
-not yet included in the selected output. The `component_launch_exit_code=0`
+M23P child-crash class was confirmed by this JSON, and the
+operator later independently extracted the exact child exit code
+from the saved log: **`-11`, SIGSEGV**. The `component_launch_exit_code=0`
 belongs to the launch **parent**, not the component child. The
 operator's original `crash_context` selection included only the
 first eight leading lines, not the actual death message. Neither
 this result nor the last successful loader close establishes a
 particular faulting library or unloaded function.
 
-**Follow-up: analyze the existing synthetic log only, no rerun.**
-A short host-local read-only parser may extract the
-`[component_container-1]: process has died` line's numerical
-`exit code` or the explicit `Segmentation fault` line,
-without printing the full child command. If no unique code
-appears, retain **exact synthetic-run signal UNKNOWN**.
-Maintain `BLOCKED_COMPONENT_LIFECYCLE` in all cases. No
-additional no-device workload run is required to close the
-basic lifecycle classification.
+**Completed exact child-exit verification (saved log, no rerun):**
+
+```text
+M23R_COMPONENT_CHILD_EXIT_CODE=-11
+M23R_COMPONENT_SIGSEGV_CONFIRMED=TRUE
+M23R_COMPONENT_LIFECYCLE=BLOCKED
+M23R_DEVICE_ACTION=NONE
+```
+
+This **independently confirms a SIGSEGV in the instrumented
+synthetic component child**, despite valid 899/899 observed
+raw/rectified timestamp pairs and max rect image-header gap
+33.524 ms. Idle-only instrumented shutdown exited cleanly.
+The ROS launch *parent* exited 0, which does not override the
+child's `-11` fatal exit.
+
+M23R's reproduction/loader-order data gathering is complete.
+No new ROS or device experiment is required here. The faulting
+function, library ownership, and shutdown cause are **not
+established** by the successful loader-close events, missing
+tracer destructor, or the prior historical cores.
+`BLOCKED_COMPONENT_LIFECYCLE` remains the release gate;
+preserve private logs and keep the stacked PR **draft and
+unmerged**. M23A strict physical `>250ms` image-header
+gate, VIO and robot motion remain **BLOCKED**.
 
 ## Exit conditions / nonclaims
 
