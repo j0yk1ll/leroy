@@ -5,7 +5,6 @@ set -euo pipefail
 umask 077
 
 HOST_PID="48349"
-IMAGE="localhost/leroy-sensors:m23p-rectifier-shutdown"
 # The older image 8c75... was built before the publisher-first change.
 # 6eeb... is the operator's candidate tag at the time of this failed
 # first pass. Verify creation *before the crash* and embedded source
@@ -51,12 +50,12 @@ if ! grep -Eq 'Storage: .* \(present\)' "$RUN_DIR/metadata.txt"; then
     exit 2
 fi
 
-IMAGE_ID="$(podman image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null)" || {
+IMAGE_ID="$(podman image inspect "$EXPECTED_IMAGE_ID" --format '{{.Id}}' 2>/dev/null)" || {
     echo "M23Q_BLOCKED=EXACT_LOCAL_IMAGE_MISSING"
     exit 2
 }
 if [ "${IMAGE_ID#sha256:}" != "$EXPECTED_IMAGE_ID" ]; then
-    echo "M23Q_BLOCKED=LOCAL_IMAGE_ID_CHANGED"
+    echo "M23Q_BLOCKED=PINNED_IMAGE_ID_MISMATCH"
     echo "M23Q_IMAGE_ID=$IMAGE_ID"
     exit 2
 fi
@@ -77,20 +76,6 @@ if [ "$IMAGE_CREATED_EPOCH" -le "$EARLIER_EPOCH" ] ||
     exit 2
 fi
 echo "M23Q_IMAGE_ID_AND_CHRONOLOGY_VERIFIED=TRUE"
-
-CORE="$RUN_DIR/core.48349"
-coredumpctl --no-pager --output="$CORE" dump "$HOST_PID" \
-    >"$RUN_DIR/core-extraction.log" 2>&1 || {
-    echo "M23Q_BLOCKED=CORE_EXTRACTION_FAILED"
-    exit 2
-}
-if [ ! -s "$CORE" ]; then
-    echo "M23Q_BLOCKED=EXTRACTED_CORE_EMPTY"
-    exit 2
-fi
-chmod 600 "$CORE"
-echo "M23Q_CORE_EXTRACTION=SUCCESS"
-echo "M23Q_CORE_BYTES=$(wc -c <"$CORE")"
 
 # Create only stopped container metadata, never start it.
 CID=""
@@ -122,11 +107,13 @@ podman cp "$CID:/opt/ros/jazzy/lib/librectify.so" \
 }
 # Exact-source validation prevents accepting a similarly named, rebuilt
 # image even if the mutable local tag happens to resolve.
-podman cp "$CID:/opt/m23p/m23p_no_device_rectifier_shutdown.py"     "$RUN_DIR/m23p_runner_from_image.py" || {
+podman cp "$CID:/opt/m23p/m23p_no_device_rectifier_shutdown.py" \
+    "$RUN_DIR/m23p_runner_from_image.py" || {
     echo "M23Q_BLOCKED=M23P_RUNNER_COPY_FAILED"
     exit 2
 }
-podman cp "$CID:/opt/m23p/m23p_qos_graph.py"     "$RUN_DIR/m23p_graph_from_image.py" || {
+podman cp "$CID:/opt/m23p/m23p_qos_graph.py" \
+    "$RUN_DIR/m23p_graph_from_image.py" || {
     echo "M23Q_BLOCKED=M23P_GRAPH_COPY_FAILED"
     exit 2
 }
@@ -140,12 +127,28 @@ if ! git show "$M23P_COMMIT:ros/m23p_qos_graph.py" |
     echo "M23Q_BLOCKED=M23P_GRAPH_SOURCE_MISMATCH"
     exit 2
 fi
-chmod 600 "$RUN_DIR/m23p_runner_from_image.py"           "$RUN_DIR/m23p_graph_from_image.py"
+chmod 600 "$RUN_DIR/m23p_runner_from_image.py" \
+          "$RUN_DIR/m23p_graph_from_image.py"
 echo "M23Q_EMBEDDED_SOURCE_MATCHES_M23P_COMMIT=TRUE"
 cleanup
 CID=""
 echo "M23Q_EXACT_IMAGE_ID_VERIFIED=TRUE"
 echo "M23Q_STOPPED_IMAGE_FILES_STAGED=TRUE"
+
+CORE="$RUN_DIR/core.48349"
+coredumpctl --no-pager --output="$CORE" dump "$HOST_PID" \
+    >"$RUN_DIR/core-extraction.log" 2>&1 || {
+    echo "M23Q_BLOCKED=CORE_EXTRACTION_FAILED"
+    exit 2
+}
+if [ ! -s "$CORE" ]; then
+    echo "M23Q_BLOCKED=EXTRACTED_CORE_EMPTY"
+    exit 2
+fi
+chmod 600 "$CORE"
+echo "M23Q_CORE_EXTRACTION=SUCCESS"
+echo "M23Q_CORE_BYTES=$(wc -c <"$CORE")"
+
 
 # Use host GDB for a postmortem read only; never attach to a live process.
 # Avoid Arch host library misattribution: GDB's sysroot is private.
