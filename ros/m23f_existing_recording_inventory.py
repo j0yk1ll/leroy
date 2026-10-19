@@ -69,12 +69,21 @@ def _audit_one(path, *, full_cdr):
     from m23e_offline_evidence_snapshot import inspect_existing_bag
     audit = inspect_existing_bag(path, origin_label=SAFE_ORIGIN)
     profile = audit["m23d_profile"]
+    m23a = profile.get("m23a_preflight", {})
     report = {
         "candidate_verdict": audit["verdict"],
         "counts": audit["stream_evidence"]["counts"],
         "faults": sorted(set(
             audit["stream_evidence"]["faults"]
-            + profile["faults"])),
+            + profile["faults"]
+            + m23a.get("faults", []))),
+        "m23a_verdict": m23a.get("verdict"),
+        "m23a_faults": list(m23a.get("faults", [])),
+        "m23a_matched_image_info_pairs":
+            m23a.get("matched_image_info_pairs"),
+        "m23a_camera_info_cache_evictions":
+            m23a.get("camera_info_cache_evictions"),
+        "gaps_over_250ms": profile.get("gaps_over_250ms"),
         "sha256_manifest": audit["bag_files"],
         "header_overlap_s": profile["header_overlap_s"],
         "max_header_gap_ms": profile["max_header_gap_ms"],
