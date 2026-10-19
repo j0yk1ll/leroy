@@ -108,14 +108,13 @@ def inspect_elf(path):
                         and 16 + 24 * count <= descsz):
                     raise InvalidCore("invalid NT_FILE header")
                 triples = read_at(stream, descpos + 16, 24 * count, total)
-                relevant = []
+                entries = []
                 for i in range(count):
                     start, end, pages = struct.unpack_from(
                         "<QQQ", triples, i * 24)
                     if start >= end:
                         raise InvalidCore("invalid NT_FILE range")
-                    if any(start <= pc < end for pc in (PC, NEARBY_PC)):
-                        relevant.append((i, start, end, pages * page_size))
+                    entries.append((i, start, end, pages * page_size))
                 filenames_pos = descpos + 16 + 24 * count
                 names_size = descsz - 16 - 24 * count
                 if names_size > MAX_NOTE_BYTES:
@@ -124,10 +123,48 @@ def inspect_elf(path):
                     b"\0")
                 if len(names) < count:
                     raise InvalidCore("NT_FILE filename list truncated")
-                for i, start, end, offset in relevant:
+                for i, start, end, offset in entries:
                     filename = names[i].decode("utf-8", "backslashreplace")
                     file_maps.append((start, end, offset, filename))
     return notes_found, file_maps, load_maps, siginfo_notes
+
+
+def closest_surviving_neighbors(address, mappings):
+    """Return nearest known ranges on either side; never infer removed mapping."""
+    below = max((m for m in mappings if m[1] <= address),
+                key=lambda m: m[1], default=None)
+    above = min((m for m in mappings if m[0] > address),
+                key=lambda m: m[0], default=None)
+    return below, above
+
+
+def emit_fault_neighbors(pc, mapped, loads):
+    """Bounded map edges, not a guess at what memory was unmapped."""
+    lines = []
+    for kind, candidates in (
+        ("FILE", mapped),
+        ("EXEC_LOAD", [segment for segment in loads if segment[2] & 1]),
+    ):
+        lower, upper = closest_surviving_neighbors(pc, candidates)
+        for direction, selected in (("LOWER", lower), ("UPPER", upper)):
+            field = f"M23Q_FAULT_NEAREST_{kind}_{direction}"
+            if selected is None:
+                lines.append(field + "=NONE")
+                continue
+            start, end = selected[:2]
+            distance = pc - end if direction == "LOWER" else start - pc
+            lines.append(f"{field}=0x{start:016x}-0x{end:016x}"
+                         f" distance_bytes={distance}")
+            if kind == "FILE":
+                filename = selected[3]
+                # Deliberately omit full user-specific paths from CLI output.
+                basename = Path(filename).name
+                provenance = ("JAZZY" if filename.startswith("/opt/ros/jazzy/")
+                              else "OTHER")
+                lines.append(f"{field}_LABEL={basename!r}"
+                             f" provenance={provenance}")
+    lines.append("M23Q_NEAREST_MAPPING_PROVES_UNLOAD=FALSE")
+    return lines
 
 
 def render(path):
@@ -167,6 +204,10 @@ def render(path):
             lines.append(f"M23Q_{name}_CORE_SEGMENT="
                          f"0x{start:016x}-0x{end:016x} "
                          f"permissions={perms} core_bytes={size}")
+    if not any(start <= PC < end for start, end, *_ in mapped + loads):
+        lines.extend(emit_fault_neighbors(PC, mapped, loads))
+    else:
+        lines.append("M23Q_FAULT_NEAREST=NOT_APPLICABLE_PC_MAPPED")
     if signal_notes:
         signo, _, code, fault_address = signal_notes[0]
         if signo == 11 and code == 1 and fault_address == PC:
