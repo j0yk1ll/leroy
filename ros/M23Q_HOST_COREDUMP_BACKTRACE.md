@@ -114,6 +114,19 @@ crash and therefore was the wrong assumption for this crash. No
 core extraction, image staging or GDB execution occurred.
 A matching tag alone is *not* proof that `6eeb...` made the core.
 
+**Second operator execution also blocked safely before core extraction.**
+The pinned candidate image was accessible, but Podman reported its
+creation time as `2026-10-19 14:23:21.51374453 +0000 UTC`.
+GNU `date -d` rejects the redundant combination `+0000 UTC`,
+leading to `M23Q_BLOCKED=IMAGE_CREATED_TIME_INVALID`.
+This is a timestamp parsing problem, **not evidence that the image
+falls outside the experiment window**. Interpreted using the explicit
+`+0000` offset, this is **16:23:21 CEST**, later than 16:11:25
+and earlier than 16:24:57. The script now strips only the redundant
+literal ` UTC` suffix when ` +0000 UTC` appears, retains the
+numeric offset, and still requires the original chronology and
+source comparisons. No core was extracted or GDB run on this attempt.
+
 The revised script pins immutable candidate image
 `6eeb8ca08525d451dc0f216f097c1df7e300444d8c8ae551fde576d64a1c48f1`
 and **fails closed** unless its Podman-created timestamp is **after**
