@@ -7,6 +7,7 @@ Only mappings containing the two previously documented suspect PCs print.
 """
 import argparse
 from pathlib import Path
+import stat
 import struct
 import sys
 
@@ -137,12 +138,24 @@ def render(path):
     return "\n".join(lines)
 
 
+def validated_historical_core_path(candidate):
+    """Refuse anything except the private, saved PID 48349 regular core."""
+    path = candidate.resolve(strict=True)
+    base = (Path.home() / ".local/state/leroy-m23q").resolve(strict=True)
+    if (path.name != "core.48349"
+            or path.parent.parent != base
+            or not path.parent.name.startswith("gdb-firstpass.")
+            or not stat.S_ISREG(path.stat().st_mode)):
+        raise InvalidCore("expected saved regular core.48349 under private M23Q directory")
+    return path
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("core_file", type=Path)
     args = parser.parse_args()
     try:
-        print(render(args.core_file))
+        print(render(validated_historical_core_path(args.core_file)))
     except (InvalidCore, OSError, struct.error) as exc:
         print("M23Q_MAPPING_BLOCKED=" + type(exc).__name__ + ":" + str(exc),
               file=sys.stderr)
