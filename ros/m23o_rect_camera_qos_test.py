@@ -5,7 +5,8 @@ import unittest
 
 from m23o_rect_qos_graph import REQUIRED, validate_graph
 from m23k_camera_path_probe import (
-    camera_qos_request, rectified_qos_request, PROBE_VARIANTS,
+    camera_qos_request, rectified_qos_request, camera_crash_context,
+    PROBE_VARIANTS,
 )
 
 
@@ -105,8 +106,19 @@ class M23ORectifiedQoSContracts(unittest.TestCase):
             'stats_report["rect_only_observed_header_stamps"] == 0',
             'stats_report["rectified_image_continuity_validated"] = False',
             'M23O_RECT_QOS_JSON=',
+            'if requested_qos and not m23o_qos:',
+            'M23O_CAMERA_CRASH_CONTEXT=',
         ):
             self.assertIn(token, source)
+        # Preserve bounded crash context instead of only the ROS exit line.
+        log = "\\n".join(
+            ["older log " + str(i) for i in range(40)] +
+            ["process has died: component_container exit code -11"] +
+            ["later log " + str(i) for i in range(30)])
+        excerpt = camera_crash_context(log)
+        self.assertEqual(len(excerpt), 21)
+        self.assertTrue(any("exit code -11" in line for line in excerpt))
+        self.assertEqual(camera_crash_context("clean shutdown"), [])
         for forbidden in ("serial.Serial(", 'create_publisher(', "set_wheels("):
             self.assertNotIn(forbidden, source)
 
