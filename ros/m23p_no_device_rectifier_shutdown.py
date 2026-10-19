@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """M23P isolated no-device RectifyNode shutdown experiment.
 
-Profiles: idle component vs synthetic M23L RGB8 + CameraInfo publisher,
+Profiles: idle component vs fabricated M23P RGB8 + CameraInfo publisher,
 with the same C++ observer used in M23O. Never touches real devices.
 """
 import json
@@ -37,7 +37,8 @@ def parse_m23p_publisher_log(payload):
     """Demand complete M23P-only publisher evidence and declared fake calibration."""
     fields = {}
     required = ("COUNTS", "START_SPAN_NS", "MAX_CALLBACK_NS",
-                "PAYLOAD_BYTES", "SYNTHETIC_CALIBRATION")
+                "PAYLOAD_BYTES", "SYNTHETIC_CALIBRATION",
+                "GRAPH_READY", "FRAMES_STARTED")
     for line in payload.splitlines():
         if line.startswith("M23P_PUBLISHER_FATAL="):
             raise ValueError("M23P synthetic publisher reported fatal")
@@ -52,6 +53,8 @@ def parse_m23p_publisher_log(payload):
         raise ValueError("incomplete M23P fabricated publisher output")
     if fields["SYNTHETIC_CALIBRATION"] != "FABRICATED_NONZERO_DISTORTION":
         raise ValueError("publisher calibration fixture unverified")
+    if fields["GRAPH_READY"] != "YES" or fields["FRAMES_STARTED"] != "YES":
+        raise ValueError("publisher graph-ready / frame-start marker invalid")
     try:
         counts = [int(x) for x in fields["COUNTS"].split(",")]
         span = int(fields["START_SPAN_NS"])
@@ -145,6 +148,38 @@ def wait_for_rectifier(proc, out_path, timeout=15):
     raise RuntimeError("rectifier component load not confirmed")
 
 
+def wait_for_synthetic_graph_ready(proc, out_path, timeout=5):
+    """Require publisher-created ROS endpoints before connecting rectifier."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError("synthetic publisher quit before graph-ready")
+        payload = out_path.read_text(errors="replace")
+        if "M23P_PUBLISHER_GRAPH_READY=YES" in payload:
+            return
+        time.sleep(0.1)
+    raise RuntimeError("publisher graph-ready marker timed out")
+
+
+def inspect_synthetic_graph():
+    """Record one actual ROS graph snapshot, require reliable endpoints."""
+    from m23p_qos_graph import validate_synthetic_graph
+    audit = subprocess.run(
+        ["python3", "/opt/m23p/m23p_qos_graph.py"],
+        capture_output=True, text=True, check=False, timeout=8,
+        env=dict(os.environ))
+    records = [line.split("=", 1)[1]
+               for line in audit.stdout.splitlines()
+               if line.startswith("M23P_GRAPH_JSON=")]
+    if len(records) != 1:
+        raise ValueError("missing or duplicate M23P ROS QoS graph JSON")
+    snapshot = json.loads(records[0])
+    validate_synthetic_graph(snapshot)
+    if audit.returncode != 0:
+        raise ValueError("graph audit did not exit cleanly")
+    return snapshot
+
+
 def run():
     profile = selected_profile(os.environ)
     prohibit_devices()
@@ -157,6 +192,8 @@ def run():
             raise ValueError("refusing to overwrite diagnostic log " + str(path))
     issues = []
     observations = {}
+    graph_snapshot = None
+    graph_verified = False
     launch_proc = counter = publisher = None
     launch_code = counter_code = publisher_code = None
     # Each mode executes in a fresh disposable isolated container.
@@ -176,18 +213,37 @@ def run():
                 with COUNTER_LOG.open("xb") as counter_out, \
                         PUBLISHER_LOG.open("xb") as publisher_out:
                     try:
-                        counter = subprocess.Popen(
-                            [COUNTER], stdout=counter_out,
-                            stderr=subprocess.STDOUT,
-                            start_new_session=True, env=env)
-                        time.sleep(2)
-                        if counter.poll() is not None:
-                            raise RuntimeError("C++ observer stopped before publishing")
+                        # M23O verified a reliable rectifier input on
+                        # the actual camera. To match that order, bring
+                        # up the synthetic RELIABLE publisher *before*
+                        # attaching the rectified observer. Jazzy
+                        # RectifyNode's lazy subscription chooses QoS
+                        # when the downstream observer appears.
                         publisher = subprocess.Popen(
                             [PUBLISHER], stdout=publisher_out,
                             stderr=subprocess.STDOUT,
                             start_new_session=True, env=dict(os.environ))
-                        publisher_code = publisher.wait(timeout=55)
+                        wait_for_synthetic_graph_ready(publisher, PUBLISHER_LOG)
+                        counter = subprocess.Popen(
+                            [COUNTER], stdout=counter_out,
+                            stderr=subprocess.STDOUT,
+                            start_new_session=True, env=env)
+                        time.sleep(0.8)
+                        if counter.poll() is not None:
+                            raise RuntimeError("C++ observer stopped before frames")
+                        try:
+                            graph_snapshot = inspect_synthetic_graph()
+                            graph_verified = True
+                        except (ValueError, RuntimeError, OSError,
+                                subprocess.TimeoutExpired) as exc:
+                            issues.append("SYNTHETIC_GRAPH_QOS_UNVERIFIED:" +
+                                          type(exc).__name__ + ":" + str(exc)[:160])
+                        # When timing slips, do not call this a verified
+                        # pre-frame audit; still preserve the observations.
+                        if "M23P_PUBLISHER_FRAMES_STARTED=YES" in (
+                                PUBLISHER_LOG.read_text(errors="replace")):
+                            issues.append("SYNTHETIC_GRAPH_AUDIT_AFTER_FRAMES_STARTED")
+                        publisher_code = publisher.wait(timeout=65)
                         if publisher_code != 0:
                             issues.append("SYNTHETIC_PUBLISHER_EXIT_" +
                                           str(publisher_code))
@@ -228,6 +284,8 @@ def run():
             verified_receiver_qos_log(observer_log, "reliable_100")
             observations = {
                 "synthetic_published_image_count": published["image"],
+                "actual_graph_qos_verified": graph_verified,
+                "graph_endpoints": graph_snapshot,
                 "synthetic_calibration": published["synthetic_calibration"],
                 "synthetic_observer_counts": observed["counts"],
                 "synthetic_observer_faults": observed["faults"],
@@ -271,6 +329,7 @@ def run():
         "synthetic_publisher_exit_code": publisher_code,
         "synthetic_observer_exit_code": counter_code,
         "crash_context": camera_crash_context(launch_text),
+        "actual_graph_qos_verified": graph_verified if profile == "synthetic" else None,
         "observations": observations,
         "device_access": "NONE",
         "synthetic_calibration_only": True,
