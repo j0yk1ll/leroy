@@ -211,3 +211,77 @@ capture. Only after continuity improves should we separately
 re-align recorder time boundaries so IMU covers the image window,
 then collect and READ-ONLY audit a new complete real bag. Never
 change M23A's 250ms acceptance limit to manufacture a PASS.
+
+
+## Follow-up evidence — second 45s C++ camera-only probe
+
+Operator selected verified front USB camera by-id
+`usb-Wed_Camera_Wed_Camera_20240420112206-video-index0`, currently
+resolving to /dev/video8. The revised C++ header-only subscriber
+showed raw **90 at 1.883 Hz**, rect **467 at 9.944 Hz**,
+CameraInfo **1411 at 29.811 Hz**. Counts of >250ms header gaps:
+raw **29** (max 4659.976ms), rect **50** (max 971.981ms),
+CameraInfo **0** (max 36.12ms). Raw/rect identical stamp
+intersection **59**, raw-only 31, rect-only **408**.
+
+Since image_proc uses camera raw frames, independent DDS raw-image
+subscription misses many frames relative to the rectifier's output.
+The C++ callback only inspects headers but still receives/deserializes
+full sensor_msgs/Image payloads. Do not infer that raw camera is
+literally publishing at 1.883Hz or CameraInfo's 29.811Hz proves a
+30Hz image publication rate.
+
+**Repeatable SIGSEGV during camera launch SIGINT:** component_container
+exit code **-11**, caught as CAMERA_CHILD_PROCESS_CRASHED,
+shutdown_clean=false and INCOMPLETE_CAMERA_PATH_OBSERVATION. This
+fault must not be marked clean or hidden; keep it separate from
+the unknown frame-rate bottleneck. No STM32 accessed.
+
+## Next discriminator — native host V4L2 MJPEG streaming benchmark
+
+This is a **separate, direct camera-only experiment**: no ROS, no
+image_proc, no DDS/rectified subscriber, no STM32. Use the same
+currently verified external USB camera and ensure no process owns it.
+Requires `v4l2-ctl` from Arch `v4l-utils`. Streaming data is
+discarded, and neither original bag nor a new bag is written.
+
+~~~bash
+CAMERA_BY_ID="/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0"
+CAMERA="$(readlink -f -- "$CAMERA_BY_ID")"
+test -c "$CAMERA"
+command -v v4l2-ctl
+command -v timeout
+command -v fuser
+fuser -v "$CAMERA" || true
+# Ensure the camera has NO competing owner before continuing.
+
+v4l2-ctl -d "$CAMERA" --set-fmt-video=width=640,height=480,pixelformat=MJPG \
+  --set-parm=30 --get-fmt-video --get-parm
+
+set +e
+set +o pipefail
+timeout --signal=INT --kill-after=3s 45s \
+  v4l2-ctl -d "$CAMERA" --stream-mmap=4 \
+  --stream-count=900 --stream-poll \
+  2>&1 | tee m23k_native_v4l2_640x480_mjpg.log
+M23K_NATIVE_EXIT=${PIPESTATUS[0]}
+echo "M23K_NATIVE_V4L2_EXIT_CODE=$M23K_NATIVE_EXIT"
+~~~
+
+Nominal target: 900 frames in ~30 seconds. Exit 0 if the
+requested frame count finishes, 124 if the 45s timeout is reached
+(which is evidence of <20fps average or stall/other streaming
+issue, NOT by itself an exact frame count). Inspect the displayed
+frame-rate and V4L2 errors; the stream is intentionally discarded.
+If `v4l2-ctl` or `timeout` is missing, install/use the appropriate
+host package rather than running within a motor-capable container.
+
+- Native V4L2 roughly 30fps but ROS raw/rect remain gappy:
+  prioritize usb_cam JPEG decode to RGB, image_proc processing,
+  ROS 2 DDS delivery, executor CPU scheduling, and independent
+  shutdown crash.
+- Native V4L2 also stalls / low FPS: prioritize USB/UVC camera
+  bandwidth, negotiated format, host USB topology, and driver logs.
+- Always preserve the original m23g_live_capture001 forensics bytes
+  and M23A 250ms header-gap blocker. No physical camera-IMU
+  calibration follows from this benchmark.
