@@ -24,10 +24,11 @@ RUN chmod 0755 /usr/local/bin/leroy-m23k-camera-probe \
     && python3 -m py_compile \
          /opt/m23k/m23k_camera_path_probe.py \
          /opt/m23k/m23k_camera_path_probe_test.py \
-    && colcon build --base-paths /opt/m23k_cpp \
+    && colcon --log-base /tmp/m23k-cpp-logs build \
+         --base-paths /opt/m23k_cpp \
          --build-base /tmp/m23k-cpp-build \
          --install-base /opt/m23k-cpp-install \
-         --log-base /tmp/m23k-cpp-logs \
+         --merge-install \
          --packages-select leroy_m23k_camera_counter \
     && test -x /opt/m23k-cpp-install/lib/leroy_m23k_camera_counter/m23k_camera_header_counter \
     && python3 -u /opt/m23k/m23k_camera_path_probe_test.py \
