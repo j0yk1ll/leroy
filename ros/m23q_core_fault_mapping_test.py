@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from m23q_core_fault_mapping import PC, NT_FILE, InvalidCore, render
+from m23q_core_fault_mapping import (
+    PC, NT_FILE, InvalidCore, render, validated_historical_core_path,
+)
 
 
 def fake_core(*, corrupt_magic=False, mapped=True):
@@ -48,6 +50,13 @@ class M23QCoreMappingContracts(unittest.TestCase):
         out = self.run_fixture(fake_core(mapped=False))
         self.assertIn("M23Q_FAULT_FILE_MATCHES=0", out)
         self.assertIn("M23Q_FAULT_LOAD_MATCHES=0", out)
+
+    def test_arbitrary_file_is_forbidden_as_live_inspection_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "core.48349"
+            path.write_bytes(fake_core())
+            with self.assertRaises(InvalidCore):
+                validated_historical_core_path(path)
 
     def test_bad_elf_core_is_rejected(self):
         with self.assertRaises(InvalidCore):
