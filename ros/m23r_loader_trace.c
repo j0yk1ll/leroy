@@ -54,7 +54,13 @@ static void event(const char *stage, const char *module, void *handle, int statu
                      handle, status, safe_module);
     if (n > 0) {
         size_t length = (size_t)n < sizeof(buffer) ? (size_t)n : sizeof(buffer) - 1;
-        (void)write(STDERR_FILENO, buffer, length);
+        /* Diagnostics are best effort; never retry/block shutdown.
+         * A short write leaves an incomplete line and fails parsing. */
+        ssize_t written = write(STDERR_FILENO, buffer, length);
+        if (written < 0 || (size_t)written != length) {
+            in_trace = 0;
+            return;
+        }
     }
     in_trace = 0;
 }
@@ -97,7 +103,9 @@ int dlclose(void *handle) {
         return -1;
     }
     char path[448] = "<unknown>";
-    if (enabled && !in_trace && handle != NULL) {
+    /* glibc declares dlclose(handle) nonnull. Respect the contract;
+     * don't compare a nonnull-annotated argument against NULL. */
+    if (enabled && !in_trace) {
         struct link_map *mapping = NULL;
         if (dlinfo(handle, RTLD_DI_LINKMAP, &mapping) == 0 &&
             mapping && mapping->l_name && mapping->l_name[0]) {
