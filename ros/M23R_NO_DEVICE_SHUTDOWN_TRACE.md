@@ -229,6 +229,55 @@ if synthetic frame delivery remains healthy. If it does not occur,
 report **CLEAN OBSERVED UNDER INSTRUMENTATION ONLY**, never a
 validated shutdown fix or production acceptance.
 
+## Gate C observed results — idle PASS, synthetic BLOCKED
+
+**Operator Gate B:** M23R 14/14 host offline source tests passed;
+the local disconnected image build completed with
+`M23R_NO_DEVICE_TRACE_IMAGE_CONTRACT=PASS`, exit0.
+
+**Operator Gate C idle:** Original M23P component child reported
+`CLEAN_COMPONENT_SHUTDOWN`, M23R exited 0 with
+`CLEAN_OBSERVED_UNDER_TRACE_ONLY`; one constructor, one destructor,
+33 `DLOPEN_RETURN` events, 12 `DLCLOSE_BEGIN` and 12
+`DLCLOSE_RETURN`. Device action `NONE`.
+This validates only idle tracer function, **not the known loaded
+shutdown failure**.
+
+**Operator Gate C synthetic:** Isolated synthetic-only M23R returned
+`M23R_SYNTHETIC_EXIT_CODE=2`, M23P verdict
+`BLOCKED_NO_DEVICE_RECTIFIER_LIFECYCLE`, M23R verdict
+`BLOCKED_COMPONENT_LIFECYCLE`, `M23R_DEVICE_ACCESS=NONE`.
+M23R's `faults=[]` means its trace-parser found no internal
+metadata error; the unchanged M23P runner still **failed**.
+
+The trace captured 1 successful constructor, **no destructor**,
+41 `DLOPEN_RETURN`, 9 `DLCLOSE_BEGIN`, 9
+`DLCLOSE_RETURN`, one launch-process start, one shutdown request,
+and one launch-process exit. `librectify.so` closed with
+interposer `status=0`; later image transport library closes were
+seen. A separate TID 89 entered and returned from `dlclose`
+of `libtbbmalloc.so.2`, which was the last reported trace event.
+No unmatched `dlclose` begin was recorded.
+
+**Do not infer causation or signal from trace ordering.**
+An interposed successful `dlclose` call does not establish actual
+unmapping or identify any faulting function. The synthetic run's
+full M23P child-exit summary and exact process-exit classification
+were not included in the supplied excerpt. TID 89 in a new isolated
+container is not the same identified thread as historical core LWP89.
+
+**Next step is read-only triage of the already-retained host
+`synthetic-trace-1.log`**, not a new ROS/container execution.
+Extract the original `M23P_LIFECYCLE_JSON` values for
+`component_exit_class`, `component_launch_exit_code`,
+`faults`, bounded `crash_context`, and synthetic observations.
+If those do not independently show a child SIGSEGV, classify it
+as **BLOCKED, specific signal still unconfirmed**. Do not assert
+an originating library or causal `dlclose`.
+
+All M23P lifecycle, production-camera, VIO, recorder and
+robot-motion gates remain BLOCKED. Keep M23R draft/unmerged.
+
 ## Exit conditions / nonclaims
 
 M23R can supply temporally ordered loader events that help
