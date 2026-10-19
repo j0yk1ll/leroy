@@ -1,5 +1,6 @@
 """Offline M23Q prior-core comparison: synthetic metadata only, no core export."""
 import unittest
+from pathlib import Path
 
 from m23q_compare_prior_core import (
     PRIOR_PC, PRIOR_NEARBY, LATEST_PC, LATEST_NEARBY, summarize,
@@ -7,6 +8,15 @@ from m23q_compare_prior_core import (
 
 
 class PriorCoreCompareContracts(unittest.TestCase):
+    def test_export_script_uses_real_shell_parameter_expansions(self):
+        script = Path(__file__).with_name("m23q_extract_prior_core.sh")
+        source = script.read_text()
+        self.assertIn('BASE="${HOME}/.local/state/leroy-m23q"', source)
+        self.assertIn('"${BASH_SOURCE[0]}"', source)
+        self.assertNotIn(r'\${', source)
+        self.assertIn('coredumpctl --no-pager info "$PID"', source)
+        self.assertIn('coredumpctl --no-pager --output="$CORE" dump "$PID"', source)
+
     def test_recurring_relative_address_signature(self):
         self.assertEqual(PRIOR_PC & 0xFFF, LATEST_PC & 0xFFF)
         self.assertEqual(PRIOR_NEARBY - PRIOR_PC, 0x801A)
