@@ -144,6 +144,24 @@ class M23RTraceContracts(unittest.TestCase):
         self.assertIn("if (enabled && !in_trace)", source)
         self.assertIn("int status = next_dlclose(handle)", source)
 
+    def test_build_image_contains_every_file_read_by_offline_contracts(self):
+        # The source tests run *inside* the image, not only from the
+        # repository checkout: missing COPY directives fail builds.
+        root = Path(__file__).resolve().parent
+        docker = (root / "Dockerfile.m23r-shutdown-trace").read_text()
+        required = (
+            "m23r_loader_trace.c",
+            "m23r_rectifier_trace.launch.py",
+            "m23r_shutdown_trace_runner.py",
+            "m23r_shutdown_trace_test.py",
+            "M23R_NO_DEVICE_SHUTDOWN_TRACE.md",
+            "Dockerfile.m23r-shutdown-trace",
+        )
+        for source in required:
+            with self.subTest(source=source):
+                self.assertIn(
+                    f"COPY {source} /opt/m23r/{source}", docker)
+
     def test_offline_container_and_operator_safety_guards(self):
         root = Path(__file__).resolve().parent
         docker = (root / "Dockerfile.m23r-shutdown-trace").read_text()
