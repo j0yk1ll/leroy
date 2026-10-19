@@ -144,9 +144,16 @@ echo "M23H_SIM_EXIT_CODE=$M23H_SIM_EXIT"
 ~~~
 
 Require M23H_OFFLINE_CAPTURE_LIFECYCLE_CONTRACT=PASS,
-M23H_DEVICE_ACCESS=NONE, M23H_SIM_EXIT_CODE=0.
-These tests use MOCK subprocesses and disposable fake SQLite
-files. They do NOT run the ros2 recorder or access real devices.
+M23H_FAKE_RECORDER_SUBSCRIPTIONS=PASS,
+M23H_SYNTHETIC_ROS2_RECORDER_SQLITE=PASS,
+M23H_SYNTHETIC_CLI_RECORDER_SELFTEST=PASS,
+M23H_DEVICE_ACCESS=NONE and M23H_SIM_EXIT_CODE=0.
+The first test uses MOCK subprocesses and fake SQLite files;
+the second runs the **actual Jazzy ros2 bag CLI** with three
+deliberately fabricated ROS publishers inside an isolated no-device
+container. The synthetic data is discarded with the /tmp directory.
+No physical camera or serial device is mapped or accessed.
+Neither test is a live recording or physical calibration.
 
 ## D. Physical operator-controlled capture — HOLD before checks pass
 
