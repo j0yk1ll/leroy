@@ -7,7 +7,7 @@ import unittest
 from m23k_camera_path_probe import (
     CameraStats, DURATION_S, GAP_NS, MAX_MESSAGES, TOPICS,
     _require_live_environment, parse_counter_log,
-    camera_launch_crashed, COUNTER_PATH, _stop_session,
+    camera_launch_crashed, COUNTER_PATH, _stop_session, PROBE_VARIANTS,
 )
 
 N = 1_800_000_000_000_000_000
@@ -194,6 +194,64 @@ class M23KCameraPathContracts(unittest.TestCase):
         with mock.patch("m23k_camera_path_probe.os.killpg"):
             _stop_session(proc, signal.SIGINT, 10, problems, "CAMERA_LAUNCH")
         self.assertEqual(problems, ["CAMERA_LAUNCH_EXIT_CODE_-11"])
+
+
+    def test_camera_comparison_variants_are_exactly_allowlisted(self):
+        self.assertEqual(set(PROBE_VARIANTS), {
+            "full_mjpeg", "raw_only_mjpeg", "raw_only_yuyv"})
+        self.assertTrue(PROBE_VARIANTS["full_mjpeg"][1])
+        self.assertFalse(PROBE_VARIANTS["raw_only_mjpeg"][1])
+        self.assertFalse(PROBE_VARIANTS["raw_only_yuyv"][1])
+
+    def test_raw_only_camera_info_not_blocked_for_missing_rectifier(self):
+        result = sample(raw_count=12, rect_count=0, info_count=12).report(
+            required_streams=("raw", "info"))
+        self.assertEqual(result["verdict"], "CAMERA_PATH_DIAGNOSTIC_ONLY")
+        self.assertIsNone(result["rect_over_raw_count_ratio"])
+        self.assertEqual(result["counts"]["rect"], 0)
+
+    def test_raw_only_missing_raw_is_still_blocked(self):
+        result = sample(raw_count=0, rect_count=0, info_count=12).report(
+            required_streams=("raw", "info"))
+        self.assertIn("MISSING_CAMERA_STREAM", result["faults"])
+
+    def test_cpp_counter_raw_only_parses_zero_rect_summary(self):
+        lines = []
+        for i in range(5):
+            for kind in ("raw", "info"):
+                stamp = N + i * 33_333_333
+                lines.append("M23K_SAMPLE %s %d %d" %
+                             (kind, stamp, stamp + 1_000_000))
+        lines.append("M23K_COUNTER_COUNTS=5,0,5")
+        result = parse_counter_log("\n".join(lines), require_rect=False)
+        self.assertEqual(result["counts"]["rect"], 0)
+        self.assertEqual(result["verdict"], "CAMERA_PATH_DIAGNOSTIC_ONLY")
+        self.assertIsNone(result["rect_over_raw_count_ratio"])
+
+    def test_full_mode_still_rejects_missing_rectifier(self):
+        payload = "\n".join(
+            ["M23K_SAMPLE raw 100 101",
+             "M23K_SAMPLE info 100 102",
+             "M23K_SAMPLE raw 200 201",
+             "M23K_SAMPLE info 200 202",
+             "M23K_SAMPLE raw 300 301",
+             "M23K_SAMPLE info 300 302",
+             "M23K_COUNTER_COUNTS=3,0,3"])
+        result = parse_counter_log(payload, require_rect=True)
+        self.assertIn("MISSING_CAMERA_STREAM", result["faults"])
+
+    def test_raw_only_launch_preserves_capture_contract(self):
+        root = Path(__file__).resolve().parent
+        built = Path("/opt/m23k/m23k_camera_raw_only.launch.py")
+        source = (built if built.is_file() else
+                  root / "m23k_camera_raw_only.launch.py").read_text()
+        self.assertIn('"mjpeg2rgb"', source)
+        self.assertIn('"yuyv2rgb"', source)
+        self.assertIn('"/dev/video2"', source)
+        self.assertIn('"framerate": 30.0', source)
+        self.assertIn('"image_width": 640, "image_height": 480', source)
+        self.assertNotIn("image_proc", source)
+        self.assertNotIn("create_publisher(", source)
 
 
 if __name__ == "__main__":
