@@ -84,7 +84,7 @@ class M23MReceiverQoSContracts(unittest.TestCase):
         image = Path("/opt/m23m/Dockerfile.m23m-qos")
         local = root / "Dockerfile.m23m-qos"
         s = (image if image.exists() else local).read_text()
-        self.assertIn("FROM M23M_LOCAL_BASE_IMAGE", s)
+        self.assertIn("FROM localhost/leroy-sensors:m23l-synthetic-image-dds", s)
         self.assertIn("M23M_CPP_INSTALL_ROOT=/opt/m23m-cpp-install", s)
         for forbidden in ("--device", "curl ", "apt-get ", "wget "):
             self.assertNotIn(forbidden, s)
