@@ -60,7 +60,9 @@ class SyntheticImagePublisher final : public rclcpp::Node {
     if (!first_start_) first_start_ = start;
     last_start_ = start;
     // No pixel data are generated from any real sensor.
-    const auto stamp = now().to_msg();
+    // Jazzy rclcpp::Time implicitly converts to builtin_interfaces::msg::Time.
+    // Take one ROS timestamp and reuse it for Image and CameraInfo.
+    const auto stamp = now();
     image_.header.stamp = stamp;
     info_.header.stamp = stamp;
     image_pub_->publish(image_);
