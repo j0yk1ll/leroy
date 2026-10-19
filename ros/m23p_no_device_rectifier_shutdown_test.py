@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 import unittest
 
+from m23p_qos_graph import REQUIRED as SYNTHETIC_GRAPH_ENDPOINTS, validate_synthetic_graph
 from m23p_no_device_rectifier_shutdown import (
     PROFILES, REQUIRED_ENV, assess_container_exit, selected_profile,
     prohibit_devices, parse_m23p_publisher_log,
@@ -92,8 +93,14 @@ class M23PNoDeviceRectifierContracts(unittest.TestCase):
             "camera_crash_context(launch_text)",
             "M23P_LIFECYCLE_JSON=",
             "M23P_DEVICE_ACCESS=NONE",
+            "wait_for_synthetic_graph_ready(publisher, PUBLISHER_LOG)",
+            "graph_snapshot = inspect_synthetic_graph()",
+            "SYNTHETIC_GRAPH_QOS_UNVERIFIED",
+            "SYNTHETIC_GRAPH_AUDIT_AFTER_FRAMES_STARTED",
         ):
             self.assertIn(token, source)
+        self.assertLess(source.index("publisher = subprocess.Popen("),
+                        source.index("counter = subprocess.Popen("))
         for forbidden in ("create_publisher(", "serial.Serial(",
                           "ros2 bag record", "--device "):
             self.assertNotIn(forbidden, source)
@@ -111,6 +118,9 @@ class M23PNoDeviceRectifierContracts(unittest.TestCase):
             '"/camera/image_raw"',
             '"/camera/camera_info"',
             "constexpr unsigned int kFrames = 900",
+            "M23P_PUBLISHER_GRAPH_READY=YES",
+            "M23P_PUBLISHER_FRAMES_STARTED=YES",
+            "std::chrono::seconds(8)",
         ):
             self.assertIn(token, pub)
         self.assertNotIn("/dev/video", pub)
@@ -119,6 +129,8 @@ class M23PNoDeviceRectifierContracts(unittest.TestCase):
     def test_m23p_publisher_evidence_parses_and_invalid_is_blocked(self):
         good = "\n".join((
             "M23P_SYNTHETIC_CALIBRATION=FABRICATED_NONZERO_DISTORTION",
+            "M23P_PUBLISHER_GRAPH_READY=YES",
+            "M23P_PUBLISHER_FRAMES_STARTED=YES",
             "M23P_PUBLISHER_COUNTS=900,900",
             "M23P_PUBLISHER_START_SPAN_NS=29966666667",
             "M23P_PUBLISHER_MAX_CALLBACK_NS=1050000",
@@ -129,6 +141,10 @@ class M23PNoDeviceRectifierContracts(unittest.TestCase):
         self.assertEqual(result["info"], 900)
         for corrupted in (
             good.replace("FABRICATED_NONZERO_DISTORTION", "UNVERIFIED"),
+            good.replace("M23P_PUBLISHER_GRAPH_READY=YES",
+                         "M23P_PUBLISHER_GRAPH_READY=NO"),
+            good.replace("M23P_PUBLISHER_FRAMES_STARTED=YES",
+                         "M23P_PUBLISHER_FRAMES_STARTED=NO"),
             good.replace("900,900", "899,900"),
             good.replace("921600", "99"),
             good + "\nM23P_PUBLISHER_COUNTS=900,900",
@@ -138,6 +154,53 @@ class M23PNoDeviceRectifierContracts(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     parse_m23p_publisher_log(corrupted)
 
+    def test_graph_reliable_endpoints_are_all_required(self):
+        topics = {}
+        for topic, kind, name in SYNTHETIC_GRAPH_ENDPOINTS:
+            endpoints = topics.setdefault(
+                topic, {"publishers": [], "subscriptions": []})
+            endpoints[kind].append({
+                "node_name": name,
+                "qos": {"reliability": "RELIABLE", "durability": "VOLATILE",
+                        "history": "UNKNOWN", "depth": 0},
+            })
+        graph = {"rmw_implementation": "rmw_fastrtps_cpp",
+                 "topics": topics}
+        self.assertTrue(validate_synthetic_graph(graph))
+        for topic, kind, name in SYNTHETIC_GRAPH_ENDPOINTS:
+            with self.subTest(topic=topic, kind=kind, name=name):
+                endpoint = next(x for x in graph["topics"][topic][kind]
+                                if x["node_name"] == name)
+                endpoint["qos"]["reliability"] = "BEST_EFFORT"
+                with self.assertRaises(ValueError):
+                    validate_synthetic_graph(graph)
+                endpoint["qos"]["reliability"] = "RELIABLE"
+
+    def test_graph_missing_duplicate_or_wrong_rmw_blocks(self):
+        topics = {}
+        for topic, kind, name in SYNTHETIC_GRAPH_ENDPOINTS:
+            endpoints = topics.setdefault(
+                topic, {"publishers": [], "subscriptions": []})
+            endpoints[kind].append({
+                "node_name": name,
+                "qos": {"reliability": "RELIABLE", "durability": "VOLATILE"},
+            })
+        graph = {"rmw_implementation": "rmw_fastrtps_cpp",
+                 "topics": topics}
+        graph["rmw_implementation"] = "unspecified_default"
+        with self.assertRaises(ValueError):
+            validate_synthetic_graph(graph)
+        graph["rmw_implementation"] = "rmw_fastrtps_cpp"
+        topic, kind, _ = SYNTHETIC_GRAPH_ENDPOINTS[0]
+        endpoint = graph["topics"][topic][kind][0]
+        graph["topics"][topic][kind].append(endpoint.copy())
+        with self.assertRaises(ValueError):
+            validate_synthetic_graph(graph)
+        graph["topics"][topic][kind].pop()
+        graph["topics"][topic][kind].clear()
+        with self.assertRaises(ValueError):
+            validate_synthetic_graph(graph)
+
     def test_container_contract_is_completely_device_free(self):
         root = Path(__file__).resolve().parent
         docker = (root / "Dockerfile.m23p-rectifier-shutdown").read_text()
@@ -146,10 +209,19 @@ class M23PNoDeviceRectifierContracts(unittest.TestCase):
             "FROM localhost/leroy-sensors:m23o-rect-camera-qos", docker)
         self.assertIn("M23P_JAZZY_NO_DEVICE_IMPORT=PASS", docker)
         self.assertIn("COPY m23p_cpp", docker)
+        self.assertIn("COPY m23p_qos_graph.py", docker)
         self.assertIn("--packages-select leroy_m23p_calibrated_synthetic", docker)
         self.assertIn("--network none", runbook)
         self.assertIn("--cap-drop all", runbook)
         self.assertIn("--read-only", runbook)
+        graph_script = (root / "m23p_qos_graph.py").read_text()
+        for required in ("get_rmw_implementation_identifier",
+                         "capture_graph(", "M23P_GRAPH_JSON=",
+                         "M23P_GRAPH_VERDICT="):
+            self.assertIn(required, graph_script)
+        for disallowed in ("create_subscription(", "create_publisher(",
+                           "/dev/video", "/dev/ttyACM"):
+            self.assertNotIn(disallowed, graph_script)
         for forbidden in ("--device ", "--privileged", "--network host",
                           "apt-get ", "wget ", "curl "):
             self.assertNotIn(forbidden, docker)
