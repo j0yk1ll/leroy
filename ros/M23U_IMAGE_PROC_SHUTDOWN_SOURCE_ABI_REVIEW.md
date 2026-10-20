@@ -610,6 +610,87 @@ If `dlinfo` supplied only `<unknown>` or a private/nonstandard
 path, retain an opaque alias rather than inventing a module.
 Do **not** run ROS, containers or upload raw traces/cores.
 
+## Operator overlapping target-DSO audit — Theora + Zstd; two opaque nested handles
+
+Operator's **host-only**, no-ROS target-classification audit passed:
+`M23U_HOST_ONLY_TARGET_AUDIT=PASS`,
+`M23U_CAUSATION_VERIFIED=NO`,
+`M23U_PRODUCTION_ACCEPTANCE=BLOCKED`.
+There were four M23S close-call intervals on T1 overlapping
+T2's `libtbbmalloc.so.2` close; none in M23T.
+
+| M23S T1 interval | Close-target DSO provenance | Nest depth | Overlap | Same target closed in M23T? |
+|---|---|---:|---:|---|
+| 1 | ROS Jazzy `libtheora_image_transport_component.so` | 1 | **6.621ms** | Yes, 1 |
+| 2 | **UNRESOLVED** `dlinfo` target | 2 | **0.010ms** | Not verifiable |
+| 3 | **UNRESOLVED** `dlinfo` target | 2 | **0.002ms** | Not verifiable |
+| 4 | ROS Jazzy `libzstd_image_transport.so` | 1 | **0.199ms** | Yes, 1 |
+
+The two nested target handles were opaque in the existing traced
+`dlinfo(handle, RTLD_DI_LINKMAP)` results. Do not invent their
+targets or infer that they reference either plugin or TBB.
+`dlclose` interposition reports the **handle being closed**; it
+does not capture the **caller program counter or stack**.
+Theora and Zstd both have successful closes in the **clean** M23T
+trace, making library presence or an attempted close insufficient
+to explain the crash. All captured close calls returned.
+
+### Additional Jazzy upstream source evidence: publisher plugin fan-out
+
+Pinned upstream sources retrieved after identifying these plugins:
+
+- `ros-perception/image_common`, `jazzy`,
+  `image_transport/src/publisher.cpp`, git blob
+  `48f0257e4dacd959bfc6f64ef7245cd2059ce057`:
+  `image_transport::Publisher::Publisher` builds
+  `all_transport_names` from **every** declared publisher
+  plugin in `loader->getDeclaredClasses()`. It uses those
+  names as the **default** value of
+  `<image_topic>.enable_pub_plugins`, then iterates the
+  resulting allowlist, calls `createUniqueInstance`, calls
+  `advertise`, and holds each instance. In its `Impl`
+  `shutdown()`, it calls each plugin's `shutdown()` and
+  clears `publishers_`.
+  Source: https://github.com/ros-perception/image_common/blob/jazzy/image_transport/src/publisher.cpp
+- Same upstream project, `jazzy`,
+  `image_transport/src/image_transport.cpp`, git blob
+  `evidence available on upstream retrieval, installed ELF not verified`:
+  image_transport uses shared `PubLoader` and `SubLoader`
+  pluginlib loaders for its create functions.
+  Source: https://github.com/ros-perception/image_common/blob/jazzy/image_transport/src/image_transport.cpp
+- `ros-perception/image_transport_plugins`, `jazzy`:
+  `theora_image_transport/CMakeLists.txt` (blob
+  `654b83fadc23c0ccc6c163248c8d5c653273f054`)
+  defines a `theora_image_transport_component` shared library
+  and exports a publisher plugin;
+  `zstd_image_transport/CMakeLists.txt` (blob
+  `9c290275ffe86a84f78c4d954a11efa23c10780a`)
+  defines `zstd_image_transport` as a shared plugin library.
+  Sources:
+  https://github.com/ros-perception/image_transport_plugins/blob/jazzy/theora_image_transport/CMakeLists.txt
+  https://github.com/ros-perception/image_transport_plugins/blob/jazzy/zstd_image_transport/CMakeLists.txt
+
+**Interpretation:** It is plausible for the rectifier's image_transport
+**output publisher** to instantiate Theora and Zstd publisher plugins
+even while the synthetic test observes only raw image delivery,
+**if** those plugins are declared, installed, allowed by parameters
+and successfully advertised in the actual container. Merely
+observing the plugin `dlclose` targets does **not** prove codec
+use, image content compression or that the fault occurs in either
+plugin. This source behavior brings publisher plugin object
+and class-loader lifetimes into a testable shutdown audit, not a
+proven fault.
+
+**Next offline check:** Pair the two `UNRESOLVED` nested
+`DLCLOSE_BEGIN` handles against earlier captured
+`DLOPEN_RETURN` handles by raw identifier **inside the protected
+host process only**, and print merely sanitized `origin` and
+DSO-name category if present. Preserve opaque aliases otherwise;
+do not output raw memory handles, PIDs or private filesystem paths.
+This still would not reconstruct the original `dlclose` caller,
+faulting RIP or the complete loader state. **No new ROS/container
+run or hardware access.**
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
