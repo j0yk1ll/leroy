@@ -1,0 +1,37 @@
+# M23T — isolated OpenCV thread-configuration probe for the unchanged
+# image_proc::RectifyNode. Inherit already-tested M23S A/B publisher.
+FROM localhost/leroy-sensors:m23s-rectification-ab
+
+ENV M23T_THREAD_PROBE_ONLY=1 \
+    M23T_OPENCV_THREAD_PROFILE=default \
+    M23S_DISTORTION_PROFILE=rectify \
+    M23P_PROFILE=synthetic \
+    M23K_PROBE_MODE=selftest \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/m23t:/opt/m23s:/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20
+
+COPY m23t_opencv_thread_probe.cpp /opt/m23t/m23t_opencv_thread_probe.cpp
+COPY m23t_rectifier_thread_trace.launch.py /opt/m23t/m23t_rectifier_thread_trace.launch.py
+COPY m23t_thread_probe_runner.py /opt/m23t/m23t_thread_probe_runner.py
+COPY m23t_compare_thread_logs.py /opt/m23t/m23t_compare_thread_logs.py
+COPY m23t_thread_probe_test.py /opt/m23t/m23t_thread_probe_test.py
+COPY M23T_OPENCV_THREAD_LIFETIME.md /opt/m23t/M23T_OPENCV_THREAD_LIFETIME.md
+COPY Dockerfile.m23t-opencv-thread /opt/m23t/Dockerfile.m23t-opencv-thread
+# Source-equivalence fixture: ensure component launch is byte-for-byte same
+# except child-scoped added OpenCV preload library.
+COPY m23r_rectifier_trace.launch.py /opt/m23t/m23r_rectifier_trace.launch.py
+
+RUN pkg-config --exists opencv4 \
+    && c++ -std=c++17 -O1 -Wall -Wextra -Werror -fPIC -shared \
+       -Wl,-z,defs \
+       -o /opt/m23t/libm23t_opencv_thread_probe.so \
+       /opt/m23t/m23t_opencv_thread_probe.cpp \
+       $(pkg-config --cflags opencv4) -lopencv_core \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && PYTHONDONTWRITEBYTECODE=1 python3 -u /opt/m23t/m23t_thread_probe_test.py \
+    && test -f /opt/m23r/libm23r_loader_trace.so \
+    && test -x /opt/m23s-cpp-install/lib/leroy_m23s_rectification_ab/m23s_ab_publisher \
+    && echo M23T_NO_DEVICE_THREAD_IMAGE_CONTRACT=PASS
+
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && python3 -u /opt/m23t/m23t_thread_probe_runner.py"]
