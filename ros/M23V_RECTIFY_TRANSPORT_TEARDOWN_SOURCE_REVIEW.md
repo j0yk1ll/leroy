@@ -528,6 +528,173 @@ change plugin parameters or initiate a ROS/Podman/container
 process. PASS confirms only those literal launch-source AST
 invariants in the checked-out repo, not runtime or ABI state.
 
+## Operator M23V Gate C — three literal launch ASTs PASS
+
+The operator executed the **host-only Python AST parser** supplied
+by M23V and reported:
+
+```text
+M23V_LAUNCH=m23p_rectifier_only.launch.py|NODE=RectifyNode|EXPLICIT_PARAMS=NONE|REMAPS=PASS
+M23V_LAUNCH=m23r_rectifier_trace.launch.py|NODE=RectifyNode|EXPLICIT_PARAMS=NONE|REMAPS=PASS
+M23V_LAUNCH=m23t_rectifier_thread_trace.launch.py|NODE=RectifyNode|EXPLICIT_PARAMS=NONE|REMAPS=PASS
+M23V_LAUNCH_AST_AUDIT=PASS
+M23V_DEVICE_ACCESS=NONE
+M23V_PRODUCTION_ACCEPTANCE=BLOCKED
+```
+
+This verifies that the three **checked-out source ASTs** contain one
+literal `image_proc::RectifyNode` definition each, namespace
+`/camera`, exactly the same `image → image_raw` and
+`camera_info → camera_info` remaps and **no ComposableNode
+`parameters=` keyword**. It does *not* prove the installed
+Jazzy plugin configuration, runtime/CLI parameter overrides or
+whether any shutdown callback was active.
+
+### Gate D — source-only preload and wrapper dispatch audit
+
+The exact launch source shows **no preload assignment in M23P**;
+M23R preloads only its loader tracer in the launch process
+environment; M23T uses **that tracer plus the OpenCV helper**.
+M23S delegates to M23R which delegates to the underlying
+M23P runner. M23T replaces the M23R trace launch path and
+delegates to M23S. This makes M23T `default` a materially
+different child initialization condition even with
+`cv::getNumThreads()=16` before and after.
+
+Operator **host-only**, no-import AST validation (the inspected
+Python files are only parsed and never imported or executed):
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+test "$(git branch --show-current)" = \
+  "feature/m23v-transport-teardown-source-review" || {
+  echo "M23V_BLOCKED=WRONG_BRANCH"
+  exit 2
+}
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import ast
+from pathlib import Path
+
+launches = {
+    "m23p_rectifier_only.launch.py": None,
+    "m23r_rectifier_trace.launch.py":
+        "/opt/m23r/libm23r_loader_trace.so",
+    "m23t_rectifier_thread_trace.launch.py":
+        "/opt/m23r/libm23r_loader_trace.so:"
+        "/opt/m23t/libm23t_opencv_thread_probe.so",
+}
+
+def read_ast(name):
+    path = Path("ros") / name
+    if path.is_symlink() or not path.is_file():
+        raise SystemExit("M23V_BLOCKED=MISSING_SOURCE:" + name)
+    if path.stat().st_size > 256_000:
+        raise SystemExit("M23V_BLOCKED=OVERSIZE_SOURCE:" + name)
+    return ast.parse(path.read_text(encoding="utf-8"), filename=name)
+
+def string_expr(expr, constants):
+    if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
+        return expr.value
+    if isinstance(expr, ast.Name) and expr.id in constants:
+        return constants[expr.id]
+    if isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.Add):
+        return string_expr(expr.left, constants) + string_expr(expr.right, constants)
+    raise ValueError("non-literal environment expression")
+
+def has_call(tree, owner, method):
+    return any(
+        isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == method
+        and isinstance(n.func.value, ast.Name)
+        and n.func.value.id == owner
+        for n in ast.walk(tree)
+    )
+
+def has_attr_assignment(tree, owner, field, value_name):
+    return any(
+        isinstance(n, ast.Assign)
+        and isinstance(n.value, ast.Name)
+        and n.value.id == value_name
+        and any(
+            isinstance(target, ast.Attribute)
+            and isinstance(target.value, ast.Name)
+            and target.value.id == owner
+            and target.attr == field
+            for target in n.targets
+        )
+        for n in ast.walk(tree)
+    )
+
+print("M23V_PRELOAD_DISPATCH_AUDIT_BEGIN")
+
+for name, expected in launches.items():
+    tree = read_ast(name)
+    constants = {}
+    for item in tree.body:
+        if (isinstance(item, ast.Assign)
+            and len(item.targets) == 1
+            and isinstance(item.targets[0], ast.Name)
+            and isinstance(item.value, ast.Constant)
+            and isinstance(item.value.value, str)):
+            constants[item.targets[0].id] = item.value.value
+
+    calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "SetEnvironmentVariable"
+    ]
+    if expected is None:
+        if calls:
+            raise SystemExit("M23V_BLOCKED=UNEXPECTED_PRELOAD:" + name)
+        label = "NONE"
+    else:
+        if len(calls) != 1:
+            raise SystemExit("M23V_BLOCKED=PRELOAD_COUNT:" + name)
+        keys = {kw.arg: kw.value for kw in calls[0].keywords}
+        try:
+            actual_name = string_expr(keys["name"], constants)
+            actual_value = string_expr(keys["value"], constants)
+        except (KeyError, ValueError) as exc:
+            raise SystemExit("M23V_BLOCKED=PRELOAD_EXPRESSION:" + name) from exc
+        if actual_name != "LD_PRELOAD" or actual_value != expected:
+            raise SystemExit("M23V_BLOCKED=PRELOAD_VALUE:" + name)
+        label = "TRACE_ONLY" if "m23r_" in name else "TRACE_PLUS_OPENCV"
+    print(f"M23V_LAUNCH_PRELOAD={name}|{label}|PASS")
+
+r = read_ast("m23r_shutdown_trace_runner.py")
+s = read_ast("m23s_rectification_ab.py")
+t = read_ast("m23t_thread_probe_runner.py")
+checks = [
+    has_call(r, "m23p", "run"),
+    has_attr_assignment(r, "m23p", "LAUNCH", "TRACE_LAUNCH"),
+    has_call(s, "m23r", "run"),
+    has_attr_assignment(s, "m23p", "PUBLISHER", "PUBLISHER"),
+    has_call(t, "m23s", "run"),
+    has_attr_assignment(t, "m23r", "TRACE_LAUNCH", "THREAD_LAUNCH"),
+]
+if not all(checks):
+    raise SystemExit("M23V_BLOCKED=RUNNER_DISPATCH")
+print("M23V_RUNNER_DISPATCH=PASS")
+print("M23V_CHILD_PRELOAD_PARITY=M23R_AND_M23T_DIFFER")
+print("M23V_PRELOAD_DISPATCH_AUDIT=PASS")
+print("M23V_DEVICE_ACCESS=NONE")
+print("M23V_PRODUCTION_ACCEPTANCE=BLOCKED")
+print("M23V_PRELOAD_DISPATCH_AUDIT_END")
+PY
+```
+
+**Gate D interpretation:** PASS would validate limited
+lexical/AST source invariants only, not Python launch execution
+order, effective `LD_PRELOAD` values in the child, installed
+libraries, actual OpenCV workers or a faulting instruction.
+
+**No synthetic A/B, ROS process or container is authorized.**
+A new plugin-allowlist A/B could alter which transport DSOs
+are loaded and would require its own controlled, operator-run
+protocol, reproducing original crash baseline and approval.
+
 ## Restrictions and next possible investigation
 
 This is a **source-only** finding; all root-cause claims are
