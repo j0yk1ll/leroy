@@ -732,6 +732,101 @@ loader-name-only iteration and preserve the unknowns rather than
 claim a root cause. M23A/production and physical gates remain
 blocked.
 
+## Operator final nested-name audit — same placeholder handle, no DSO attribution
+
+The operator ran the **host-only** `DLOPEN` argument audit over the
+preserved M23S SIGSEGV trace. It reported
+`M23U_HOST_ONLY_DLOPEN_NAME_AUDIT=PASS`,
+`M23U_M23S_CRASH_EVIDENCE=PASS`,
+`M23U_CAUSATION_VERIFIED=NO`, and
+`M23U_PRODUCTION_ACCEPTANCE=BLOCKED`.
+
+- The **two nested depth-2 `dlclose` calls** within the longer
+  Theora close use **the same raw handle**.
+- Both calls' *target* annotations fall in the
+  `LOADER_PLACEHOLDER` category (not a verified path or SONAME).
+- For that shared handle, the captured history contains **two**
+  successful `DLOPEN_RETURN` calls whose recorded filename
+  was the interposer's `<unnamed>` placeholder;
+  they occurred roughly **40376.3ms** before the nested closes.
+- Nested call 2 had **no** earlier completed close of that handle;
+  nested call 3 had **one**. Both nested closes returned
+  successfully. Neither shares the Theora outer-close handle or
+  the separate T2 TBB allocator close handle.
+
+**Critical interposer semantics:** M23R `dlopen` logs the *original
+filename argument* and formats either a null pointer or an empty
+string as `<unnamed>`. This does **not** prove `dlopen(NULL)`,
+although that standard usage could yield a main-program handle.
+M23R `dlclose` target discovery via
+`dlinfo(handle, RTLD_DI_LINKMAP)` can report `<unknown>` if no
+nonempty path is recoverable. Neither string proves which ELF
+mapping or original caller was involved. Two opens with the
+same handle followed by two closes are consistent with normal
+handle reference management and **not evidence of a double-close
+bug, unsafe unload, or use-after-free**. No faulting-PC module
+has been recovered.
+
+**Stop criterion met:** The available recorded loader filenames
+and handle associations cannot attribute these two nested close
+targets. Do **not** repeat increasingly speculative handle
+classification or claim the TBB allocator or named image-transport
+plugins are the crash source. The retained diagnostic outcome is
+a **specific cross-thread shutdown interleaving associated with
+one crashing M23S run**, not proven deterministic causation.
+A future experiment to vary a plugin allowlist or instrument
+callbacks would change the comparison and must have its **own
+separately authorized no-device protocol**; never apply it to
+production.
+
+### Source-only ownership focus for a future diagnostic design
+
+A renewed upstream Jazzy source read confirms:
+
+1. Stock `RectifyNode` creates an
+   `image_transport::Publisher` for `image_rect` and uses
+   a match callback capturing raw `this` to manage
+   `sub_camera_` (pin `image_pipeline/image_proc/src/rectify.cpp`,
+   blob `e7cbd9b1e1a0c42fff53241a0094d80988979623`).
+2. `image_transport::Publisher` defaults its
+   `<topic>.enable_pub_plugins` allowlist to the set
+   of declared publisher transports, constructs and advertises
+   enabled plugins, then invokes each plugin's
+   `shutdown()` and clears instances when its implementation
+   shuts down (pin `image_common/image_transport/src/publisher.cpp`,
+   blob `48f0257e4dacd959bfc6f64ef7245cd2059ce057`).
+3. `image_transport/src/image_transport.cpp` uses a shared
+   `PubLoader` and `SubLoader` held in a process-static
+   `Impl * kImpl = new Impl()` (pin
+   `dfddcb91b45e4a127c44f2ce3109f34834e6819b`).
+   This design means per-publisher plugin instance teardown
+   and shared class-loader lifetime should **not be assumed
+   identical**.
+4. `RectifyNode` declares `sub_camera_` before `pub_rect_`
+   and `model_` after it; C++ member destruction runs in
+   reverse declaration order, meaning `model_` precedes
+   `pub_rect_`, then `sub_camera_`
+   (pin `image_proc/include/image_proc/rectify.hpp`, blob
+   `aec7e5d2ebdf90c1f22bee0710438a227e25fc5d`).
+5. Component container and manager have deliberate executor
+   and node-wrapper/loader teardown ordering, but this
+   does not establish that every external callback or plugin
+   reference has been drained (pin `rclcpp_components`
+   sources already listed above).
+
+These **source-level relationships** justify a separate
+read-only design review of **publisher plugin instance shutdown
+vs camera subscription callback cancellation and cached camera
+model destruction**, before considering any new synthetic
+no-device runtime A/B. The reviewed upstream source git blobs
+are not proof of installed-package source/build provenance.
+
+**M23U loader-attribution branch disposition:** source + host-only
+ELF and trace audits complete; 13 common objects byte-identical,
+M23T adds one OpenCV helper, nested loader targets not attributable,
+actual crash caller unknown. No fix, build, runtime experiment,
+camera, robot or production change is implied.
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
