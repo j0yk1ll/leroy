@@ -68,7 +68,7 @@ def fixture(profile="default", crash=True, delivered=900):
         "device_access": "NONE", "production_acceptance": "BLOCKED",
         "root_cause_verified": False, "opencv_backend_verified": False,
         "faults": [], "m23s_runner_exit": 2 if crash else 0,
-        "verdict": "BLOCKED_M23T_COMPONENT_LIFECYCLE" if crash else
+        "verdict": "BLOCKED_M23T_INHERITED_GATES" if crash else
                    "CLEAN_UNDER_THREAD_PROBE_ONLY",
         "opencv_setup": {"profile": profile, "api_threads_before": before,
                          "api_threads_after": after, "threading_backend_verified": False,
