@@ -1,5 +1,5 @@
 """M23S: offline-only A/B source, safety, publisher and evidence tests."""
-import copy
+import ast
 import json
 from pathlib import Path
 import unittest
@@ -242,9 +242,29 @@ class M23SABContracts(unittest.TestCase):
         self.assertIn("m23p.prohibit_devices()", runner)
         self.assertIn("m23r.preconditions(os.environ)", runner)
         self.assertIn("M23S_PRODUCTION_ACCEPTANCE=BLOCKED", runner)
-        for forbidden in ("subprocess.Popen(", "ros2 launch",
-                          "os.killpg(", "serial.Serial(", "usb_cam"):
-            self.assertNotIn(forbidden, runner)
+        # Analyze executable syntax, not comments: the runner's own
+        # explanatory text may mention the inherited ROS launch parent.
+        tree = ast.parse(runner)
+        banned_imports = {"subprocess", "rclpy", "serial"}
+        banned_calls = {
+            "subprocess.Popen", "subprocess.run", "subprocess.call",
+            "os.killpg", "os.system", "serial.Serial",
+        }
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    self.assertNotIn(alias.name.split(".")[0],
+                                     banned_imports)
+            elif isinstance(node, ast.ImportFrom):
+                self.assertNotIn((node.module or "").split(".")[0],
+                                 banned_imports)
+            elif isinstance(node, ast.Call):
+                self.assertNotIn(ast.unparse(node.func), banned_calls)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                # A literal ROS launch command is forbidden in wrapper code,
+                # but a comment mentioning that phrase is not an invocation.
+                self.assertNotIn("ros2 launch", node.value)
+        self.assertNotIn("usb_cam", runner)
 
     def test_pair_classifies_clean_passthrough_crashing_rectify(self):
         result = compare_payloads(
