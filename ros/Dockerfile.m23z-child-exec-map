@@ -1,0 +1,32 @@
+# M23Z experimental mapping snapshot, built only from verified local M23Y v2.
+# No production changes; do not build/run without separate operator gates.
+FROM localhost/leroy-sensors:m23y-synthetic-drain-v2
+
+ENV M23Z_MAP_ONLY=1 \
+    M23X_ARM=raw \
+    M23Y_DRAIN_ONLY=1 \
+    M23S_DISTORTION_PROFILE=rectify \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/m23z:/opt/m23y:/opt/m23x:/opt/m23s:/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20
+
+COPY m23z_loader_map_trace.c /opt/m23z/m23z_loader_map_trace.c
+COPY m23r_loader_trace.c /opt/m23z/m23r_reference.c
+COPY m23z_raw_rectifier.launch.py /opt/m23z/m23z_raw_rectifier.launch.py
+COPY m23x_raw_rectifier.launch.py /opt/m23z/m23x_raw_reference.launch.py
+COPY m23z_snapshot_runner.py /opt/m23z/m23z_snapshot_runner.py
+COPY m23z_source_contract_test.py /opt/m23z/m23z_source_contract_test.py
+COPY Dockerfile.m23z-child-exec-map /opt/m23z/Dockerfile.m23z-child-exec-map
+COPY M23Z_CHILD_EXEC_MAP_DESIGN.md /opt/m23z/M23Z_CHILD_EXEC_MAP_DESIGN.md
+
+# Disconnected build: source-only tests and a separate child-only C tracer.
+# The original M23R library, Jazzy RectifyNode, M23Y publisher and M23X
+# allowlist launcher are inherited byte-for-byte and never overwritten.
+RUN PYTHONDONTWRITEBYTECODE=1 python3 -B /opt/m23z/m23z_source_contract_test.py \
+    && cc -std=c11 -shared -fPIC -O2 -Wall -Wextra -Werror \
+       -o /opt/m23z/libm23z_loader_map_trace.so \
+       /opt/m23z/m23z_loader_map_trace.c -ldl \
+    && test -f /opt/m23z/libm23z_loader_map_trace.so \
+    && echo M23Z_SOURCE_IMAGE_CONTRACT=PASS
+
+# Only explicitly gated, single-run synthetic raw-arm execution allowed.
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && . /opt/m23y-cpp-install/local_setup.sh && python3 -u /opt/m23z/m23z_snapshot_runner.py"]
