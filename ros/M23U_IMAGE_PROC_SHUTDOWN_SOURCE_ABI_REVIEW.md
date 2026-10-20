@@ -216,6 +216,56 @@ At minimum the operator should check:
 that a C++ helper's successful compilation proved runtime ABI
 consistency, worker lifetime or the faulting function.
 
+## Operator result — M23S original image static ELF inspection PASS
+
+The operator reports `M23U_STATIC_ELF_EXIT_CODE=0` and
+`M23U_STATIC_ELF_INSPECTION=PASS` for the original M23S
+SIGSEGV-producing diagnostic image. These are **installed ELF Build IDs**,
+not source blob IDs. The operator supplied a bounded path/Build ID
+excerpt rather than complete SHA256, dynamic dependency or package
+metadata; do not assume those other fields have been verified.
+
+| Reported installed ELF path | Build ID |
+|---|---|
+| `/opt/ros/jazzy/lib/rclcpp_components/component_container` | `6a4e4dd2da8de60a224da230df34f681cc74f32e` |
+| `/opt/m23r/libm23r_loader_trace.so` | `1e6a49d2f5700b44feed8d7113e4a0cc0ec1f2db` |
+| `/opt/ros/jazzy/lib/librclcpp.so` | `43ab5428180ef658f107081f8e587215bcbac94c` |
+| `/opt/ros/jazzy/lib/libcv_bridge.so` | `8bd0a35752c5f8085aee5c570514c69469bc7a05` |
+| `/opt/ros/jazzy/lib/librectify.so` | `48db591c6c6eda0a16ec95699e8a34a234c08486` |
+| `/opt/ros/jazzy/lib/libimage_geometry.so` | `937627421ba46ad2904b602b80d9dca3063f1234` |
+| `/opt/ros/jazzy/lib/libimage_transport.so` | `77b3b18786f84e343e941343f925cf124cd79674` |
+| `/usr/lib/x86_64-linux-gnu/libopencv_core.so.4.6.0` | `674ef9a47fda170b288a4d05597250ce5b2192bb` |
+| `/usr/lib/x86_64-linux-gnu/libopencv_imgproc.so.4.6.0` | `117ae1589074b59cdafa86ec7d99d21e38cdfd4b` |
+| `/usr/lib/x86_64-linux-gnu/libtbb.so.12.11` | `91dd0c49c55c7dd6f455dc466ded540122adb4c3` |
+| `/usr/lib/x86_64-linux-gnu/libtbbmalloc.so.2.11` | `282636301e99d2b15d58cc8d9929b3e0ede8c363` |
+
+The operator also reported aliases for
+`libopencv_core.so`/`.406`, `libopencv_imgproc.so`/`.406`,
+`libtbb.so`/`.12`, `libtbbmalloc.so`/`.2`, and
+`libimage_transport.so` under the alternate ROS lib directory, each
+with the **same respective Build ID** as its canonical path. This
+is consistent with normal versioned shared-library symlinks; the
+reported aliases **do not** establish an ABI collision.
+The excerpt contains no `librclcpp_components.so` entry; absence
+from this bounded listing does not establish absence from the image.
+
+**Supported:** OpenCV 4.6.0 binary objects and TBB 12 runtime /
+TBB malloc are present in the original image, with concrete Build IDs.
+The presence of `libtbbmalloc.so.2` agrees with the prior M23R
+last-close library name, but **does not establish that TBB caused the
+crash**. A static ELF Build ID by itself does not demonstrate that
+a library was mapped at the faulting RIP, or that an ABI mismatch
+exists.
+
+**Next evidence required:** Obtain the **same limited ELF Build ID
+inventory from the already-existing clean-default M23T diagnostic
+image**, compare matching resolved library paths/Build IDs (including
+the added M23T OpenCV helper), and inspect only targeted `DT_NEEDED`
+dependencies before inferring an initialization difference. Do not
+run ROS, rebuild either image or change the preload configuration
+during this static comparison. No M23T ELF inventory is in the
+operator report yet.
+
 ## Gate A — source/document integrity (no execution necessary)
 
 This PR changes exactly **one Markdown file** and **zero runtime
@@ -300,11 +350,12 @@ summary. No raw cores or full logs go into the GitHub PR.
 **Completed:** Source ownership and teardown-order review, pinned
 source references and explicit ABI evidence requirements.
 
-**Still UNKNOWN:** Actual installed ELF versions/build IDs,
-module responsible for unmapped crash PC, specific invalid caller,
-active OpenCV worker/backend, image_transport callback drain,
-component unload timing, and reproducibility across multiple
-no-device pairs. Do not label any one library a root cause.
+**Still UNKNOWN:** Clean-default M23T image ELF Build IDs and
+any actual installed-version/ABI divergence, module responsible for
+unmapped crash PC, specific invalid caller, active OpenCV worker/backend,
+image_transport callback drain, component unload timing, and
+reproducibility across multiple no-device pairs. Original M23S image
+ELF Build IDs were recorded above. Do not label any one library a root cause.
 
 **Remains BLOCKED:** nonzero-D component lifecycle, M23A original
 strict >250ms real-camera gap gate, physical camera, STM32/IMU,
