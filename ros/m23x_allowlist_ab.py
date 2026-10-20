@@ -37,6 +37,14 @@ def inspect_before_frames(state):
             capture_output=True, text=True, check=False, timeout=7,
             env=dict(os.environ))
         if audit.returncode != 0:
+            # The subprocess owns the exact ROS error context. Share only
+            # one allowlisted stage marker; never expose private stderr.
+            stages = [line.split("=", 1)[1] for line in audit.stdout.splitlines()
+                      if line.startswith("M23X_PARAM_FAILURE_STAGE=")]
+            allowed = {"GRAPH_QOS", "PARAMETER_SERVICE",
+                       "PARAMETER_RESPONSE", "ALLOWLIST_CONTENT"}
+            stage = stages[0] if len(stages) == 1 and stages[0] in allowed else "UNCLASSIFIED"
+            print("M23X_PARAM_FAILURE_STAGE=" + stage, flush=True)
             raise ValueError("parameter/graph observer returned nonzero")
         if single_output(audit.stdout, "M23X_PARAM_VERDICT") != "PASS":
             raise ValueError("effective parameter audit was not PASS")
