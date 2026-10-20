@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.8)
+project(leroy_m23y_drain_publisher LANGUAGES CXX)
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+add_executable(m23y_drained_publisher src/m23y_drained_publisher.cpp)
+target_compile_features(m23y_drained_publisher PUBLIC cxx_std_17)
+target_compile_options(m23y_drained_publisher PRIVATE -Wall -Wextra -Wpedantic)
+ament_target_dependencies(m23y_drained_publisher rclcpp sensor_msgs)
+install(TARGETS m23y_drained_publisher DESTINATION lib/${PROJECT_NAME})
+ament_package()
