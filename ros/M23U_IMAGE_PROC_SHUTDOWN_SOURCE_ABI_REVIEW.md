@@ -477,6 +477,60 @@ tracer's last 80 events may not contain every earlier `dlopen`:
 only the captured windows can be compared directly. No fix or
 production acceptance is established.
 
+## Operator per-thread loader close timeline — 60 versus 64 verified events
+
+The operator's **host-only** timeline parser verified the complete
+available M23R captured-event windows and reported
+`M23U_TEARDOWN_TIMELINE=PASS`, with **60** M23S captured events and
+**64** M23T captured events. The parser identified two distinct
+traced threads in each run. Thread identifiers below are
+**per-log pseudonyms**, not matching OS TIDs across runs.
+
+| Existing trace event | M23S nonzero-D SIGSEGV | M23T nonzero-D clean |
+|---|---|---|
+| `librectify.so` close | T1 begin 40654.994ms, return 40655.508ms | T1 begin 40635.074ms, return 40635.559ms |
+| TBB allocator close | T2 begin **40662.362ms**, return **40669.221ms** | T2 begin **40751.026ms**, return **40751.041ms** |
+| TBB close wall duration | **6.859ms** | **0.015ms** |
+| Other thread's close calls during TBB close | **Observed on T1** | **Not observed** |
+| M23R tracer's `DESTRUCTOR` marker | **Absent** | T1 at **40750.585ms**, **before** T2's TBB close |
+| Last traced event | T2 TBB allocator `DLCLOSE_RETURN` | T1 other `DLCLOSE_RETURN` |
+
+In the M23S crashing run, a T1 `OTHER` close began at
+**40658.761ms** and did not return until **40668.983ms**; this
+overlapped the T2 TBB allocator close for roughly **6.621ms**.
+T1 also recorded further nested/overlapping close begin/return
+events during this period. The T2 TBB close's successful return
+at 40669.221ms was the final captured loader event; the tracer
+did **not** emit its destructor marker, and the actual child
+subsequently exited SIGSEGV (-11).
+
+In the M23T clean run, the T2 TBB allocator close lasted
+approximately **0.015ms**, started **0.441ms after** the T1
+tracer-destructor marker, and did not overlap the shown T1
+close calls. The clean process emitted further T1 close-return
+events afterwards.
+
+**Interpretation:** same inspected 13 ELF binaries, but materially
+different interleaving and elapsed time in the captured thread-local
+loader close calls. This elevates a **concurrent shutdown/loader-
+lifecycle race** to a testable engineering hypothesis; it does not
+prove `libtbbmalloc`, `dlclose`, OpenCV, or any particular
+object destructor causes an invalid jump. Both traces include a
+successful TBB allocator `dlclose` return. The `DESTRUCTOR`
+marker is the **M23R loader-interposer's destructor**, not proof
+that the ROS RectifyNode destructor ran at that time. The trace
+records only instrumented `dlopen`/`dlclose` and does not track
+the complete glibc loader state, dynamic references or all process
+threads. It also cannot associate the old M23Q unmapped RIP with
+a specific ELF object.
+
+**Next permitted read-only step:** locally pair
+`DLCLOSE_BEGIN`/`DLCLOSE_RETURN` by *same thread and handle*
+from the already retained M23S and M23T logs, verify the overlap
+duration and whether either observed call was unfinished.
+Print only elapsed time and sanitized library-category names.
+No ROS or container execution and no new preload/helper.
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
