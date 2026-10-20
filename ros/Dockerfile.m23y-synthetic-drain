@@ -1,0 +1,44 @@
+# M23Y additive no-device diagnostic from the verified M23X v2 local image.
+# Parent immutable image ID MUST be verified by operator before any build.
+# No ROS source, original synthetic M23S publisher, launch or production edit.
+FROM localhost/leroy-sensors:m23x-raw-publisher-controlled-v2
+
+ENV M23Y_DRAIN_ONLY=1 \
+    M23X_ARM= \
+    M23S_DISTORTION_PROFILE=rectify \
+    M23P_PROFILE=synthetic \
+    M23P_SYNTHETIC_ONLY=1 \
+    M23R_TRACE_ONLY=1 \
+    M23S_AB_ONLY=1 \
+    M23K_PROBE_MODE=selftest \
+    M23N_CAMERA_QOS_ONLY=0 \
+    M23O_RECT_QOS_ONLY=0 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/m23y:/opt/m23x:/opt/m23s:/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20
+
+COPY m23y_cpp /opt/m23y/m23y_cpp
+COPY m23s_cpp/src/m23s_ab_publisher.cpp /opt/m23y/m23s_reference.cpp
+COPY m23y_drained_ab.py /opt/m23y/m23y_drained_ab.py
+COPY m23y_source_contract_test.py /opt/m23y/m23y_source_contract_test.py
+COPY M23Y_SYNTHETIC_PUBLISHER_DRAIN_DESIGN.md /opt/m23y/M23Y_SYNTHETIC_PUBLISHER_DRAIN_DESIGN.md
+
+# This build does not execute ROS; it only checks source identity and
+# compiles the independent, synthetic-only C++ publisher binary.
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && PYTHONDONTWRITEBYTECODE=1 python3 -B /opt/m23y/m23y_source_contract_test.py \
+    && colcon --log-base /tmp/m23y-cpp-build-logs build \
+       --base-paths /opt/m23y/m23y_cpp \
+       --build-base /tmp/m23y-cpp-build \
+       --install-base /opt/m23y-cpp-install \
+       --merge-install \
+       --packages-select leroy_m23y_drain_publisher \
+    && test -x /opt/m23y-cpp-install/lib/leroy_m23y_drain_publisher/m23y_drained_publisher \
+    && test -f /opt/m23r/libm23r_loader_trace.so \
+    && echo M23Y_SOURCE_IMAGE_CONTRACT=PASS
+
+# Explicit M23X_ARM=baseline or raw is required; no unattended runtime arm.
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && . /opt/m23y-cpp-install/local_setup.sh && python3 -u /opt/m23y/m23y_drained_ab.py"]
