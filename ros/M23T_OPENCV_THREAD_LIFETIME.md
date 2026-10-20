@@ -245,8 +245,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -u m23t_compare_thread_logs.py \
 Any truncated/missing marker, unverified child SIGSEGV,
 missing rectified stream, incorrect D, changed image, or unverified
 OpenCV API setup returns `M23T_PAIR_BLOCKED`.
-No outcome makes `M23T_PRODUCTION_ACCEPTANCE` anything but
-`BLOCKED`. One pair is not sufficient to identify a faulting
+No outcome makes `M23T_PRODUCTION_ACCEPTANCE=BLOCKED`
+change to a release PASS. One pair is not sufficient to identify a faulting
 library or declare a fix.
 
 ## Strict release/safety nonclaims
