@@ -91,6 +91,71 @@ independently checks the M23R tracer and
 shutdown can be labeled **synthetic-only observation**,
 never production fix.
 
+## A1 operator result — diagnostic API spelling blocked the pre-frame audit
+
+The first operator-executed M23X-image A1 baseline was
+**inconclusive**. Operator markers:
+
+```text
+M23X_A1_PREFLIGHT=PASS
+M23X_A1_RUN_EXIT_CODE=2
+M23X_A1_PARAMETER_VERIFIED=FALSE
+M23X_A1_RECT_MATCHED=None
+M23X_A1_CHILD_EXIT=None
+M23X_A1=BLOCKED_OR_NOT_REPRODUCED
+M23X_A1_M23X_PARAMETER_AUDIT=BLOCKED_ValueError
+M23X_A1_COMPONENT_EXIT_CLASS=CLEAN_COMPONENT_SHUTDOWN
+M23X_A1_GRAPH_QOS_VERIFIED=FALSE
+M23X_A1_M23P_FAULT_CATEGORIES=KeyboardInterrupt,SYNTHETIC_LOG_INVALID
+M23X_A1_M23S_FAULT_CATEGORIES=PUBLISHER_NOT_VERIFIED
+```
+
+The pre-frame observer failure caused the intended
+fail-closed cleanup before images were validated. Clean
+component exit in that **aborted** attempt is neither a
+successful raw-output change nor evidence against the
+historic nonzero-D SIGSEGV. A1 does **not** count toward
+either crashing control; **A2/B1/B2 stayed STOPPED**.
+
+### Found offline source defect — Jazzy parameter client import
+
+The initial `m23x_graph_param.py` imported and constructed
+`AsyncParametersClient` (**plural**). ROS Jazzy
+`rclpy/rclpy/parameter_client.py` at upstream blob
+`512bfeed9afec96a32ef4ce7a230a72672a2a6f7`
+actually defines **`AsyncParameterClient`** (singular).
+The initial import therefore could not succeed against
+that Jazzy API, and was outside the observer's
+`try/except`. The M23X wrapper captured and discarded
+the child observer's stderr and raised its own generic
+`ValueError`, masking the import problem. This defect
+is a sufficient explanation for the A1 pre-frame failure,
+without a claim that no other issues can emerge after
+the import correction.
+
+The proposed source-only repair corrects the class name
+and adds a **fifth offline AST contract** checking the exact
+Jazzy API spelling plus bounded status markers for the
+next observer failure category (`GRAPH_QOS`,
+`PARAMETER_SERVICE`, `PARAMETER_RESPONSE`,
+`ALLOWLIST_CONTENT`). The existing synthetic
+publisher, stock rectifier, baseline/raw launch
+configurations, tracer, QoS and shutdown code remain
+unchanged. No verbose exception strings, raw loader
+traces, PIDs or paths are surfaced in public logs.
+
+**Rebuild requirement:** the first M23X image was
+built from the faulty diagnostic source. Do **not**
+retag/overwrite it and do **not** rerun A1 in that old
+image. Reconfirm new Git head and offline Gate A,
+then create a **new uniquely tagged** disconnected
+v2 image using the same verified M23S immutable
+parent, a new owner-private log and new image-ID
+evidence. Verify the new image/defaults and source
+provenance before any separately operator-controlled
+synthetic A1 trial. The previous A1 result remains
+inconclusive and its private log stays untouched.
+
 ## Pre-run source and isolation gates — no runtime authorization
 
 The old M23S image must still exist by **immutable SHA256
