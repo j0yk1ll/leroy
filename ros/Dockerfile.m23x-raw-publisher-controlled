@@ -1,0 +1,34 @@
+# M23X: review-only no-device raw-output publisher A/B on pinned M23S base.
+# Does not modify ROS, image_proc, production scripts, devices, or firmware.
+# Operator must pin/verify the *existing* M23S image SHA before building.
+FROM localhost/leroy-sensors:m23s-rectification-ab
+
+ENV M23S_DISTORTION_PROFILE=rectify \
+    M23P_PROFILE=synthetic \
+    M23P_SYNTHETIC_ONLY=1 \
+    M23R_TRACE_ONLY=1 \
+    M23S_AB_ONLY=1 \
+    M23K_PROBE_MODE=selftest \
+    M23N_CAMERA_QOS_ONLY=0 \
+    M23O_RECT_QOS_ONLY=0 \
+    LEROY_NAV2_DRY_RUN=1 \
+    ROS_DOMAIN_ID=170 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/m23x:/opt/m23s:/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20
+
+COPY m23x_baseline_rectifier.launch.py /opt/m23x/m23x_baseline_rectifier.launch.py
+COPY m23x_raw_rectifier.launch.py /opt/m23x/m23x_raw_rectifier.launch.py
+COPY m23x_graph_param.py /opt/m23x/m23x_graph_param.py
+COPY m23x_allowlist_ab.py /opt/m23x/m23x_allowlist_ab.py
+COPY m23x_allowlist_ab_test.py /opt/m23x/m23x_allowlist_ab_test.py
+COPY M23X_RAW_PUBLISHER_CONTROLLED_DIAGNOSTIC.md /opt/m23x/M23X_RAW_PUBLISHER_CONTROLLED_DIAGNOSTIC.md
+
+# Pure offline tests only. No ROS graph, runtime node or device used in build.
+RUN PYTHONDONTWRITEBYTECODE=1 python3 -B /opt/m23x/m23x_allowlist_ab_test.py \
+    && test -f /opt/m23r/libm23r_loader_trace.so \
+    && test -x /opt/m23s-cpp-install/lib/leroy_m23s_rectification_ab/m23s_ab_publisher \
+    && echo M23X_NO_DEVICE_SOURCE_IMAGE_CONTRACT=PASS
+
+# There is intentionally no default M23X_ARM. A missing arm fails closed.
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && python3 -u /opt/m23x/m23x_allowlist_ab.py"]
