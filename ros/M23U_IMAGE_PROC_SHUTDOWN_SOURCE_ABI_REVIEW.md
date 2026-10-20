@@ -569,6 +569,47 @@ their ownership or propose a production loader change. No ROS,
 container invocation, camera or robot activity is justified by
 this check.
 
+## Operator nested close-family audit — four `OTHER` overlaps
+
+The operator completed another **host-only, no-ROS** audit,
+`M23U_HOST_ONLY_OVERLAP_AUDIT=PASS`, with
+`M23U_CAUSATION_VERIFIED=NO` and
+`M23U_PRODUCTION_ACCEPTANCE=BLOCKED`. Source logs remain private.
+
+| Close interval overlapping T2 `libtbbmalloc.so.2` | Family | T1 nesting depth | Begin relative to TBB start | End relative to TBB start | Interval intersecting TBB |
+|---|---|---:|---:|---:|---:|
+| 1 | `OTHER` | 1 | -3.601ms | +6.621ms | **6.621ms** |
+| 2 | `OTHER` | 2 | +1.489ms | +1.499ms | **0.010ms** |
+| 3 | `OTHER` | 2 | +1.523ms | +1.525ms | **0.002ms** |
+| 4 | `OTHER` | 1 | +6.641ms | +6.839ms | **0.199ms** |
+
+M23S had **9** completely paired close calls, maximum observed
+nesting depth **2**, four cross-thread overlapping **intervals**
+(all belonging to one other observed thread T1). The clean M23T
+default run had **13** paired calls, zero such overlaps, maximum
+nesting depth **1**. `OTHER` is **the local parser's fallback
+bucket**, not a named ELF object or evidence that four distinct
+modules were involved. The first long T1 operation encloses the
+second/third very short nested calls, so overlap durations are **not
+independent additive times**.
+
+**Interpretation:** nested close operations in T1 overlap a T2 TBB
+allocator close on the crashing run; no equivalent overlap was
+observed on the clean run. This is a source of stronger
+shutdown-interleaving evidence, **not a proved double-close,
+reentrant loader defect, deadlock or cause of SIGSEGV**.
+`M23R_TRACE_EVENT` identifies the `dlclose` *target handle*
+through `dlinfo`, **not the call-site stack or original caller**.
+An `OTHER` label alone is insufficient to assign the ownership
+of any of the four calls. Every captured close returned.
+
+**Next offline-only gate:** recover **sanitized target DSO basenames
+and coarse origin** of those four existing overlap intervals from
+the protected M23S log; compare to other existing M23T close targets.
+If `dlinfo` supplied only `<unknown>` or a private/nonstandard
+path, retain an opaque alias rather than inventing a module.
+Do **not** run ROS, containers or upload raw traces/cores.
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
