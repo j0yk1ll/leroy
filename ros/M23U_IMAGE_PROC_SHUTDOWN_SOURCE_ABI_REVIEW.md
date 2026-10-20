@@ -345,6 +345,43 @@ authorized mapping snapshot. Redact sensitive host paths, serials
 and any runtime address evidence before posting a bounded
 summary. No raw cores or full logs go into the GitHub PR.
 
+## Operator M23S static comparison retry — successful (2026-10-20)
+
+The operator confirmed the assistant-supplied **first follow-up comparison**
+script failed before producing an ELF inventory:
+```text
+M23U_DEVICE_ACCESS=NONE
+/bin/bash: line 41: $3: unbound variable
+M23U_m23s_EXIT_CODE=1
+```
+The failure was a **shell-quoting bug** in nested double-quoted
+`awk` expressions (unescaped `$3` under `set -u`), **not**
+a ROS/component or ELF failure. The existing failed log is preserved.
+
+With a corrected static-only command that removed the fragile nested
+`awk` expressions, the operator then reported:
+```text
+M23U_m23s_RETRY_EXIT_CODE=0
+M23U_DEVICE_ACCESS=NONE
+M23U_STATIC_COMPARE_INSPECTION=PASS
+```
+This completes the **original-image ELF comparison-log collection**
+to a private, non-overwritten `m23s-abi-compare-02.log`.
+The complete SHA256/DT_NEEDED records were **not pasted**; only the
+success markers were supplied. This does not establish the M23T
+library match and is not a fix or additional crash reproducer.
+
+**Next evidence gate:** separately authorized static-only inventory
+of the **M23T clean-default image**, immutable ID
+`b849d4336faf203d2c955197af6fa7d1e9b0d5764d9e1e1a3e9d22b6d25d9254`,
+including its child-only OpenCV probe, and **local offline**
+comparison to the completed `m23s-abi-compare-02.log`.
+Do **not** rerun the failed M23S command, overwrite either private
+log, run ROS, rebuild diagnostic images or use hardware.
+An identical set of inherited Build IDs would rule out a difference
+in the recorded binaries, **not** prove that loader initialization
+or a particular cache/callback/allocator caused or prevented SIGSEGV.
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
