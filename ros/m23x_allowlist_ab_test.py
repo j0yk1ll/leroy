@@ -65,6 +65,27 @@ class M23XSourceContracts(unittest.TestCase):
                 tree.body.pop(0)  # mode-specific module docstring only
         self.assertEqual(ast.dump(baseline_tree), ast.dump(raw_tree))
 
+    def test_jazzy_parameter_client_api_and_sanitized_failure_stage(self):
+        # rclpy Jazzy rclpy/parameter_client.py uses singular
+        # AsyncParameterClient; the plural spelling silently failed
+        # inside the previous captured diagnostic subprocess.
+        observer = (ROOT / "m23x_graph_param.py").read_text()
+        runner = (ROOT / "m23x_allowlist_ab.py").read_text()
+        tree = ast.parse(observer)
+        imports = [n for n in ast.walk(tree)
+                   if isinstance(n, ast.ImportFrom)
+                   and n.module == "rclpy.parameter_client"]
+        self.assertEqual(len(imports), 1)
+        self.assertEqual([alias.name for alias in imports[0].names],
+                         ["AsyncParameterClient"])
+        self.assertIn("client = AsyncParameterClient(node, TARGET)", observer)
+        self.assertNotIn("AsyncParametersClient", observer)
+        for stage in ("GRAPH_QOS", "PARAMETER_SERVICE",
+                      "PARAMETER_RESPONSE", "ALLOWLIST_CONTENT"):
+            self.assertIn(stage, observer)
+        self.assertIn("M23X_PARAM_FAILURE_STAGE=", observer)
+        self.assertIn("M23X_PARAM_FAILURE_STAGE=", runner)
+
     def test_only_child_tracer_and_stock_rectifier(self):
         for arm in ("baseline", "raw"):
             tree, node = launch_tree(arm)
