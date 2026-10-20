@@ -41,7 +41,7 @@ def main():
         return 2
 
     import rclpy
-    from rclpy.parameter_client import AsyncParametersClient
+    from rclpy.parameter_client import AsyncParameterClient
     from rclpy.utilities import get_rmw_implementation_identifier
     from rcl_interfaces.msg import ParameterType
     from m23o_rect_qos_graph import capture_graph
@@ -53,6 +53,7 @@ def main():
                              enable_rosout=False)
     graph = None
     values = None
+    stage = "GRAPH_QOS"
     try:
         # Strict pre-frame sequence; the inherited M23P runner rejects a
         # snapshot whose acquisition overlaps first published frames.
@@ -70,9 +71,11 @@ def main():
         if error:
             raise error
 
-        client = AsyncParametersClient(node, TARGET)
+        stage = "PARAMETER_SERVICE"
+        client = AsyncParameterClient(node, TARGET)
         if not client.wait_for_services(timeout_sec=1.0):
             raise ValueError("rectifier parameter service unavailable")
+        stage = "PARAMETER_RESPONSE"
         future = client.get_parameters([PARAM])
         rclpy.spin_until_future_complete(node, future, timeout_sec=2.0)
         if not future.done() or future.exception() is not None:
@@ -82,6 +85,7 @@ def main():
             raise ValueError("rectifier parameter response cardinality")
         parameter = result.values[0]
         values = list(parameter.string_array_value)
+        stage = "ALLOWLIST_CONTENT"
         inspect_values(arm, TARGET, parameter.type, values,
                        ParameterType.PARAMETER_STRING_ARRAY)
         print("M23P_GRAPH_JSON=" + json.dumps(graph, sort_keys=True), flush=True)
@@ -95,7 +99,8 @@ def main():
         }, sort_keys=True), flush=True)
         print("M23X_PARAM_VERDICT=PASS", flush=True)
         return 0
-    except (ValueError, RuntimeError, TypeError, OSError) as exc:
+    except (ValueError, RuntimeError, TypeError, OSError, AttributeError) as exc:
+        print("M23X_PARAM_FAILURE_STAGE=" + stage, flush=True)
         # Keep private component/host data out of exported summary.
         print("M23X_PARAM_VERDICT=BLOCKED_" + type(exc).__name__, flush=True)
         return 2
