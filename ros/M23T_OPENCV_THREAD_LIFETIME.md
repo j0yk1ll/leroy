@@ -206,7 +206,7 @@ podman run --rm --pull=never \
   --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m \
   -e M23S_DISTORTION_PROFILE=rectify \
   -e M23T_OPENCV_THREAD_PROFILE=default \
-  "$IMAGE" >"$LOG" 2>&1 || RC=$?
+  "$ID" >"$LOG" 2>&1 || RC=$?
 
 echo "M23T_DEFAULT_EXIT_CODE=$RC"
 grep -E '^(M23S_AB_VERDICT=|M23R_LIFECYCLE_VERDICT=|M23T_THREADS_VERDICT=|M23T_THREADS_JSON=|M23T_DEVICE_ACCESS=|M23T_PRODUCTION_ACCEPTANCE=)' \
