@@ -76,7 +76,7 @@ struct m23z_snapshot_state {
     unsigned int truncated;
 };
 
-static int m23z_capture_exec(const struct dl_phdr_info *info, size_t size,
+static int m23z_capture_exec(struct dl_phdr_info *info, size_t size,
                              void *opaque) {
     (void)size;
     struct m23z_snapshot_state *state = opaque;
