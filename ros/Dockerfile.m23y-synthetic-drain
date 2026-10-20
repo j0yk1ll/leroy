@@ -23,6 +23,7 @@ COPY m23y_cpp /opt/m23y/m23y_cpp
 COPY m23s_cpp/src/m23s_ab_publisher.cpp /opt/m23y/m23s_reference.cpp
 COPY m23y_drained_ab.py /opt/m23y/m23y_drained_ab.py
 COPY m23y_source_contract_test.py /opt/m23y/m23y_source_contract_test.py
+COPY Dockerfile.m23y-synthetic-drain /opt/m23y/Dockerfile.m23y-synthetic-drain
 COPY M23Y_SYNTHETIC_PUBLISHER_DRAIN_DESIGN.md /opt/m23y/M23Y_SYNTHETIC_PUBLISHER_DRAIN_DESIGN.md
 
 # This build does not execute ROS; it only checks source identity and
