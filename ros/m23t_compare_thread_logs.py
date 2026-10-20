@@ -104,7 +104,7 @@ def classify(log, profile):
           and child_code == -11
           and t.get("m23s_runner_exit") == 2
           and r.get("verdict") == "BLOCKED_COMPONENT_LIFECYCLE"
-          and t.get("verdict") == "BLOCKED_M23T_COMPONENT_LIFECYCLE"):
+          and t.get("verdict") == "BLOCKED_M23T_INHERITED_GATES"):
         lifecycle = "SIGSEGV_CHILD_EXIT_MINUS11"
     else:
         raise ValueError("child exit not classifiable")
