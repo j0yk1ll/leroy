@@ -100,6 +100,25 @@ Require all tests PASS with
 `M23S_DEVICE_ACCESS=NONE`; retain the previous M23Q offline
 regression gates. Never advance on missing markers.
 
+## First operator Gate A result and false-positive source-test correction
+
+The first operator offline run completed **21/22** tests successfully.
+Only `test_no_new_ros_launch_or_custom_shutdown` failed because its
+literal `"ros2 launch"` substring check matched an explanatory comment
+inside `m23s_rectification_ab.py`. The actual runner contains no new
+process launch or shutdown action; it delegates to M23R/M23P.
+
+The M23S test now uses Python's `ast` to inspect imports, actual
+call expressions and string literals, ignoring comment text. It
+refuses direct `subprocess`, `rclpy`, `serial`, `os.killpg`
+or `os.system` invocations and embedded `ros2 launch` string
+literals, while still requiring `m23r.run()` and the original
+no-device preconditions. Neither ROS process creation nor the
+existing M23P/M23R lifecycle logic was modified.
+
+**Corrected test has NOT yet been rerun by the operator.**
+Repeat Gate A and require **22/22 PASS** before building.
+
 ## Gate B — disconnected image build, separately approved
 
 Confirm the already-validated local parent image:
