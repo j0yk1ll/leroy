@@ -531,6 +531,44 @@ duration and whether either observed call was unfinished.
 Print only elapsed time and sanitized library-category names.
 No ROS or container execution and no new preload/helper.
 
+## Operator strict close pairing — every observed close returned
+
+The operator completed **host-only**, zero-ROS close pairing from the
+original preserved M23S/M23T captured loader trace windows.
+`M23U_HOST_ONLY_CLOSE_PAIRING=PASS`,
+`M23U_CAUSATION_VERIFIED=NO`, and
+`M23U_PRODUCTION_ACCEPTANCE=BLOCKED` were explicitly reported.
+
+| Pairing metric | M23S nonzero-D child SIGSEGV | M23T nonzero-D clean |
+|---|---:|---:|
+| `DLCLOSE_BEGIN/RETURN` matched by traced **thread+handle** | **9** | **13** |
+| Unreturned close calls | **0** | **0** |
+| Failed close returns | **0** | **0** |
+| TBB allocator close duration | **6.859 ms** | **0.015 ms** |
+| Close calls on the other thread overlapping TBB close | **4** | **0** |
+| Longest such overlap | **6.621 ms** | **0.000 ms** |
+| M23R tracer destructor marker | Not observed | Observed; TBB close begins **0.441 ms later** |
+| Ratio using unrounded timestamps (operator computed) | **452.4×** longer than M23T | Reference |
+
+**Scope:** These are completed instrumented `dlclose` invocations;
+the four overlapping calls are **not** four independent threads.
+The valid begin/return pairs, durations and overlap intervals show
+a substantially different shutdown interleaving, not a fault inside
+one of the calls. Both runs successfully returned from all recorded
+`dlclose` calls. Neither trace proves the module actually unmapped
+at return, and a 452.4× single-pair duration ratio must not be
+interpreted as repeatable or causal. The missing M23R tracer
+destructor in M23S remains evidence of an incomplete observed
+teardown, not the location of the faulting instruction.
+
+**Next read-only refinement:** classify the *four T1 overlap calls*
+by sanitized ELF-name families and quantify their nesting/thread
+order around the T2 TBB allocator close, using only the two saved
+logs. If the unknown module names remain ambiguous, do not infer
+their ownership or propose a production loader change. No ROS,
+container invocation, camera or robot activity is justified by
+this check.
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
