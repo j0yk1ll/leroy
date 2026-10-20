@@ -289,6 +289,106 @@ production/source/launch/Dockerfile/test modifications.
 completeness** assertion; it cannot independently verify all
 upstream source claims or the operator private manifest.
 
+## Operator M23V Gate A report — PASS (2026-10-20)
+
+The operator supplied the following completed **host-only**
+source-document and change-scope gate markers:
+
+```text
+M23V_ONLY_DOC_CHANGE=PASS
+M23V_HOST_ONLY_SOURCE_DOCUMENT=PASS
+M23V_DEVICE_ACCESS=NONE
+M23V_PRODUCTION_ACCEPTANCE=BLOCKED
+```
+
+These are the operator's reported results. They establish that the
+M23V checkout passed the supplied *document-only* and expected
+commit/file-scope checks. They do **not** show that compiled runtime
+objects match each upstream git blob, or that any callback was
+executed after destruction. The PR remains draft/unmerged.
+
+## Gate B — host-only runner/configuration source discovery, NOT a ROS experiment
+
+**Goal:** inventory existing tracked `ros/` source or launch files
+that mention output-publisher `enable_pub_plugins`, `image_rect`,
+`image_transport`, `component_container` or related diagnostic
+runner names. This is preparatory source research, not a license
+to change configuration or run synthetic publishing.
+
+Operator command (only Git and Python; no network, ROS, Podman,
+devices, builds, instrumentation or filesystem writes):
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from collections import defaultdict
+from pathlib import Path
+import subprocess
+
+tracked = subprocess.check_output([
+    "git", "ls-files", "-z", "--", "ros/"
+]).decode("utf-8", "surrogateescape").split("\0")
+
+suffixes = {".py", ".sh", ".bash", ".yaml", ".yml",
+            ".xml", ".cpp", ".hpp", ".c", ".h"}
+needles = (
+    "enable_pub_plugins",
+    "image_rect",
+    "image_transport",
+    "component_container",
+    "m23s",
+    "m23t",
+)
+hits = defaultdict(list)
+count = 0
+for raw in tracked:
+    if not raw:
+        continue
+    path = Path(raw)
+    if path.suffix.lower() not in suffixes:
+        continue
+    if path.is_symlink() or not path.is_file():
+        continue
+    if path.stat().st_size > 2_000_000:
+        continue
+    content = path.read_text(encoding="utf-8", errors="replace")
+    for lineno, line in enumerate(content.splitlines(), 1):
+        lower = line.lower()
+        for needle in needles:
+            if needle in lower:
+                hits[needle].append((path.as_posix(), lineno))
+                count += 1
+
+print("M23V_SOURCE_DISCOVERY_BEGIN")
+for needle in needles:
+    records = hits[needle]
+    print(f"M23V_SOURCE_TOKEN={needle}|hits={len(records)}")
+    for path, lineno in records[:24]:
+        print(f"M23V_SOURCE_LOCATION={needle}|{path}|line={lineno}")
+    if len(records) > 24:
+        print(f"M23V_SOURCE_OMITTED={needle}|{len(records)-24}")
+print(f"M23V_SOURCE_MATCH_TOTAL={count}")
+print("M23V_DEVICE_ACCESS=NONE")
+print("M23V_SOURCE_DISCOVERY=PASS")
+print("M23V_PRODUCTION_ACCEPTANCE=BLOCKED")
+print("M23V_SOURCE_DISCOVERY_END")
+PY
+```
+
+**Required:** `M23V_SOURCE_DISCOVERY=PASS`,
+`M23V_DEVICE_ACCESS=NONE` and
+`M23V_PRODUCTION_ACCEPTANCE=BLOCKED`, plus the bounded
+token/location summary. A zero-match source token is **not**
+proof of a runtime default or loaded parameter value; it only
+means this limited tracked-file scan found none.
+
+**Stop condition:** No ROS/test/container invocation, package
+installation or parameter changes. A future `enable_pub_plugins`
+A/B must first have an independently verified crashing
+non-probe baseline, an explicitly defined sole variable, immutable
+image IDs, reserved private logs and separate operator authorization.
+M23T's clean default cannot substitute as the crashing baseline.
+
 ## Restrictions and next possible investigation
 
 This is a **source-only** finding; all root-cause claims are
