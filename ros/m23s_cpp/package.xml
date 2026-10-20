@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>leroy_m23s_rectification_ab</name>
+  <version>0.0.1</version>
+  <description>No-device M23S calibrated synthetic distortion A/B publisher</description>
+  <maintainer email="noreply@example.invalid">Leroy diagnostic source contracts</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
