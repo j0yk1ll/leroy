@@ -210,7 +210,11 @@ class M23SABContracts(unittest.TestCase):
             "[component_container-1]: process has died [exit code -11]\n"))
 
     def test_cpp_publisher_exact_payload_timers_and_intrinsics(self):
-        original = (ROOT / "m23p_cpp/src/m23p_calibrated_publisher.cpp").read_text()
+        original_path = (ROOT / "m23p_cpp/src/m23p_calibrated_publisher.cpp")
+        if not original_path.is_file():
+            original_path = Path(
+                "/opt/m23p/m23p_cpp/src/m23p_calibrated_publisher.cpp")
+        original = original_path.read_text()
         modified = (ROOT / "m23s_cpp/src/m23s_ab_publisher.cpp").read_text()
         self.assertEqual(
             original.split("    auto qos =", 1)[1].split("    info_.k =", 1)[0],
