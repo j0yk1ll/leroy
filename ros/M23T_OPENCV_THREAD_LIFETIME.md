@@ -1,8 +1,13 @@
 # M23T — narrow OpenCV thread-lifetime differential (no devices)
 
-**Draft PR stacked on M23S #113. NOT operator-tested, built or run.**
-This is a diagnostic experiment, **not** a fix for the image_proc
-shutdown SIGSEGV or authorization to change production.
+**Draft PR stacked on M23S #113.** Operator M23T source tests **20/20 PASS**,
+disconnected OpenCV probe image build **PASS**, parent image unchanged.
+The first separately authorized device-free **default** threading runtime
+completed with a clean component exit; the baseline SIGSEGV **did not
+reproduce**. The proposed `single` arm has **not been run and must not
+proceed under the current Gate C stop rule**. This is a diagnostic
+experiment, **not** a fix for image_proc shutdown or authorization to
+change production.
 
 ## Evidence and exact target
 
@@ -222,6 +227,56 @@ and output `M23T_SINGLE_EXIT_CODE`. Pin the same image ID
 prior to the second run. Both runs remain synthetic ROS only.
 `RC=2` on a confirmed child SIGSEGV is a **BLOCKED component
 lifecycle**, not a successful shutdown test.
+
+## Operator Gate C result — STOP after default profile (2026-10-20)
+
+Operator-reported M23T image ID:
+`b849d4336faf203d2c955197af6fa7d1e9b0d5764d9e1e1a3e9d22b6d25d9254`.
+An operator explicitly authorized and ran **only** the no-device
+`M23T_OPENCV_THREAD_PROFILE=default` arm; its nonzero-distortion
+`M23S_DISTORTION_PROFILE=rectify` was preserved.
+
+```text
+M23T_DEFAULT_EXIT_CODE=0
+M23P_LIFECYCLE_VERDICT=NO_DEVICE_SYNTHETIC_RECTIFIER_SHUTDOWN_ONLY
+M23R_LIFECYCLE_VERDICT=CLEAN_OBSERVED_UNDER_TRACE_ONLY
+M23S_AB_VERDICT=SYNTHETIC_PROFILE_CLEAN_UNDER_TRACE_ONLY
+M23T_THREADS_VERDICT=CLEAN_UNDER_THREAD_PROBE_ONLY
+M23T_DEVICE_ACCESS=NONE
+M23T_PRODUCTION_ACCEPTANCE=BLOCKED
+```
+
+The reported M23T JSON independently recorded
+`opencv_setup.profile=default`, `api_threads_before=16`,
+`api_threads_after=16`, `component_pid=32`, `faults=[]`,
+`m23s_runner_exit=0`, the unchanged nonzero-D vector
+`-0.08,0.01,0.001,-0.001,0`, and
+`actual_worker_threads_verified=false`,
+`threading_backend_verified=false`. Exact observer frame counts
+were not supplied in this excerpt, but the unchanged inherited M23P
+and M23S clean verdicts require validated synthetic delivery,
+QoS, matching header stamps and child exit.
+
+**Gate C STOP: default did not reproduce -11.** This is an expected
+fail-closed experimental outcome, **not** a successful root-cause
+isolation or production fix. Although the default arm does not call
+`cv::setNumThreads(1)`, its extra preloaded OpenCV helper and
+`cv::getNumThreads()` calls can alter initialization and scheduling;
+stochastic crash timing also remains possible. This single clean
+run cannot distinguish those hypotheses. Since the required default
+SIGSEGV baseline was absent, **do not run the `single` arm** under
+this experiment's authorization; no paired M23T inference is valid.
+Preserve `default-01.log` privately and keep any historical cores
+private. The earlier M23S same-image A/B association remains intact:
+zero D clean, nonzero D -11, with 900/900 images in both arms.
+
+**Next engineering work:** read-only source/ABI-level investigation
+of image-geometry/OpenCV rectification and component callback/worker
+teardown, then design a separate minimally perturbative no-device
+reproduction only if authorized. Avoid assuming that OpenCV threading
+limits, TBB, DDS or any particular `dlclose` caused the segfault.
+All physical camera, MCU/STM32, recorder, VIO, motion and production
+gates remain **BLOCKED**.
 
 ## Gate D — local read-only log comparison
 
