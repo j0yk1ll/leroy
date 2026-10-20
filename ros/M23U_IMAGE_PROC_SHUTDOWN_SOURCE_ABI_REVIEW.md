@@ -827,6 +827,49 @@ M23T adds one OpenCV helper, nested loader targets not attributable,
 actual crash caller unknown. No fix, build, runtime experiment,
 camera, robot or production change is implied.
 
+## Operator immutable private evidence-manifest closeout — PASS (2026-10-20)
+
+After completing the M23U loader-name attribution branch, the operator
+reported successful **host-only, no-ROS** creation of the privately
+retained evidence manifest from four existing logs:
+
+```text
+M23U_CLOSEOUT_LOG_COUNT=4
+M23U_CLOSEOUT_MANIFEST=PASS
+M23U_DEVICE_ACCESS=NONE
+M23U_ROOT_CAUSE=UNRESOLVED
+M23U_PRODUCTION_ACCEPTANCE=BLOCKED
+```
+
+The operator-generated protected JSON manifest is
+`~/.local/state/leroy-m23u/m23u-closeout-manifest-01.json`.
+It records SHA256 and byte size for each pre-existing private log:
+`m23s-abi-compare-02.log`, `m23t-abi-compare-01.log`,
+`rectify-01.log` and `default-01.log`, as well as a creation
+timestamp and explicit nonacceptance status. The report confirms
+**script success only**; the manifest's individual SHA256 values
+were not pasted or independently compared by this source review.
+Do not post the private manifest, raw logs or cores to GitHub.
+
+**M23U disposition:** the intended **source/installed ELF and
+existing-log diagnostic investigation is complete**. The operator
+reported **13/13** matching common ELFs, one added M23T helper,
+different observed loader interleavings, two image-transport plugin
+close targets, and two opaque same-handle nested closes whose
+original `dlopen` filename was null or empty. Stop repeated
+loader-handle/name attribution. The **SIGSEGV faulting module,
+caller and root cause remain unknown**; M23T's clean default profile
+is **not** a verified fix and did not justify running the single
+arm.
+
+**Permitted next direction:** a **separate source-only design
+review** of image_transport publisher plugin instance lifetime,
+camera subscription cancellation, raw-`this` callbacks, rectifier
+member destruction and component-manager executor/loader ordering.
+A future runtime experiment would need an independently approved
+no-device protocol. This manifest closeout grants **no** new
+physical-device, production or M23A acceptance authority.
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
