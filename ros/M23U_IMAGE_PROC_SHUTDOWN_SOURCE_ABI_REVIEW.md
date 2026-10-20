@@ -382,61 +382,25 @@ An identical set of inherited Build IDs would rule out a difference
 in the recorded binaries, **not** prove that loader initialization
 or a particular cache/callback/allocator caused or prevented SIGSEGV.
 
-## Operator M23S–M23T static comparison — PASS with limited ELF coverage
+## Initial M23S–M23T diff excerpt — corrected scope
 
-Operator completed the **static-only** M23T inspection with
-`M23U_m23t_EXIT_CODE=0`, `M23U_STATIC_COMPARE_INSPECTION=PASS`,
-`M23U_BOTH_IMAGES_INSPECTED=PASS` and
-`M23U_DEVICE_ACCESS=NONE`. M23T original clean-default image was
-pinned to `b849d4336faf203d2c955197af6fa7d1e9b0d5764d9e1e1a3e9d22b6d25d9254`
-by the operator's command.
+The operator's first static-comparison report showed a unified
+`diff -u` hunk `@@ -1,4 +1,5 @@`, indicating an added
+M23T helper alongside four unchanged **context lines**. That
+hunk was temporarily misread as a complete 4-versus-5 record
+inventory. **The later host-only audit below supersedes that
+interpretation:** there are 13 original M23S records and 14 M23T
+records, including all required library families, and every one
+of the **13 common ELF records** matches in Build ID and SHA256.
 
-**Critical scope limit:** The reported unified diff hunk header was
-`@@ -1,4 +1,5 @@`—there were **only four common
-`M23U_ELF_RECORD` lines**, and five lines in M23T. The only
-difference among those recorded lines was this **added** helper:
-
-```text
-/opt/m23t/libm23t_opencv_thread_probe.so
-Build ID: 7bcab42364099c13c1c5be0ce44f6914a54828db
-SHA256: 774b852fd9af03496a9c3e2e7a45fc9079a3b5e6b0ee5dcac44b31d6e4c0b89a
-DT_NEEDED: libopencv_core.so.406
-DT_NEEDED: libc.so.6
-```
-
-Unchanged records in the output were:
-- `/opt/m23r/libm23r_loader_trace.so`:
-  Build ID `1e6a49d2f5700b44feed8d7113e4a0cc0ec1f2db`;
-- `/opt/ros/jazzy/lib/libclass_loader.so`:
-  `638214e9de76742f4a5586533d54eb6373114e31`;
-- `/opt/ros/jazzy/lib/libcv_bridge.so`:
-  `8bd0a35752c5f8085aee5c570514c69469bc7a05`;
-- `/opt/ros/jazzy/lib/libimage_geometry.so`:
-  `937627421ba46ad2904b602b80d9dca3063f1234`.
-
-**Do not claim every inherited runtime library has been proven
-identical**: this specific comparison output did **not** include
-`librectify.so`, `component_container`, `librclcpp.so`,
-`libimage_transport.so`, OpenCV core/imgproc or TBB runtime/allocator,
-although the earlier independent M23S inventory discovered those
-paths and their Build IDs. The success marker proves **script
-completion**, not completeness of its enumerated ELF coverage.
-The operator did not supply a full per-image `M23U_ELF_RECORD` file
-listing or explain why the comparison only contained 4/5 objects.
-
-The additional M23T helper's **direct ELF dependency**
-`libopencv_core.so.406` is established. Whether it caused earlier
-OpenCV initialization, changed loader/destructor sequencing,
-or altered a timing-sensitive callback remains **unverified**.
-The clean M23T default result still is not a threading fix.
-
-**Next read-only action:** inspect the **already saved two
-comparison logs**, count and list recorded ELF paths, and check
-required coverage locally. Do not rerun containers until the
-coverage gap is understood. Separately compare existing M23S
-nonzero-D crash and M23T clean-default loader traces to assess
-load/close sequencing, without treating the last close as causality.
-Keep logs private; share only bounded and redacted results.
+The sole added helper is
+`/opt/m23t/libm23t_opencv_thread_probe.so`, ELF Build ID
+`7bcab42364099c13c1c5be0ce44f6914a54828db`, SHA256
+`774b852fd9af03496a9c3e2e7a45fc9079a3b5e6b0ee5dcac44b31d6e4c0b89a`,
+with direct `DT_NEEDED` entries for
+`libopencv_core.so.406` and `libc.so.6`.
+This additional dependency does **not** independently prove
+OpenCV initialization or loader ordering caused the clean exit.
 
 ## Operator complete host-only audit — 13/13 common ELF objects match
 
