@@ -188,6 +188,136 @@ No repetition count, executable ROS command or automatic
 test scheduling is specified: these would constitute an
 independently authorized experiment, not source-only review.
 
+## Decision following M23W Gate A — continue toward usable `/camera/image_rect`
+
+**Operator intent (2026-10-20):** Continue work to make
+`/camera/image_rect` reliable and lifecycle-safe for the future
+XRSLAM/VIO image input. This is approval to **continue planning
+and source-only analysis**, **not** permission to start another
+ROS, Podman, synthetic, camera, or production test.
+
+The camera-only history separates two distinct engineering
+conditions:
+
+1. **Delivery:** The M23N real-camera `raw_only_mjpeg`
+   `reliable_100` subscriber received **1414** raw Images at
+   ~29.821Hz, no header intervals >250ms and a clean
+   component-free shutdown. In M23O's full rectifier
+   `reliable_100` diagnostic, raw **1411** and rectified
+   **1410** samples (~29.8Hz) had zero >250ms header
+   intervals and **1410/1410** rect header stamps matched
+   raw — but the component-container shutdown SIGSEGV
+   still blocked acceptance. These are **receipts in those
+   runs**, not independently authenticated camera-publisher
+   counts or a general performance guarantee.
+2. **Lifecycle:** M23S tracer-only synthetic zero-D arm was
+   clean; the same-image nonzero-D arm delivered **900/900**
+   matching rectified headers and then SIGSEGV **-11** on
+   child SIGINT. Therefore, a `/camera/image_rect` topic
+   existing or delivering frames does **not** mean the
+   rectifier is safe to deploy.
+
+### Definition of success for a future synthetic no-device diagnostic
+
+The following is a **proposed acceptance specification**,
+not an authorized test or a claim that it has passed:
+
+- Exact stock `image_proc::RectifyNode` remains the
+  pixel rectifier, exercising the **nonzero-D**
+  `image_geometry`/OpenCV path, not substituting
+  `/camera/image_raw`, changing `D` to zero,
+  or redefining `/camera/image_rect`.
+- Same 900-frame 640x480 synthetic RGB8 source with
+  the original M23S fabricated nonzero-D CameraInfo,
+  same header stamps, subscriber QoS and observed graph
+  readiness. Retain M23P/P/S publisher-first synchronization
+  and **original fail-closed validation**.
+- Require complete publisher counts, correct synthetic
+  distortion markers and valid image/CameraInfo association.
+  Target **900/900 matched raw and rectified header
+  stamps**, no unmatched rectified stamps, no >250ms
+  rectified header-stamp interval, and complete graph/QoS
+  verification. If counts miss the target, preserve
+  the existing M23P minimum 810/900 as a **diagnostic
+  completeness threshold only**, not an
+  `image_rect` acceptance PASS.
+- Require explicit **clean `component_container` child
+  exit after SIGINT**, not just ROS launch parent exit 0.
+  A SIGSEGV, other child failure, missing completion
+  marker or timeout blocks the synthetic acceptance.
+- Passing any synthetic result would validate **only
+  that isolated tested condition**; it would not
+  validate camera calibration, true optical rectification
+  accuracy, physical image timing, camera/IMU phase,
+  M23A bag continuity, XRSLAM/VIO or production.
+
+### Proposed controlled two-arm decision tree — requires separate approval
+
+**Arm A — original-behavior tracer-only control:** Same
+M23S image/ELF identity, original M23R child-only loader
+tracer, nonzero-D frames, default output plugin allowlist,
+no M23T OpenCV helper. A new experimental harness
+must first prove the *unmodified* baseline can still
+reproduce the original SIGSEGV on SIGINT. **No skip
+ahead** to raw-only if this does not reproduce. Review
+must set a fixed, bounded repetition count **before**
+any runtime execution; one historic crash is not
+a repeatability estimate.
+
+**Arm B — output raw-publisher-only intervention:**
+Same controlled no-device image, source, publisher,
+graph, QoS, preload, exit classifier and teardown
+sequence; the **sole intended experimental variable**
+is the stock `RectifyNode` output publisher parameter
+`image_rect.enable_pub_plugins` as a string array
+`["image_transport/raw"]`. Do not modify
+`CameraInfo.D`, the upstream pixel processing,
+the subscriber transport hint, `cv::getNumThreads`,
+OpenCV threads or global `LD_PRELOAD`.
+
+An approved runner would need to establish **effective
+parameter parity** on both arms, not merely presence
+of `parameters=` in source, and record the exact
+loaded/declared publisher plugin set. Do not claim
+Theora/Zstd loaded or unloaded based solely on their
+close-target traces.
+
+**Stop and interpretation:**
+
+| Outcome | Bounded decision |
+|---|---|
+| Control does not reproduce fault | Stop; **no valid intervention comparison** |
+| Control faults and intervention faults | Raw-only is **not a demonstrated fix**; investigate component/rectifier/OpenCV teardown and exact fault mapping under a separate scope |
+| Control faults and intervention exits clean with complete rectified delivery | Output plugin fan-out/lifetime becomes a **candidate contributor**; repeatability and runtime plugin/parameter evidence still required; **no DSO attribution** |
+| Any incomplete stream, endpoint, scope, safety or child exit evidence | BLOCKED regardless of clean parent exit |
+
+A future source change should not be considered a
+production remedy unless its mechanism is explained,
+the original shutdown fault is shown absent under an
+approved repeatable comparison, and real optical,
+sensor/recording, safety and M23A gates are
+subsequently completed. This review does **not**
+authorize any of those subsequent steps.
+
+### Pre-execution safety gate — NOT SATISFIED
+
+A human operator must separately authorize a **written
+bounded synthetic/no-device protocol** before any run,
+including: approved exact image digest and source refs,
+rootless disposable per-arm container, `--network none`,
+private PID/IPC, `--cap-drop all`, no privilege elevation,
+read-only filesystem with bounded tmpfs, **no `--device`**
+mapping, no camera/serial/STM32/IMU/motor capabilities,
+isolated ROS domain, protected immutable per-run evidence,
+no global preload, explicit SIGINT/kill timeout policy,
+fail-closed exit classifier, bounded run count, and
+predefined stop rule. Host operator retains sole
+execution authority. No new executable launch, test
+script, container image, or experimental command
+is created by this M23W document.
+
+**Authorization: NO. Execution: NONE. Production: BLOCKED.**
+
 ## Gate A — host-only document and configuration-name inspection
 
 Only fetch/check Git source and parse Python syntax. This
