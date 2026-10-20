@@ -695,6 +695,71 @@ A new plugin-allowlist A/B could alter which transport DSOs
 are loaded and would require its own controlled, operator-run
 protocol, reproducing original crash baseline and approval.
 
+## Operator M23V Gate D — host-only preload and dispatch audit PASS
+
+The operator completed the source-only AST check and returned all
+expected markers:
+
+```text
+M23V_LAUNCH_PRELOAD=m23p_rectifier_only.launch.py|NONE|PASS
+M23V_LAUNCH_PRELOAD=m23r_rectifier_trace.launch.py|TRACE_ONLY|PASS
+M23V_LAUNCH_PRELOAD=m23t_rectifier_thread_trace.launch.py|TRACE_PLUS_OPENCV|PASS
+M23V_RUNNER_DISPATCH=PASS
+M23V_CHILD_PRELOAD_PARITY=M23R_AND_M23T_DIFFER
+M23V_PRELOAD_DISPATCH_AUDIT=PASS
+M23V_DEVICE_ACCESS=NONE
+M23V_PRODUCTION_ACCEPTANCE=BLOCKED
+```
+
+**Source-only interpretation:** M23P launch does not explicitly
+assign a diagnostic `SetEnvironmentVariable`; M23R launch
+sets `LD_PRELOAD` to the M23R loader tracer; M23T launch sets
+it to the M23R tracer **plus** the M23T OpenCV thread helper.
+M23R dispatches through M23P, M23S through M23R, and M23T
+through M23S, with the documented scoped launch substitutions.
+The check uses Python AST parsing **without importing or executing**
+the scripts. It does not observe any child's *effective* environment,
+OpenCV worker threads, actual loader/allocator state or source
+execution at failure time.
+
+In the existing recorded observations, M23S's no-helper,
+nonzero-distortion traced child **SIGSEGV -11** on SIGINT, whereas
+M23T's helper-preloaded `default` child exited cleanly. The
+OpenCV API's `16 → 16` observation does not establish identical
+runtime initialization, worker state, or a fix. In particular,
+M23T's `default` observation must **not** be treated as a
+reproducing, unchanged crash baseline.
+
+### Final M23V source-only disposition
+
+**Gates A, B, C and D: operator-reported PASS.** Their results
+support a bounded, mutually consistent source-level review:
+stock rectifier in all three launch definitions, identical
+remappings, no explicit component parameters, shared plugin
+publisher defaults in reviewed Jazzy source, raw-`this`/timer
+callback ownership boundaries, distinct source-level member
+destruction orders, conditional loader unloading, and intentionally
+different M23R/M23T preload initialization. They do **not**
+prove late callback execution, a UAF, unsafe unmapping, OpenCV
+backend/thread lifetime, an exact installed-source version, or
+the SIGSEGV faulting module/caller.
+
+**Stop point:** source-only review **COMPLETE**; causal diagnosis
+**UNRESOLVED**. Retain M23U host-only hashes, private logs and
+cores in operator storage. Do not edit stock image_proc,
+publisher allowlists, launch/runner code, preloads or runtime
+images based on these findings. A controlled
+`image_rect.enable_pub_plugins` comparison is a **possible
+future hypothesis test**, not part of M23V; it would require
+a separately authorized, device-free and unchanged-preload
+crashing baseline, isolated per-run log/artifact handling and
+explicit operator safeguards before any execution.
+
+**Authorization unchanged:** no ROS, Podman, new build, physical
+camera, STM32/IMU, VIO, Nav2, recorder, robot motion or production
+testing; M23A original >250ms physical camera acceptance
+remains BLOCKED. All PRs stay **draft and unmerged**.
+
 ## Restrictions and next possible investigation
 
 This is a **source-only** finding; all root-cause claims are
