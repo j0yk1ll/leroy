@@ -260,7 +260,7 @@ podman run --rm --pull=never \
   "$ID" -lc '
     set -euo pipefail
     echo M23U_DEVICE_ACCESS=NONE
-    dpkg-query -W -f="${Package}=${Version}\n"       "ros-jazzy-image-proc" "ros-jazzy-image-geometry"       "ros-jazzy-cv-bridge" "ros-jazzy-rclcpp-components"       "libopencv-core*" "libopencv-imgproc*" "libtbb*" || true
+    dpkg-query -W -f="\${Package}=\${Version}\n"       "ros-jazzy-image-proc" "ros-jazzy-image-geometry"       "ros-jazzy-cv-bridge" "ros-jazzy-rclcpp-components"       "libopencv-core*" "libopencv-imgproc*" "libtbb*" || true
     for dir in /opt/ros/jazzy/lib /usr/lib/x86_64-linux-gnu; do
       test -d "$dir" || continue
       find "$dir" -maxdepth 3 \( -type f -o -type l \) \
