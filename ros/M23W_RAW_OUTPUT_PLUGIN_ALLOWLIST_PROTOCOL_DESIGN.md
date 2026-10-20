@@ -318,6 +318,228 @@ is created by this M23W document.
 
 **Authorization: NO. Execution: NONE. Production: BLOCKED.**
 
+## M23W Gate B — finite no-device protocol and explicit runtime approval (PENDING)
+
+**Operator objective:** retain the real nonzero-D rectification
+path and get `/camera/image_rect` to deliver correctly *and*
+shut down cleanly. This specification is a **draft safety
+decision**, not instructions to execute. **NO ROS, Podman,
+image build, replay, physical sensor, or motor access is
+authorized by this document or by "continue."**
+
+### Already-existing guardrail sources, pinned locally
+
+- `ros/m23p_no_device_rectifier_shutdown.py`,
+  blob `0bda340b9d751eebf0c5464fb1bf4c608cff5616`:
+  `M23P_SYNTHETIC_ONLY=1`, domain 170, localhost ROS
+  discovery, checks no visible video/serial devices; verifies
+  publisher graph-ready before attaching observer, then
+  graph QoS before frame start, 900 frames, a two-second
+  subscriber drain, independent component-child exit and
+  `M23P` diagnostic verdict.
+- `ros/m23p_qos_graph.py`,
+  blob `907f663a50f12c801e2623ef1cfb3991d03b4c50`:
+  checks exact `/camera/image_raw`, `/camera/camera_info`
+  and `/camera/image_rect` publisher/subscriber identities,
+  with `RELIABLE/VOLATILE` endpoints. **Does not capture
+  `image_rect.enable_pub_plugins` effective value.**
+- `ros/m23r_shutdown_trace_runner.py`,
+  blob `c8388fec5091b3c85977228f739c9816cdebcf5b`:
+  child-only tracer, refuses global `LD_PRELOAD`; requires
+  a tracer constructor and coherent event parsing.
+- `ros/m23s_rectification_ab.py`,
+  blob `913e6abffff2bde21adb908a6a802070361cb4e1`:
+  verifies exact fabricated D-vector/profile, delegates
+  to unchanged M23R/M23P checks, records child `-11`
+  separately if logged. A crash ordinarily makes its
+  wrapper return nonzero; that is valid **fault evidence**
+  when independently authenticated, **not a PASS**.
+
+### Finite proposed pilot — maximum 2+2, zero authorized runs now
+
+One *future* separately approved disposable image may
+contain both launch variants, but they must run in separate,
+fresh isolated containers with exactly the **same pinned
+image digest** and installed ELF/library set. Since the new
+image would differ from historical M23S, compare its
+common installed ELF hashes with the historical record
+and re-establish fault behavior in that new image. Record
+the image ID without embedding it in GitHub. No dynamic
+install, network pull, or runtime configuration mutation.
+
+| Order | Trial | Rectifier output allowlist | Gate |
+|---|---|---|---|
+| 1 | `A1` | Original default (no override) | Nonzero D, unchanged M23R tracer-only child, verified 900 frames, expected child SIGSEGV -11 |
+| 2 | `A2` | Original default (no override) | Same invariants, second independently verified SIGSEGV -11 |
+| 3 | `B1` | `["image_transport/raw"]` | Only if A1/A2 both meet gates; require complete rectified delivery + explicit child exit |
+| 4 | `B2` | `["image_transport/raw"]` | Only if B1's complete evidence has been separately inspected and no safety/quality blocker; maximum two interventions |
+
+**Global cap: four trials, two baseline and two
+intervention.** This is a bounded exploratory pilot only;
+it is **not** a statistically powered study. Before execution,
+the operator must approve actual image digests, protected
+unique local evidence destinations, immutable artifact
+retention, and the literal runtime invocation after a
+separate review of the as-built launch/runner diff.
+
+**Immediate STOP** if either baseline does not reproduce
+child SIGSEGV `-11` with otherwise valid complete input,
+if any input/graph/readiness/transport parameter attestation
+is missing, if any hardware is visible, if any unplanned
+process/network access appears, if resource caps are
+exceeded, or if a trial exits ambiguously. On an
+intervention `-11` crash, stop remaining intervention
+runs; the raw-only intervention has not demonstrated a
+solution. Never execute `B1` or `B2` by automatic
+continuation from an earlier command: each new trial
+requires the operator to inspect the previous summary.
+
+### Single intended variable and necessary instrumentation
+
+- Both arms: stock `image_proc::RectifyNode`, original
+  M23S nonzero `D=[-0.08,0.01,0.001,-0.001,0]`,
+  900 fabricated RGB8 640x480 frames and CameraInfo,
+  unchanged publisher, graph QoS, subscriber,
+  frame timestamps, child-only M23R tracer,
+  output topic `/camera/image_rect`, two-second drain,
+  SIGINT and fail-closed exit classification.
+- **No M23T OpenCV `LD_PRELOAD` helper** on either arm.
+  No new `cv::setNumThreads`, allocator flags, transport
+  hint changes or zero-distortion substitution.
+- **A arm:** no explicit output-publisher plugin
+  allowlist parameter; the actual parameter value
+  must be captured, including its string-array type.
+- **B arm:** the sole intended override is the
+  node-relative string-array parameter
+  `image_rect.enable_pub_plugins =
+  ["image_transport/raw"]`. Source review indicates
+  this is the prefix of `image_transport/raw_pub`.
+  The override must be set **before publisher creation**,
+  not after the rectifier is loaded.
+- Existing M23P graph inspector is **insufficient** for
+  the parameter check. Any future diagnostic observer
+  must capture the effective ROS parameter type
+  and values from the **same `/camera/rectify_node`**
+  before frames begin, with matching identical
+  observation machinery in A and B. An unverified
+  `ros2 param get` string, duplicate node names,
+  or unchecked global override does not pass.
+  Verify the output raw publisher remains available
+  and the expected endpoints/QoS still match.
+- The design must compare baseline/override launch
+  source *structurally*: same `ComposableNode`
+  plugin/name/namespace/remaps and instrumentation;
+  only explicit publisher plugin allowlist differs.
+  New instrumentation may perturb timing, so require
+  a fresh baseline crash in the **final as-built**
+  image and harness, not just in historical M23S.
+- For each run capture local immutable summary and raw
+  evidence *separately* under owner-only permissions;
+  per-run log files must be new/not overwritten.
+  Never post private log text, PIDs/TIDs, loader
+  handles, core, host device enumeration or
+  private paths to GitHub. Share only PASS/BLOCKED
+  result markers, counts and nonidentifying verdicts.
+
+### Interpretation and quality thresholds
+
+- Source publisher must truthfully report **900 Image
+  and 900 CameraInfo** messages, correct nonzero D
+  and exact synthetic payload.
+- Require graph snapshot before publishing, all
+  expected `RELIABLE/VOLATILE` endpoints and
+  consistent original ROS RMW in both arms.
+- Existing harness accepts at least `810/900`
+  raw and rect observations, `>=90%` rect header
+  matching, zero unmatched rect stamps and
+  no rect header intervals **>250 ms**. This
+  threshold is an evidence-validity floor, **not**
+  a final `/camera/image_rect` quality PASS.
+- Target the historical full synthetic
+  `900/900` matched delivery and explicitly
+  **clean `component_container` child exit**
+  on SIGINT for any provisional B-arm success.
+  Never equate parent `ros2 launch` status
+  with component-child status.
+- A provisional clean result is **not** a verified
+  root cause, production fix, or proof of camera
+  calibration/optical accuracy. Output plugin fan-out,
+  RMW endpoint count, memory mapping and callback
+  lifetimes can change together. Do **not** blame
+  Theora/Zstd/TBB from `dlclose` *target* names.
+
+### Isolation and resource budget to approve separately
+
+Require operator-reviewed exact `podman run` arguments
+to establish **rootless**, `--network none`,
+private IPC/PID, `--cap-drop all`,
+`--security-opt no-new-privileges`,
+`--read-only`, bounded `/tmp` tmpfs,
+`--pull=never`, **no `--device`**, host
+device mounts, privileged flags, host-network/PID,
+serial, camera, IMU or motor access. Maintain
+`ROS_DOMAIN_ID=170`, discovery `LOCALHOST`,
+`LEROY_NAV2_DRY_RUN=1` and all historical
+M23S isolation settings; separately attest the
+production container remains untouched and
+any production or motor-capable process remains
+excluded. Operator approves per-trial timeout
+bounds and max resource/log bytes before execution;
+preexisting M23P waits are bounded but do not
+replace a host-side total-run timeout or log cap.
+
+**EXPLICIT APPROVAL REQUIRED FOR A FUTURE STEP:**
+authorize *preparing executable no-device diagnostic
+code* separately from authorizing *building or running*
+it. Passing documentation-only Git/AST checks,
+or a message such as "continue", permits **neither
+build nor run**. Absent each scoped authorization:
+`M23W_RUNTIME_AUTHORIZED=NO`,
+`M23W_DEVICE_ACCESS=NONE`,
+`M23W_PRODUCTION_ACCEPTANCE=BLOCKED`.
+
+### Gate B offline read-only source-review check
+
+Use **only host Git/Python**; no ROS or Podman:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+git fetch --no-tags origin
+
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import subprocess
+
+def git(*parts):
+    return subprocess.check_output(["git", *parts], text=True).strip()
+
+head = "origin/feature/m23w-raw-publisher-allowlist-design"
+base = "origin/feature/m23v-transport-teardown-source-review"
+path = "ros/M23W_RAW_OUTPUT_PLUGIN_ALLOWLIST_PROTOCOL_DESIGN.md"
+expected_file_change = "A\t" + path
+if git("diff", "--name-status", base + "..." + head) != expected_file_change:
+    raise SystemExit("M23W_GATE_B_BLOCKED=NON_DOC_CHANGE")
+
+doc = git("show", head + ":" + path)
+for required in (
+    "## M23W Gate B",
+    "A1", "A2", "B1", "B2",
+    '["image_transport/raw"]',
+    "before frames begin",
+    "component_container",
+    "STOP",
+    "M23W_RUNTIME_AUTHORIZED=NO",
+    "M23W_PRODUCTION_ACCEPTANCE=BLOCKED",
+):
+    if required not in doc:
+        raise SystemExit("M23W_GATE_B_BLOCKED=MISSING_PROTOCOL_FIELD")
+print("M23W_GATE_B_DOC_ONLY=PASS")
+print("M23W_GATE_B_PREEXECUTION_PROTOCOL=REVIEWED")
+print("M23W_RUNTIME_AUTHORIZED=NO")
+print("M23W_DEVICE_ACCESS=NONE")
+print("M23W_PRODUCTION_ACCEPTANCE=BLOCKED")
+PY
+```
+
 ## Gate A — host-only document and configuration-name inspection
 
 Only fetch/check Git source and parse Python syntax. This
