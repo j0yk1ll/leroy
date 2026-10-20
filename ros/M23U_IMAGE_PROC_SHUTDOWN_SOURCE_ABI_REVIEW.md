@@ -438,19 +438,94 @@ nonzero-D crash and M23T clean-default loader traces to assess
 load/close sequencing, without treating the last close as causality.
 Keep logs private; share only bounded and redacted results.
 
+## Operator complete host-only audit — 13/13 common ELF objects match
+
+The operator subsequently ran a **host-only** inventory and captured
+loader-trace comparison from four pre-existing protected logs. The
+final summary printed `M23U_HOST_ONLY_AUDIT=PASS` and
+`M23U_ELF_COVERAGE_BEGIN/END`, demonstrating why the prior
+`@@ -1,4 +1,5 @@` diff had been misleading: that diff hunk
+displayed only the **four context records immediately around a
+single added file**, not the entire 13/14-line files. Do **not**
+infer total record counts from unified diff hunk context.
+
+The actual counts reported by the host-only parser were:
+- `M23S_ELF_COUNT=13`, `M23S_MISSING=NONE`;
+- `M23T_ELF_COUNT=14`, `M23T_MISSING=NONE`;
+- `M23U_COMMON_ELF_COUNT=13`;
+- `M23U_COMMON_HASH_MISMATCHES=NONE`.
+
+**Corrected conclusion:** all **13 common resolved ELF paths**
+in the two saved comparison inventories have matching **Build IDs
+and SHA256s**, including `component_container`,
+`librectify.so`, `librclcpp.so`, `libimage_transport.so`,
+`libimage_geometry.so`, `libcv_bridge.so`,
+`libopencv_core.so.4.6.0`, `libopencv_imgproc.so.4.6.0`,
+`libtbb.so.12.11`, `libtbbmalloc.so.2.11`,
+`libclass_loader.so`, the existing M23R loader tracer and
+a second resolved `libimage_transport.so` location.
+All required path families were present. The **single recorded
+additional ELF** is the M23T OpenCV helper with direct
+`DT_NEEDED libopencv_core.so.406` and `libc.so.6`.
+
+This establishes byte-identity of the **recorded** objects across
+M23S/M23T, not runtime equivalence of load order, constructor state,
+thread scheduling, callbacks, untracked DSOs or an absence of races.
+
+### Existing ROS child loader traces — no new runtime activity
+
+| Event | M23S nonzero-D SIGSEGV | M23T nonzero-D clean |
+|---|---:|---:|
+| `CONSTRUCTOR` | 1 | 1 |
+| `DESTRUCTOR` | **0** | **1** |
+| `DLOPEN_RETURN` | 41 | 36 |
+| `DLCLOSE_BEGIN` | 9 | 13 |
+| `DLCLOSE_RETURN` | 9 | 13 |
+| Unreturned observed close calls | 0 | 0 |
+| Last traced stage | `DLCLOSE_RETURN` | `DLCLOSE_RETURN` |
+| Last traced module | `libtbbmalloc.so.2` | `OTHER` |
+| Captured trace lines | 60 | 64 |
+
+The operator's last twelve captured events from both traces include
+a `libtbbmalloc.so.2` close. In M23S it was the last **recorded**
+loader event; in M23T it preceded additional traced close returns.
+M23S exited with component `SIGSEGV -11` and did **not** emit
+the tracer `DESTRUCTOR` marker, whereas M23T exited cleanly and
+emitted the marker. These are **temporal correlations only**.
+Even a `DLCLOSE_RETURN` does **not** establish that the named
+library was fully unloaded or was responsible for the invalid RIP.
+Likewise a missing tracer destructor simply establishes that the
+tracer never reached/logged that phase, not the exact faulting caller.
+
+**Remaining uncertainties:** whether a late matched callback,
+`PinholeCameraModel` map-cache destructor, allocator/worker,
+other library finalizer or race caused an invalid control transfer;
+the historical M23Q core's unmapped target remains unsymbolized.
+The M23T helper itself can change OpenCV dependency loading,
+initialization and scheduling despite not calling
+`cv::setNumThreads(1)` in the default arm.
+
+**Next safe investigation:** compare individual *existing* close
+events and thread ordering from the two private M23R captured
+windows, with sanitized module names/TID labels and relative
+timestamps; do **not** run new ROS profiles or containers. The
+tracer's last 80 events may not contain every earlier `dlopen`:
+only the captured windows can be compared directly. No fix or
+production acceptance is established.
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
 source references and explicit ABI evidence requirements.
 
-**Still UNKNOWN:** Full M23T vs M23S installed-ELF equivalence outside
-the four compared shared objects, why this comparison enumerated only
-four/five files, any actual ABI divergence, module responsible for
-unmapped crash PC, specific invalid caller, active OpenCV worker/backend,
-image_transport callback drain, component unload timing, and
-reproducibility across multiple no-device pairs. Original M23S image
-ELF Build IDs were separately recorded above. Do not label any library
-a root cause.
+**Still UNKNOWN:** Runtime loader ordering and initialization,
+untracked runtime modules or independent ABI effects, the module at
+the unmapped crash PC, specific invalid caller, actual OpenCV worker/
+backend lifetime, image_transport callback drain, component teardown
+timing, and reproducibility across multiple no-device pairs. The 13
+common inspected ELF files now match in SHA256 and Build ID; this
+does not prove they all executed identical paths. Do not label any
+library a root cause.
 
 **Remains BLOCKED:** nonzero-D component lifecycle, M23A original
 strict >250ms real-camera gap gate, physical camera, STM32/IMU,
