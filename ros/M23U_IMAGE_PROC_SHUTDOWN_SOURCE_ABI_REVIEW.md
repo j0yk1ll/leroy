@@ -691,6 +691,47 @@ This still would not reconstruct the original `dlclose` caller,
 faulting RIP or the complete loader state. **No new ROS/container
 run or hardware access.**
 
+## Operator historical handle-match audit — two nested targets still unresolved
+
+The operator's **host-only, no-ROS** nested-handle check reported
+`M23U_HOST_ONLY_NESTED_HANDLE_AUDIT=PASS`,
+`M23U_M23S_SIGSEGV_VERIFIED=PASS`,
+`M23U_CAUSATION_VERIFIED=NO`,
+`M23U_PRODUCTION_ACCEPTANCE=BLOCKED`.
+The four T1 overlapping close intervals retained nesting pattern
+`1,2,2,1`; the two nested calls are identified here by overlap
+position **2** and **3**, not by library ownership.
+
+| Nested overlap | Earlier successful `DLOPEN_RETURN` events with same raw handle | Earlier paired close returns for same handle | Historical open module labels | Same handle as outer Theora close? | Same handle as TBB allocator close? |
+|---|---:|---:|---|---|---|
+| 2 (depth 2) | **2** | **0** | `UNRESOLVED` after sanitizer | No | No |
+| 3 (depth 2) | **2** | **1** | `UNRESOLVED` after sanitizer | No | No |
+
+Both nested close calls returned with zero status. Historical
+`dlopen` handle equality does **not** uniquely identify a DSO,
+prove which reference was released, establish the original caller,
+imply a double-close/use-after-free, or prove unmapping. Multiple
+opens may share a loader handle; the tracer captures only interposed
+events. A particular observed `DLOPEN_RETURN` may return a
+non-absolute name (e.g., an ELF SONAME) or the tracer's literal
+`<unnamed>` placeholder; the previous conservative sanitizer
+classified **both** as `UNRESOLVED`, so that category alone
+cannot distinguish them.
+
+**Next zero-execution step:** classify historical `DLOPEN_RETURN`
+module tokens for these two matched handles as
+`ABSOLUTE_ROS_JAZZY`, `ABSOLUTE_SYSTEM`,
+`UNQUALIFIED_SONAME`, `LOADER_PLACEHOLDER` or
+`OPAQUE_REDACTED`. Print only allowlisted filenames / categories,
+relative event offsets and whether the two nested close calls
+share one raw handle. Do not print handle values, addresses, PIDs,
+private paths, raw trace lines or core data. Such an audit may
+recover a *name supplied to dlopen*, but still cannot establish
+the loaded mapping or faulting caller. If uninformative, stop
+loader-name-only iteration and preserve the unknowns rather than
+claim a root cause. M23A/production and physical gates remain
+blocked.
+
 ## Final disposition and exclusions
 
 **Completed:** Source ownership and teardown-order review, pinned
