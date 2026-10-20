@@ -389,6 +389,145 @@ non-probe baseline, an explicitly defined sole variable, immutable
 image IDs, reserved private logs and separate operator authorization.
 M23T's clean default cannot substitute as the crashing baseline.
 
+## Operator M23V Gate B — tracked source discovery PASS
+
+The operator's read-only tracked-`ros/` source scan reported:
+
+```text
+M23V_SOURCE_TOKEN=enable_pub_plugins|hits=0
+M23V_SOURCE_TOKEN=image_rect|hits=54
+M23V_SOURCE_TOKEN=image_transport|hits=3
+M23V_SOURCE_TOKEN=component_container|hits=46
+M23V_SOURCE_TOKEN=m23s|hits=111
+M23V_SOURCE_TOKEN=m23t|hits=81
+M23V_DEVICE_ACCESS=NONE
+M23V_SOURCE_DISCOVERY=PASS
+M23V_PRODUCTION_ACCEPTANCE=BLOCKED
+```
+
+The scan examined tracked files ending in
+`.py`, `.sh`, `.bash`, `.yaml`, `.yml`, `.xml`,
+`.cpp`, `.hpp`, `.c`, or `.h`; ignored missing, symlink
+and >2MiB files. The `enable_pub_plugins` count **0** is a
+bounded repository scan, not a claim that the stock upstream
+library lacks this parameter or that its effective runtime value
+was read. It did not inspect untracked/generated scripts,
+container overlays, CLI/global ROS arguments or installed
+parameter overrides. Notably, the single M23S synthetic
+publisher uses ordinary `rclcpp::create_publisher` rather than
+image_transport to emit `/camera/image_raw` and
+`/camera/camera_info`.
+
+### Exact local launch and runner path — static review
+
+Additional committed local sources were read from this M23V
+branch without execution:
+
+| Repository source | Git blob | Configuration or harness fact |
+|---|---|---|
+| `ros/m23p_rectifier_only.launch.py` | `b49793f7c59ed471b6d0ba24020afc17c0b2d14b` | One `image_proc::RectifyNode` ComposableNode under `/camera`, `image→image_raw`, `camera_info→camera_info`, **no `parameters=` keyword** |
+| `ros/m23r_rectifier_trace.launch.py` | `cf94a395c608f1aca2411be9a5c674ce7f3875c2` | Same component, namespace and remaps, no `parameters=`; child launch adds `/opt/m23r/libm23r_loader_trace.so` preload |
+| `ros/m23t_rectifier_thread_trace.launch.py` | `d035f5ec58622c8b1eb04335030d0ec09fa94f68` | Same rectifier options, no `parameters=`; child preload is M23R tracer **plus** `/opt/m23t/libm23t_opencv_thread_probe.so` |
+| `ros/m23p_no_device_rectifier_shutdown.py` | `0bda340b9d751eebf0c5464fb1bf4c608cff5616` | `LAUNCH` points to M23P launch; starts synthetic publisher before rectified observer, verifies graph/QoS, later signals shutdown and checks component-child result |
+| `ros/m23r_shutdown_trace_runner.py` | `c8388fec5091b3c85977228f739c9816cdebcf5b` | Replaces M23P `LAUNCH` with traced M23R launch; parses component loader events |
+| `ros/m23s_rectification_ab.py` | `913e6abffff2bde21adb908a6a802070361cb4e1` | Reuses M23R/M23P harness and swaps to M23S fixture; changes fabricated CameraInfo distortion profile |
+| `ros/m23s_cpp/src/m23s_ab_publisher.cpp` | `bab0ee8adfa046614c43c7ad4b019df968f7958e` | Synthetic Image/CameraInfo emitted with ROS `create_publisher`; distortion profile controlled by `M23S_DISTORTION_PROFILE` |
+| `ros/m23t_thread_probe_runner.py` | `0fb1ffca165d6f262f1b97b5f8193eaf411cc64e` | Runs M23S with alternate M23T traced launch; validates OpenCV constructor setup marker |
+
+**Deduction, conditional on the installed Jazzy implementation
+matching reviewed publisher source:** absent an explicitly
+supplied `image_rect.enable_pub_plugins` override, the
+`RectifyNode` output publisher defaults to its set of declared
+image_transport publisher plugins. The source can therefore
+account for Theora and Zstd being instantiated in both D=0
+and nonzero-D configurations even though the synthetic publisher
+only emits uncompressed Image and CameraInfo. This **does not
+show** that a codec actually transmitted frames, that the
+effective runtime default was recorded, or that a plugin
+caused shutdown SIGSEGV.
+
+**Baseline warning:** M23S produced a nonzero-D SIGSEGV in the
+original traced pair, but M23T's `default` preload helper
+perturbed the child and exited cleanly. A new `raw` allowlist
+A/B cannot claim a controlled comparison unless its
+**unmodified, identical-preload baseline reproduces** the crash
+again in a separately authorized synthetic no-device protocol.
+No such experimental authorization is part of this review.
+
+## Gate C — offline AST invariants for all three launch files
+
+This **host-only, source-text-only** command parses source ASTs
+without importing `launch`, ROS or the underlying Python modules.
+It is a *configuration review* gate only:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+test "$(git branch --show-current)" = \
+  "feature/m23v-transport-teardown-source-review" || {
+  echo "M23V_BLOCKED=WRONG_BRANCH"
+  exit 2
+}
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import ast
+from pathlib import Path
+
+names = [
+    "m23p_rectifier_only.launch.py",
+    "m23r_rectifier_trace.launch.py",
+    "m23t_rectifier_thread_trace.launch.py",
+]
+expected = {
+    "plugin": "image_proc::RectifyNode",
+    "namespace": "/camera",
+}
+print("M23V_LAUNCH_AST_AUDIT_BEGIN")
+for name in names:
+    path = Path("ros") / name
+    if path.is_symlink() or not path.is_file():
+        raise SystemExit("M23V_BLOCKED=SOURCE_MISSING:" + name)
+    source = path.read_text(encoding="utf-8")
+    if len(source) > 250_000:
+        raise SystemExit("M23V_BLOCKED=SOURCE_OVERSIZE:" + name)
+    tree = ast.parse(source, filename=name)
+    nodes = [
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Name)
+        and n.func.id == "ComposableNode"
+    ]
+    if len(nodes) != 1:
+        raise SystemExit("M23V_BLOCKED=NODE_COUNT:" + name)
+    node = nodes[0]
+    keys = {k.arg: k.value for k in node.keywords}
+    if any(key not in keys or
+           not isinstance(keys[key], ast.Constant) or
+           keys[key].value != value
+           for key, value in expected.items()):
+        raise SystemExit("M23V_BLOCKED=NODE_IDENTITY:" + name)
+    if "parameters" in keys:
+        raise SystemExit("M23V_BLOCKED=EXPLICIT_PARAMS:" + name)
+    if "remappings" not in keys or not isinstance(keys["remappings"], ast.List):
+        raise SystemExit("M23V_BLOCKED=REMAPPINGS:" + name)
+    remaps = ast.literal_eval(keys["remappings"])
+    if remaps != [("image", "image_raw"),
+                  ("camera_info", "camera_info")]:
+        raise SystemExit("M23V_BLOCKED=REMAP_VALUES:" + name)
+    print(f"M23V_LAUNCH={name}|NODE=RectifyNode|EXPLICIT_PARAMS=NONE|REMAPS=PASS")
+
+if not all((Path("ros") / n).is_file() for n in names):
+    raise SystemExit("M23V_BLOCKED=SOURCE_DISAPPEARED")
+print("M23V_LAUNCH_AST_AUDIT=PASS")
+print("M23V_DEVICE_ACCESS=NONE")
+print("M23V_PRODUCTION_ACCEPTANCE=BLOCKED")
+print("M23V_LAUNCH_AST_AUDIT_END")
+PY
+```
+
+On failure, **stop**. Do not edit the stock component,
+change plugin parameters or initiate a ROS/Podman/container
+process. PASS confirms only those literal launch-source AST
+invariants in the checked-out repo, not runtime or ABI state.
+
 ## Restrictions and next possible investigation
 
 This is a **source-only** finding; all root-cause claims are
