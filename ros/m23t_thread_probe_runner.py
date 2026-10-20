@@ -116,7 +116,7 @@ def run():
         faults.append("M23T_OPENCV_SETUP_UNVERIFIED:" + str(exc)[:140])
 
     verdict = ("BLOCKED_M23T_THREAD_SETUP" if faults else
-               "BLOCKED_M23T_COMPONENT_LIFECYCLE" if status != 0 else
+               "BLOCKED_M23T_INHERITED_GATES" if status != 0 else
                "CLEAN_UNDER_THREAD_PROBE_ONLY")
     result = {
         "milestone": "M23T",
