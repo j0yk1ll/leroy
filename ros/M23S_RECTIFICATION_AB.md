@@ -241,6 +241,65 @@ confounding before claiming root cause. M23R's LD_PRELOAD tracer
 can perturb scheduling in both arms. A clean zero-D result is not
 proof that TBB or OpenCV alone caused the nonzero-D crash.
 
+## Operator M23S A/B results — one paired experiment completed
+
+**Source/build gates:** the operator reported the corrected M23S source
+suite **22/22 PASS**, `M23S_NO_DEVICE_AB_SOURCE_CONTRACT=PASS`,
+`M23S_DEVICE_ACCESS=NONE`; the disconnected image build
+`M23S_BUILD_EXIT_CODE=0` and
+`M23S_NO_DEVICE_AB_IMAGE_CONTRACT=PASS`.
+Previously reported `M23R_NO_DEVICE_TRACE_SOURCE_CONTRACT=PASS`;
+the M23S parent image unchanged marker was also confirmed.
+The parent M23P offline test suite was requested separately but its
+result was **not included in these latest markers**. Do not invent it.
+
+**Same-image, two separate device-free experiments:**
+`M23S_AB_IMAGE_ID=01a0334afd19fea39cc4b8a1dc457e65452d6b0d73d1b959ce654904e29e78c2`
+was reported for the zero-D arm; the nonzero-D arm's operator
+command required this exact image ID to match before starting.
+Each arm ran in a separate disposable container with its own
+private saved log.
+
+| | Calibrated zero-D (`passthrough`) | Calibrated nonzero-D (`rectify`) |
+|---|---:|---:|
+| Rectified images received | 900 | 900 |
+| Matching raw/rect header stamps | 900 | 900 |
+| Maximum rectified header gap | 33.562ms | 33.521ms |
+| M23P/M23R lifecycle | Clean under trace | Blocked component lifecycle |
+| Component child exit | Clean | **-11 SIGSEGV** |
+| M23S operator exit | 0 | 2 |
+| Devices | NONE | NONE |
+| Production acceptance | BLOCKED | BLOCKED |
+
+The operator then ran M23S's read-only two-log comparison, which
+returned:
+
+```text
+M23S_PAIR_VERDICT=DISTORTION_BRANCH_ASSOCIATION_SUPPORTED_NOT_CAUSAL
+M23S_PRODUCTION_ACCEPTANCE=BLOCKED
+M23S_DEVICE_ACCESS=NONE
+```
+
+The reported `M23S_PAIR_JSON` additionally confirmed both real
+rectified streams, matching header stamps, valid source-D profiles
+and separately classified child outcomes. This **one paired A/B**
+strongly associates activating the nonzero-distortion path with the
+component teardown SIGSEGV under the tested conditions.
+The experiment does **not** isolate an individual OpenCV call,
+prove `libtbbmalloc` unload causality, or validate a fix. It also
+does not eliminate stochastic shutdown race/timing effects.
+No robot/physical sensor, IMU/MCU or production tests are authorized.
+
+**Disposition:** M23S controlled differential diagnosis **PASS**
+(as an evidence-collection objective); zero-D lifecycle **CLEAN
+OBSERVED UNDER TRACE ONLY**; nonzero-D component shutdown
+**BLOCKED — confirmed SIGSEGV -11**. Root cause still **UNKNOWN**.
+Next engineering work should inspect and, if separately scoped,
+instrument the **nonzero-D execution branch** and its resource
+ownership/teardown at source level; keep both private logs and
+the existing cores. The original strict M23A image-header
+`>250ms` and all physical/production acceptance gates remain BLOCKED.
+
 ## Absolute safety and retention
 
 The existing image tags, two historical private M23Q cores,
