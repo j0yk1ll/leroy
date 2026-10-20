@@ -230,7 +230,7 @@ not an authorized test or a claim that it has passed:
 - Same 900-frame 640x480 synthetic RGB8 source with
   the original M23S fabricated nonzero-D CameraInfo,
   same header stamps, subscriber QoS and observed graph
-  readiness. Retain M23P/P/S publisher-first synchronization
+  readiness. Retain M23P/M23R/M23S publisher-first synchronization
   and **original fail-closed validation**.
 - Require complete publisher counts, correct synthetic
   distortion markers and valid image/CameraInfo association.
