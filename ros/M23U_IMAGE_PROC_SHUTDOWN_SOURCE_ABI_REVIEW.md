@@ -654,7 +654,7 @@ Pinned upstream sources retrieved after identifying these plugins:
   Source: https://github.com/ros-perception/image_common/blob/jazzy/image_transport/src/publisher.cpp
 - Same upstream project, `jazzy`,
   `image_transport/src/image_transport.cpp`, git blob
-  `evidence available on upstream retrieval, installed ELF not verified`:
+  `dfddcb91b45e4a127c44f2ce3109f34834e6819b`:
   image_transport uses shared `PubLoader` and `SubLoader`
   pluginlib loaders for its create functions.
   Source: https://github.com/ros-perception/image_common/blob/jazzy/image_transport/src/image_transport.cpp
