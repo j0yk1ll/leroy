@@ -55,7 +55,7 @@ justify a production fix.
 
 ## Gates (stop on first failure)
 
-A: Exact seven additive files and offline source tests (6 cases).
+A: Exact eight additive files and offline source tests (6 cases).
 B: Verify pre-existing immutable M23AB v2 parent image ID locally.
     Build once as a new uniquely tagged child
     `localhost/leroy-sensors:m23ac-loaded-rectify-v1` with
