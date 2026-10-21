@@ -68,10 +68,14 @@ class TimingTests(unittest.TestCase):
 
     def test_callback_gap_detection(self):
         obs, pub = fixture()
-        obs = obs.replace(
-            "M23K_SAMPLE rect 66666666 20045333333",
-            "M23K_SAMPLE rect 66666666 20295333333", 1)
-        result = timing.analyze(obs, pub)
+        modified = []
+        for line in obs.splitlines():
+            if line.startswith("M23K_SAMPLE rect "):
+                tag, stream, stamp, recv = line.split()
+                if int(stamp) >= 500 * 33_333_333:
+                    line = f"{tag} {stream} {stamp} {int(recv) + 400_000_000}"
+            modified.append(line)
+        result = timing.analyze("\n".join(modified), pub)
         self.assertGreaterEqual(result["rect_receipt_gaps_over_250ms"], 1)
 
     def test_default_has_no_runtime(self):
