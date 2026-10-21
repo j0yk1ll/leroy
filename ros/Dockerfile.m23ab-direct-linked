@@ -1,0 +1,34 @@
+# Additive M23AB diagnostic, built strictly from the immutable M23AA v1 image.
+# Builds one direct-linked executable against installed, unchanged Jazzy librectify.so.
+# Source contracts and C++ compilation only: no ROS node or hardware execution.
+FROM localhost/leroy-sensors:m23aa-standalone-v1
+
+ENV M23AB_ARM= \
+    M23AA_ARM= \
+    M23R_TRACE_ONLY=0 \
+    PYTHONPATH=/opt/m23ab:/opt/m23aa:/opt/m23y:/opt/m23x:/opt/m23s:/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23ab_cpp /opt/m23ab/m23ab_cpp
+COPY m23ab_compare.py /opt/m23ab/m23ab_compare.py
+COPY m23ab_source_test.py /opt/m23ab/m23ab_source_test.py
+COPY m23ab_direct_rectifier.launch.py /opt/m23ab/m23ab_direct_rectifier.launch.py
+COPY Dockerfile.m23ab-direct-linked /opt/m23ab/Dockerfile.m23ab-direct-linked
+COPY M23AB_DIRECT_LINKED_RECTIFY_TEST.md /opt/m23ab/M23AB_DIRECT_LINKED_RECTIFY_TEST.md
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && PYTHONDONTWRITEBYTECODE=1 python3 -B /opt/m23ab/m23ab_source_test.py \
+    && test -f /opt/ros/jazzy/lib/librectify.so \
+    && colcon --log-base /tmp/m23ab-cpp-logs build \
+       --base-paths /opt/m23ab/m23ab_cpp \
+       --build-base /tmp/m23ab-cpp-build \
+       --install-base /opt/m23ab-cpp-install \
+       --merge-install \
+       --packages-select leroy_m23ab_direct_rectifier \
+    && test -x /opt/m23ab-cpp-install/lib/leroy_m23ab_direct_rectifier/rectify_node \
+    && readelf -d /opt/m23ab-cpp-install/lib/leroy_m23ab_direct_rectifier/rectify_node | grep -q librectify.so \
+    && echo M23AB_BUILD_CONTRACT=PASS
+
+# Run only with explicit M23AB_ARM=component or direct.
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && . /opt/m23ab-cpp-install/local_setup.sh && python3 -u /opt/m23ab/m23ab_compare.py"]
