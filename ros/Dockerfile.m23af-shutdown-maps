@@ -1,0 +1,32 @@
+# M23AF: new diagnostic image ONLY; do not change accepted M23AC.
+FROM localhost/leroy-sensors:m23ac-loaded-rectify-v1
+
+ENV M23AF_ARM= \
+    M23AC_ARM= \
+    M23AB_ARM= \
+    M23AA_ARM= \
+    M23R_TRACE_ONLY=0 \
+    PYTHONPATH=/opt/m23af:/opt/m23ac:/opt/m23ab:/opt/m23aa:/opt/m23y:/opt/m23x:/opt/m23s:/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23af_cpp /opt/m23af/m23af_cpp
+COPY m23af_compare.py /opt/m23af/m23af_compare.py
+COPY m23af_source_test.py /opt/m23af/m23af_source_test.py
+COPY m23af_rectifier_container.launch.py /opt/m23af/m23af_rectifier_container.launch.py
+COPY Dockerfile.m23af-shutdown-maps /opt/m23af/Dockerfile.m23af-shutdown-maps
+COPY M23AF_SHUTDOWN_EXECUTABLE_MAPS.md /opt/m23af/M23AF_SHUTDOWN_EXECUTABLE_MAPS.md
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && . /opt/m23ac-cpp-install/local_setup.sh \
+    && PYTHONDONTWRITEBYTECODE=1 python3 -B /opt/m23af/m23af_source_test.py \
+    && colcon --log-base /tmp/m23af-cpp-logs build \
+       --base-paths /opt/m23af/m23af_cpp \
+       --build-base /tmp/m23af-cpp-build \
+       --install-base /opt/m23af-cpp-install \
+       --merge-install \
+       --packages-select leroy_m23af_shutdown_maps \
+    && test -x /opt/m23af-cpp-install/lib/leroy_m23af_shutdown_maps/component_container \
+    && echo M23AF_BUILD_CONTRACT=PASS
+
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && . /opt/m23ac-cpp-install/local_setup.sh && . /opt/m23af-cpp-install/local_setup.sh && python3 -u /opt/m23af/m23af_compare.py"]
