@@ -74,6 +74,8 @@ class M23AJTests(unittest.TestCase):
         self.assertIn("-DWITH_PTHREADS_PF=ON", docker)
         self.assertIn("-DPARALLEL_ENABLE_PLUGINS=OFF", docker)
         self.assertIn("-DBUILD_LIST=core,flann,imgproc,imgcodecs,features2d,calib3d", docker)
+        self.assertIn("M23AJ_OPENCV_ELF_AUDIT=ALL_SIX_NO_TBB_NEEDED", docker)
+        self.assertIn("for module in core flann imgproc imgcodecs features2d calib3d", docker)
         self.assertIn("M23AJ_PTHREADS_BUILD_CONTRACT=PASS", docker)
         self.assertNotIn("apt-get", docker)
         self.assertNotIn("LD_PRELOAD", docker)
