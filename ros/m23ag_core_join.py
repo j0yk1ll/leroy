@@ -86,7 +86,7 @@ def parse_metadata(info):
             r"\b2026-10-21 12:45:08 CEST\b", one("Timestamp"))),
         "storage": "(present)" in one("Storage"),
         "nonce": cmdline.count("m23af_run_id:=") == 1
-        and ("m23af_run_id:=" + RUN_ID) in cmdline,
+        and bool(re.search(r"m23af_run_id:=" + RUN_ID + r"(?![0-9a-fA-F])", cmdline)),
     }
     if not all(checks.values()):
         raise Stop("coredumpctl identity mismatch: " +
@@ -138,8 +138,7 @@ def parse_existing_log(content):
                 or sample.get("run_id") != RUN_ID
                 or sample.get("pid_in_container") != CONTAINER_PID
                 or not isinstance(sample.get("segments"), list)
-                or not 1 <= len(sample["segments"]) <= 2048
-                ):
+                or not 1 <= len(sample["segments"]) <= 2048):
             raise Stop("invalid or out-of-order mapping snapshot")
         if len(sample["segments"]) != af.get("executable_mappings", {}).get(phase):
             raise Stop("mapping count mismatch")
