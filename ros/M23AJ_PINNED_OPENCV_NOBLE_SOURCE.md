@@ -54,14 +54,10 @@ git fetch origin feature/m23aj-pinned-opencv-pthreads-source
 git worktree add --detach /tmp/leroy-m23aj \
   origin/feature/m23aj-pinned-opencv-pthreads-source
 cd /tmp/leroy-m23aj
-git diff --name-status 8fdc07f397c133352ddf107f8a018a4a7e7ab63a HEAD
+git diff --name-status 1ff3293698cb48fea878a5703f0582ffbc954fe5 HEAD
 PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23aj_source_test.py
 PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23aj_source_gate.py
 ~~~
-
-Note: use the **current head of M23AI branch**, not the older
-8fdc07f above, to diff for exactly this change set. The source
-test and no-read gate are independent of repo ancestry.
 
 Expected source tests OK, and
 M23AJ_STATUS=NO_SOURCE_READ_BY_DEFAULT.
@@ -94,7 +90,7 @@ for FILE in \
   OUT="$D/$FILE"
   test ! -e "$OUT"
   curl --fail --location --silent --show-error --retry 0 \
-      "$BASE/\${FILE//+/%2B}" --output "$OUT"
+      "$BASE/${FILE//+/%2B}" --output "$OUT"
   chmod 600 "$OUT"
 done
 PYTHONDONTWRITEBYTECODE=1 python3 -B \
