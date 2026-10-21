@@ -108,6 +108,12 @@ def main(argv=None):
         return 0
     try:
         result = collect()
+        version = subprocess.run(
+            ["dpkg-query", "-W", "-f=${Version}", "libopencv-core406t64"],
+            text=True, capture_output=True, check=False, timeout=8)
+        if version.returncode != 0 or not version.stdout.strip().startswith("4.6.0"):
+            raise Blocked("unexpected distro OpenCV core package version")
+        result["distro_opencv_package_version"] = version.stdout.strip()
         print("M23AI_BASELINE_JSON=" + json.dumps(result, sort_keys=True),
               flush=True)
         if not result["core_direct_tbb"]:
