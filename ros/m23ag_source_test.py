@@ -92,6 +92,7 @@ class M23AGSourceOnly(unittest.TestCase):
             metadata(uid="0 (root)"),
             metadata(gid="0"),
             metadata(run_id="b" * 32),
+            metadata(run_id=ag.RUN_ID + "f"),
             metadata().replace("SEGV_MAPERR", "SEGV_ACCERR").replace(
                 "11 (SEGV)", "6 (ABRT)"),
         ):
