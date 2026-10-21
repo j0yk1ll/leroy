@@ -59,7 +59,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23aj_source_test.py
 PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23aj_source_gate.py
 ~~~
 
-Expected source tests OK, and
+Expected 4 newly added files, 8 source tests OK, and
 M23AJ_STATUS=NO_SOURCE_READ_BY_DEFAULT.
 
 ## Gate B — optional host-side Ubuntu source acquisition (not runtime)
@@ -103,7 +103,82 @@ Do not erase/retry a partial source directory; it is evidence of
 failure. Expected M23AJ_SOURCE_PROVENANCE=VERIFIED_UBUNTU_NOBLE.
 The source set remains private; no archive uploads needed.
 
-## Gate C — planned separate build/compatibility gate, not yet authorized
+## Gate C — disconnected diagnostic build (after Gate B source verification)
+
+A conservative, *not yet operator-validated* Dockerfile is included:
+ros/Dockerfile.m23aj-opencv-pthreads. It starts from the already
+pinned M23AF image and installs nothing into its system prefix.
+It unpacks the exact Ubuntu source using dpkg-source with archive
+hashes independently verified, uses CMake with strict pthreads/no-TBB
+flags, and builds the minimal ROS rectifier library family
+core, flann, imgproc, imgcodecs, features2d and calib3d.
+If a required preinstalled development dependency is missing,
+the offline build stops; do NOT run apt-get or allow online
+dependencies in the diagnostic image without separate review.
+Only libopencv_core.so.406 SONAME and direct TBB NEEDED absence
+are build-time gates; **runtime absence of TBB and complete OpenCV
+ABI compatibility remain UNPROVEN**, and no ROS run is authorized
+by a successful build alone.
+
+To prepare a separate private one-shot build context without
+leaving large source tarballs in the Git worktree:
+
+~~~bash
+(
+set -euo pipefail
+set -C
+umask 077
+test "$(id -u)" -ne 0
+cd /tmp/leroy-m23aj
+test -z "$(git status --porcelain)"
+S="$HOME/.local/state/leroy-m23aj/sources"
+PYTHONDONTWRITEBYTECODE=1 python3 -B \
+  ros/m23aj_source_gate.py --verify-sources
+PARENT=a56f89bd8d3a69264e846319f8915efcff1fcd04a2dd3bf54d8491b89a119777
+test "$(podman image inspect localhost/leroy-sensors:m23af-shutdown-maps-v1 \
+  --format '{{.Id}}')" = "$PARENT"
+CTX="$HOME/.local/state/leroy-m23aj/build-context-01"
+LOG="$HOME/.local/state/leroy-m23aj/pthreads-build-01.log"
+test ! -e "$CTX" && test ! -e "$LOG"
+mkdir -m 700 "$CTX"
+mkdir -m 700 "$CTX/m23aj_sources"
+cp -- ros/Dockerfile.m23aj-opencv-pthreads "$CTX/"
+cp -- ros/m23aj_source_gate.py "$CTX/"
+cp -- "$S/"opencv_* "$CTX/m23aj_sources/"
+podman build --network=none --pull=never \
+  -f "$CTX/Dockerfile.m23aj-opencv-pthreads" \
+  -t localhost/leroy-sensors:m23aj-pthreads-opencv-v1 \
+  "$CTX" >"$LOG" 2>&1
+grep -Fq 'M23AJ_PTHREADS_BUILD_CONTRACT=PASS' "$LOG"
+ID="$(podman image inspect \
+  localhost/leroy-sensors:m23aj-pthreads-opencv-v1 \
+  --format '{{.Id}}')"
+test "$ID" != "$PARENT" && test -n "$ID"
+echo M23AJ_PTHREADS_BUILD_GATE=PASS
+echo "M23AJ_PTHREADS_NEW_IMAGE_ID=$ID"
+)
+~~~
+
+If the build fails, STOP and inspect the private existing log.
+No deleting, clobbering, reusing build-01 evidence, removing
+packages, or rerunning the original crashing control.
+
+## Gate D — planned runtime comparison; NOT AUTHORIZED YET
+
+Before testing shutdown, create a separate source-reviewed runner
+that explicitly loads ONLY the newly built OpenCV ABI-compatible
+libraries, requires all relevant loaded OpenCV ELF mappings
+correspond to the new prefix, and verifies no oneTBB mapping in
+the actual composable process at startup AND shutdown. A clean
+subprocess with only a different DT_NEEDED is not enough.
+
+Maintain exact M23AF stock factory and mapping observer plus
+full M23AA 900/900 nonzero-D, QoS/graph, stamp and drain checks.
+Do NOT silently accept image_process crash, nodelete, startup
+failure or frame loss as a successful replacement.
+Production and all physical tests remain BLOCKED.
+
+
 
 From that source provenance, a future additive Dockerfile will
 unpack the pinned Debian source and apply its Ubuntu patches,
