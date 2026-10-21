@@ -58,6 +58,13 @@ class M23AFSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             af.parse_maps(fixture(with_shutdown=False), RID)
 
+    def test_reversed_phase_order_rejected(self):
+        chunks = fixture().strip().split("\n")
+        self.assertEqual(len(chunks), 6)
+        reversed_log = "\n".join(chunks[3:] + chunks[:3]) + "\n"
+        with self.assertRaises(ValueError):
+            af.parse_maps(reversed_log, RID)
+
     def test_cross_pid_or_map_count_rejected(self):
         with self.assertRaises(ValueError):
             af.parse_maps(fixture().replace("pid=32", "pid=33", 1), RID)
