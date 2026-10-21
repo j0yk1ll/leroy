@@ -11,7 +11,7 @@ import re
 PREFIX = "/opt/m23aj-opencv/lib/"
 PHASES = ("post_factory", "on_shutdown")
 REQUIRED = frozenset(("core", "flann", "imgproc", "imgcodecs", "calib3d"))
-LIB = re.compile(r"libopencv_([a-z0-9_]+)\.so\.4\.6\.0(?: \(deleted\))?")
+LIB = re.compile(r"libopencv_([a-z0-9_]+)\.so\.4\.6\.0")
 
 
 class Blocked(ValueError):
