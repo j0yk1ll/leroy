@@ -83,7 +83,7 @@ def parse_maps(log, run_id):
             if count != len(snapshots[phase]) or count == 0:
                 raise ValueError("incomplete executable maps count")
             phase_active = None
-    if phase_active is not None or set(snapshots) != set(PHASES):
+    if phase_active is not None or tuple(snapshots) != PHASES:
         raise ValueError("both complete ordered snapshots required")
     if "librectify.so" not in {
         Path(s["path"]).name for v in snapshots.values() for s in v
