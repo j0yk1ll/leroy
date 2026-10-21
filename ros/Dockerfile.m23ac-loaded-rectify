@@ -1,0 +1,31 @@
+# M23AC new device-free executable; parent is already accepted M23AB v2.
+# One identical executable for control and nodelete arms, not two builds.
+FROM localhost/leroy-sensors:m23ab-direct-linked-v2
+
+ENV M23AC_ARM= \
+    M23AB_ARM= \
+    M23AA_ARM= \
+    M23R_TRACE_ONLY=0 \
+    PYTHONPATH=/opt/m23ac:/opt/m23ab:/opt/m23aa:/opt/m23y:/opt/m23x:/opt/m23s:/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23ac_cpp /opt/m23ac/m23ac_cpp
+COPY m23ac_compare.py /opt/m23ac/m23ac_compare.py
+COPY m23ac_source_test.py /opt/m23ac/m23ac_source_test.py
+COPY m23ac_rectifier_container.launch.py /opt/m23ac/m23ac_rectifier_container.launch.py
+COPY Dockerfile.m23ac-loaded-rectify /opt/m23ac/Dockerfile.m23ac-loaded-rectify
+COPY M23AC_LOADED_RECTIFY_NODELETE_AB.md /opt/m23ac/M23AC_LOADED_RECTIFY_NODELETE_AB.md
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && PYTHONDONTWRITEBYTECODE=1 python3 -B /opt/m23ac/m23ac_source_test.py \
+    && colcon --log-base /tmp/m23ac-cpp-logs build \
+       --base-paths /opt/m23ac/m23ac_cpp \
+       --build-base /tmp/m23ac-cpp-build \
+       --install-base /opt/m23ac-cpp-install \
+       --merge-install \
+       --packages-select leroy_m23ac_loaded_rectify_lifetime \
+    && test -x /opt/m23ac-cpp-install/lib/leroy_m23ac_loaded_rectify_lifetime/component_container \
+    && echo M23AC_BUILD_CONTRACT=PASS
+
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && . /opt/m23ac-cpp-install/local_setup.sh && python3 -u /opt/m23ac/m23ac_compare.py"]
