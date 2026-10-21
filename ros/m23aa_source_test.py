@@ -7,6 +7,26 @@ from m23aa_compare import child_outcome
 ROOT = Path(__file__).resolve().parent
 
 
+def executable_string_literals(source):
+    """AST constants excluding module/function/class docstrings."""
+    tree = ast.parse(source)
+    docstring_nodes = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef,
+                             ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
+            first = node.body[0]
+            if (isinstance(first, ast.Expr)
+                    and isinstance(first.value, ast.Constant)
+                    and isinstance(first.value.value, str)):
+                docstring_nodes.add(id(first.value))
+    return tree, [
+        node.value for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstring_nodes
+    ]
+
+
 class Contracts(unittest.TestCase):
     def test_launch_difference_and_no_tracer(self):
         a = (ROOT / "m23aa_component_rectifier.launch.py").read_text()
@@ -20,9 +40,26 @@ class Contracts(unittest.TestCase):
                       '("image", "image_raw")', '("camera_info", "camera_info")'):
             self.assertIn(token, a)
             self.assertIn(token, b)
-        for s in (a, b):
-            self.assertNotIn("LD_PRELOAD", s)
-            self.assertNotIn("usb_cam", s)
+        for source in (a, b):
+            tree, literals = executable_string_literals(source)
+            self.assertFalse(any("LD_PRELOAD" in value for value in literals))
+            self.assertFalse(any("usb_cam" in value for value in literals))
+            self.assertFalse(any(
+                isinstance(node, ast.Call)
+                and ((isinstance(node.func, ast.Name)
+                      and node.func.id == "SetEnvironmentVariable")
+                     or (isinstance(node.func, ast.Attribute)
+                         and node.func.attr == "SetEnvironmentVariable"))
+                for node in ast.walk(tree)
+            ))
+
+    def test_docstring_not_interpreted_as_preload_configuration(self):
+        safe = '"""No LD_PRELOAD in launch."""\nvalue = "image_proc"\n'
+        bad = '"""No LD_PRELOAD in launch."""\nvalue = "LD_PRELOAD"\n'
+        self.assertFalse(any(
+            "LD_PRELOAD" in item for item in executable_string_literals(safe)[1]))
+        self.assertTrue(any(
+            "LD_PRELOAD" in item for item in executable_string_literals(bad)[1]))
 
     def test_exact_exit_classes(self):
         for arm, process in (("component", "component_container"),
