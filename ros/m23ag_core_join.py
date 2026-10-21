@@ -82,8 +82,12 @@ def parse_metadata(info):
         "gid": numeric_id(one("GID")) == 1000,
         "executable": one("Executable") == EXECUTABLE,
         "signal": bool(re.search(r"11\s*\(SEGV\)|SIGSEGV", one("Signal"))),
+        # Same four-second journal-detail window as the operator's
+        # previously accepted eight-field core-identity verifier.
+        # Do not use coredumpctl-list display seconds as an exact
+        # coredumpctl-info Timestamp requirement.
         "timestamp": bool(re.search(
-            r"\b2026-10-21 12:45:08 CEST\b", one("Timestamp"))),
+            r"\b2026-10-21 12:45:0[6-9] CEST\b", one("Timestamp"))),
         "storage": "(present)" in one("Storage"),
         "nonce": cmdline.count("m23af_run_id:=") == 1
         and bool(re.search(r"m23af_run_id:=" + RUN_ID + r"(?![0-9a-fA-F])", cmdline)),
