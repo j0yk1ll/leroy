@@ -87,6 +87,22 @@ class M23AGSourceOnly(unittest.TestCase):
         self.assertTrue(got["identity_verified"])
         self.assertEqual(got["host_pid"], 32869)
 
+    def test_timestamp_accepts_previous_identity_window_only(self):
+        # The accepted host-only verifier used 12:45:06 through :09;
+        # coredumpctl's list timestamp need not equal info seconds.
+        for second in (6, 7, 8, 9):
+            with self.subTest(second=second):
+                value = metadata().replace("12:45:08 CEST",
+                    f"12:45:{second:02d} CEST")
+                self.assertTrue(ag.parse_metadata(value)["identity_verified"])
+        for timestamp in ("12:45:05 CEST", "12:45:10 CEST",
+                          "12:44:08 CEST", "12:46:08 CEST",
+                          "12:45:08 UTC"):
+            with self.subTest(timestamp=timestamp):
+                value = metadata().replace("12:45:08 CEST", timestamp)
+                with self.assertRaises(ag.Stop):
+                    ag.parse_metadata(value)
+
     def test_metadata_rejects_mismatch(self):
         for value in (
             metadata(uid="0 (root)"),
