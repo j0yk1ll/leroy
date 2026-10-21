@@ -36,10 +36,18 @@ RUN chmod 700 /opt/m23aj-source \
     && test -f /opt/m23aj-opencv/lib/libopencv_core.so.4.6.0 \
     && readelf -d /opt/m23aj-opencv/lib/libopencv_core.so.4.6.0 \
        | grep -Fq 'libopencv_core.so.406' \
-    && if readelf -d /opt/m23aj-opencv/lib/libopencv_core.so.4.6.0 \
-       | grep -E 'NEEDED.*libtbb'; then \
-         echo M23AJ_BUILD_BLOCKED=TBB_LINKED; exit 2; \
-       fi \
+    && for module in core flann imgproc imgcodecs features2d calib3d; do \
+         test -f "/opt/m23aj-opencv/lib/libopencv_${module}.so.4.6.0" \
+         || { echo "M23AJ_BUILD_BLOCKED=MISSING_MODULE_${module}"; exit 2; }; \
+         readelf -d "/opt/m23aj-opencv/lib/libopencv_${module}.so.4.6.0" \
+           | grep -Fq "libopencv_${module}.so.406" \
+         || { echo "M23AJ_BUILD_BLOCKED=WRONG_SONAME_${module}"; exit 2; }; \
+         if readelf -d "/opt/m23aj-opencv/lib/libopencv_${module}.so.4.6.0" \
+              | grep -E 'NEEDED.*libtbb'; then \
+           echo "M23AJ_BUILD_BLOCKED=TBB_NEEDED_${module}"; exit 2; \
+         fi; \
+       done \
+    && echo M23AJ_OPENCV_ELF_AUDIT=ALL_SIX_NO_TBB_NEEDED \
     && echo M23AJ_PTHREADS_BUILD_CONTRACT=PASS
 
 # Default remains non-ROS; the separately reviewed runtime runner
