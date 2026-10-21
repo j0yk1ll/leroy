@@ -73,6 +73,10 @@ class M23AJTests(unittest.TestCase):
         self.assertIn("-DWITH_OPENMP=OFF", docker)
         self.assertIn("-DWITH_PTHREADS_PF=ON", docker)
         self.assertIn("-DPARALLEL_ENABLE_PLUGINS=OFF", docker)
+        # Ubuntu +dfsg intentionally lacks these bundled third-party sources.
+        for opt in ("WITH_PROTOBUF", "WITH_QUIRC", "WITH_ITT"):
+            self.assertIn(f"-D{opt}=OFF", docker)
+            self.assertIn(f"'{opt}:BOOL=OFF'", docker)
         self.assertIn("-DBUILD_LIST=core,flann,imgproc,imgcodecs,features2d,calib3d", docker)
         self.assertIn("M23AJ_OPENCV_ELF_AUDIT=ALL_SIX_NO_TBB_NEEDED", docker)
         self.assertIn("for module in core flann imgproc imgcodecs features2d calib3d", docker)
