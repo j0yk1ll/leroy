@@ -38,7 +38,7 @@ image. Nothing is installed into ROS or run inside a container.
 1. Verify **exactly three** added M23AE files relative to M23AD HEAD
    and 8 offline synthetic unit tests:
 
-   \`\`\`bash
+   ```bash
    cd /tmp/leroy-m23ad
    git fetch origin feature/m23ae-historical-core-register-attestation
    git worktree add --detach /tmp/leroy-m23ae \
@@ -46,40 +46,40 @@ image. Nothing is installed into ROS or run inside a container.
    cd /tmp/leroy-m23ae
    git diff --name-status ae92eecfe5ba4d7fd4148941aff316e43ced3d4b HEAD
    PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23ae_source_test.py
-   \`\`\`
+   ```
 
 2. Dry-run: no core files opened:
 
-   \`\`\`bash
+   ```bash
    PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23ae_saved_registers.py
-   \`\`\`
+   ```
 
-   Expected \`M23AE_STATUS=NO_CORE_ACCESS_UNLESS_EXPLICIT\`.
+   Expected `M23AE_STATUS=NO_CORE_ACCESS_UNLESS_EXPLICIT`.
 
 3. Only if the existing two M23Q exported cores remain available,
    inspect their metadata once, read-only:
 
-   \`\`\`bash
+   ```bash
    PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23ae_saved_registers.py --verify-existing
-   \`\`\`
+   ```
 
    It only accepts:
-   - \`~/.local/state/leroy-m23q/prior-core-46312/core.46312\`
-   - exactly one \`~/.local/state/leroy-m23q/gdb-firstpass.*/core.48349\`
+   - `~/.local/state/leroy-m23q/prior-core-46312/core.46312`
+   - exactly one `~/.local/state/leroy-m23q/gdb-firstpass.*/core.48349`
 
    Both must be regular non-symlink, owner-private files, under M23Q
    storage, with correct ELF machine/notes and historical PC/signal.
 
 4. On any absent core, unknown ELF layout, multiple candidate paths or
-   mismatch, output \`M23AE_BLOCKED=...\`; stop and do not re-extract or
+   mismatch, output `M23AE_BLOCKED=...`; stop and do not re-extract or
    rerun ROS. If both pass, report two
-   \`M23AE_CORE_RESULT_JSON\` summaries and
-   \`M23AE_CROSS_CORE_RIP_AND_SIGINFO=VERIFIED_UNMAPPED_TARGET_BOTH\`.
+   `M23AE_CORE_RESULT_JSON` summaries and
+   `M23AE_CROSS_CORE_RIP_AND_SIGINFO=VERIFIED_UNMAPPED_TARGET_BOTH`.
 
 ## Interpretation
 
 A PASS independently attests that actual kernel-saved **CPU RIP**, rather
-than just GDB's unwind or journal text, was the unmapped \`si_addr\` in
+than just GDB's unwind or journal text, was the unmapped `si_addr` in
 both prior cores. The repeatable RTLD_NODELETE sensitivity remains strong
 evidence for a component/shared-object lifetime interaction, but neither
 result identifies which library (if any) unmapped, nor whether a dangling
