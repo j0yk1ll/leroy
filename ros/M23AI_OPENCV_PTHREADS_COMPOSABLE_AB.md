@@ -66,7 +66,7 @@ podman run --rm --pull=never --network=none \
   --security-opt=no-new-privileges --read-only \
   --pids-limit=32 --memory=512m \
   --tmpfs /tmp:rw,nosuid,nodev,size=16m \
-  --mount "type=bind,source=$PWD/ros/m23ai_dependency_audit.py,destination=/opt/m23ai_dependency_audit.py,readonly" \
+  --mount "type=bind,source=$PWD/ros/m23ai_dependency_audit.py,destination=/opt/m23ai_dependency_audit.py,ro=true" \
   --entrypoint /usr/bin/python3 "$IMAGE_ID" \
   -B /opt/m23ai_dependency_audit.py --audit >"$D/baseline-01.log" 2>&1
 grep -E '^M23AI_' "$D/baseline-01.log"
