@@ -65,8 +65,8 @@ def interpret_ldd(output, status, role):
 
 
 def audit():
-    if os.geteuid() == 0:
-        raise Blocked("must be rootless")
+    # Rootless Podman normally maps the container process to UID 0;
+    # enforce rootlessness at the HOST preflight, not inside the image.
     if os.environ.get("LD_PRELOAD"):
         raise Blocked("LD_PRELOAD is forbidden")
     if os.environ.get("LD_LIBRARY_PATH", "").split(":")[0] != PREFIX.rstrip("/"):
