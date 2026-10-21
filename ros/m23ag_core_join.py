@@ -139,7 +139,7 @@ def parse_existing_log(content):
                 or sample.get("pid_in_container") != CONTAINER_PID
                 or not isinstance(sample.get("segments"), list)
                 or not 1 <= len(sample["segments"]) <= 2048
-                or sample["segments"] != sample.get("segments")):
+                ):
             raise Stop("invalid or out-of-order mapping snapshot")
         if len(sample["segments"]) != af.get("executable_mappings", {}).get(phase):
             raise Stop("mapping count mismatch")
