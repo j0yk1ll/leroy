@@ -163,6 +163,35 @@ If the build fails, STOP and inspect the private existing log.
 No deleting, clobbering, reusing build-01 evidence, removing
 packages, or rerunning the original crashing control.
 
+## Stage C-02 correction after first configure failure
+
+The first operator build on Oct 21 2026 passed the source contract
+but failed CMake configuration *before compilation* because Ubuntu's
+repackaged +dfsg tarball omits 3rdparty/protobuf, 3rdparty/quirc and
+3rdparty/ittnotify. OpenCV's output nevertheless identified
+"Parallel framework: pthreads".
+
+The Dockerfile now explicitly adds
+`-DWITH_PROTOBUF=OFF -DWITH_QUIRC=OFF -DWITH_ITT=OFF`.
+These optional libraries are not required by the intended
+rectification workload. A source-only unit test requires both the
+CMake options and CMakeCache OFF assertions. This is **not** a
+change to the original source archives, OpenCV threading selection,
+ROS component code, system image, or existing runtime experiment.
+
+The operator must preserve the immutable first failure:
+`pthreads-build-01.log`, `build-context-01` and all original source
+archives. Build **once** from the updated branch using fresh paths:
+`build-context-02`, `pthreads-build-02.log`, image tag
+`localhost/leroy-sensors:m23aj-pthreads-opencv-v2`, and
+`pthreads-image-id-02.txt`. Fail if any new output already exists.
+No automatic cleanup/retry and no tag overwrite.
+
+A successful build must show the source contract, all six OpenCV
+.so.406 SONAME/no-direct-TBB DT_NEEDED checks and the pthreads
+build contract; runtime absence of TBB and ABI compatibility are
+still separately blocked.
+
 ## Gate D — planned runtime comparison; NOT AUTHORIZED YET
 
 Before testing shutdown, create a separate source-reviewed runner
