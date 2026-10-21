@@ -64,6 +64,20 @@ class M23AJTests(unittest.TestCase):
             with self.assertRaises(gate.Blocked):
                 gate.verify_source_set(folder)
 
+    def test_disconnected_build_recipe_invariants(self):
+        docker = (Path(__file__).resolve().parent /
+                  "Dockerfile.m23aj-opencv-pthreads").read_text()
+        self.assertIn("FROM localhost/leroy-sensors:m23af-shutdown-maps-v1", docker)
+        self.assertIn("verify_source_set(", docker)
+        self.assertIn("-DWITH_TBB=OFF", docker)
+        self.assertIn("-DWITH_OPENMP=OFF", docker)
+        self.assertIn("-DWITH_PTHREADS_PF=ON", docker)
+        self.assertIn("-DPARALLEL_ENABLE_PLUGINS=OFF", docker)
+        self.assertIn("-DBUILD_LIST=core,flann,imgproc,imgcodecs,features2d,calib3d", docker)
+        self.assertIn("M23AJ_PTHREADS_BUILD_CONTRACT=PASS", docker)
+        self.assertNotIn("apt-get", docker)
+        self.assertNotIn("LD_PRELOAD", docker)
+
     def test_default_no_source_read(self):
         self.assertEqual(gate.main([]), 0)
 
