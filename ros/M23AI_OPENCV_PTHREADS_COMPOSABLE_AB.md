@@ -65,7 +65,7 @@ podman run --rm --pull=never --network=none \
   --ipc=private --pid=private --cap-drop=all \
   --security-opt=no-new-privileges --read-only \
   --pids-limit=32 --memory=512m \
-  --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+  --tmpfs /tmp:rw,nosuid,nodev,size=16m,notmpcopyup \
   --mount "type=bind,source=$PWD/ros/m23ai_dependency_audit.py,destination=/opt/m23ai_dependency_audit.py,ro=true" \
   --entrypoint /usr/bin/python3 "$IMAGE_ID" \
   -B /opt/m23ai_dependency_audit.py --audit >"$D/baseline-01.log" 2>&1
@@ -83,6 +83,36 @@ Also record M23AI_BASELINE_JSON with the version of Ubuntu's OpenCV
 core package, which OpenCV shared objects have direct TBB NEEDED
 dependencies and which shared objects the stock ROS rectifier uses.
 If TBB is NOT directly linked by core, STOP before planning the build.
+
+## Operator infrastructure block: Podman temporary-directory copy-up
+
+M23AI source-only tests passed (7/7), and both immutable-image ID
+checks passed. The first baseline audit did not start; retained
+`~/.local/state/leroy-m23ai/baseline-01.log` contains:
+
+    Error: OCI runtime error: crun: write: No space left on device
+
+Host ext4 had 181 GiB available, 93% free inodes; /tmp and rootless
+runtime tmpfs also had ample headroom. This is **not** evidence of a
+full host disk, or OpenCV/TBB behavior. The initial launch explicitly
+mounted /tmp tmpfs limited to 16 MiB with Podman's **default
+tmpcopyup** behavior, which copies files already present in the
+image /tmp (the image was built using temporary colcon directories).
+A Podman upstream discussion records this same crun error when
+container-image /tmp copy-up exceeds the supplied tmpfs capacity.
+
+The corrected protocol changes only the mount to
+`--tmpfs /tmp:rw,nosuid,nodev,size=16m,notmpcopyup`.
+The audit requires no preexisting /tmp files. This is a *hypothesis
+to test*, not confirmed root cause until the next attempt succeeds.
+Do NOT rerun using baseline-01.log, overwrite/erase it, prune Podman,
+delete evidence, or touch the pinned image.
+
+For one isolated audit after source review, run the unchanged image
+identity preflight but write new protected log baseline-02.log
+(the previous first-failure log remains as-is). Include the exact
+notmpcopyup option. A failure remains a stop condition, not a reason
+to relax hardware/network isolation. No ROS nodes or devices.
 
 ## Gate B (planned, not yet implemented/authorized): actual replacement
 
