@@ -25,12 +25,16 @@ RUN chmod 700 /opt/m23aj-source \
        -DPARALLEL_ENABLE_PLUGINS=OFF \
        -DCMAKE_DISABLE_FIND_PACKAGE_TBB=TRUE \
        -DWITH_IPP=OFF \
+       -DWITH_PROTOBUF=OFF -DWITH_QUIRC=OFF -DWITH_ITT=OFF \
        -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF \
        -DBUILD_EXAMPLES=OFF -DBUILD_opencv_python3=OFF \
        -DBUILD_JAVA=OFF \
     && grep -Fxq 'WITH_TBB:BOOL=OFF' /tmp/m23aj-opencv-build/CMakeCache.txt \
     && grep -Fxq 'WITH_OPENMP:BOOL=OFF' /tmp/m23aj-opencv-build/CMakeCache.txt \
     && grep -Fxq 'WITH_PTHREADS_PF:BOOL=ON' /tmp/m23aj-opencv-build/CMakeCache.txt \
+    && grep -Fxq 'WITH_PROTOBUF:BOOL=OFF' /tmp/m23aj-opencv-build/CMakeCache.txt \
+    && grep -Fxq 'WITH_QUIRC:BOOL=OFF' /tmp/m23aj-opencv-build/CMakeCache.txt \
+    && grep -Fxq 'WITH_ITT:BOOL=OFF' /tmp/m23aj-opencv-build/CMakeCache.txt \
     && cmake --build /tmp/m23aj-opencv-build --parallel 2 \
     && cmake --install /tmp/m23aj-opencv-build \
     && test -f /opt/m23aj-opencv/lib/libopencv_core.so.4.6.0 \
