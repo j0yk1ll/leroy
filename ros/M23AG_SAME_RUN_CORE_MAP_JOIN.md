@@ -39,7 +39,7 @@ at snapshot time**, not code/function ownership, actual dlclose/unmap
 timing, identity of the invalid callback or a production fix. If no
 match, report NO_PRIOR_EXECUTABLE_MAP_MATCH, not proof of no DSO.
 
-## Gate A — source-only verification and ten tests
+## Gate A — source-only verification and eleven tests
 
 ~~~bash
 cd /tmp/leroy-m23af
@@ -51,8 +51,23 @@ git diff --name-status 567b5b9ee10c069db6479e2d7c0f5d1eac7ec709 HEAD
 PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23ag_source_test.py
 ~~~
 
-Expect exactly 3 *new* files and 10 passing offline tests.
+Expect exactly 3 *new* files and 11 passing offline tests.
 No ROS/Podman/GDB invoked.
+
+## Timestamp parser correction (2026-10-21)
+
+Initial read-only Gate B stopped with
+`M23AG_BLOCKED=Stop:coredumpctl identity mismatch: timestamp`.
+The operator's previous eight-field host identity check had accepted the
+narrow journal-detail window **12:45:06–09 CEST** for the M23AF crash,
+whereas M23AG had accidentally tightened that to exactly **12:45:08**,
+the timestamp displayed in `coredumpctl list`. Journal `info` may
+show a neighboring second; the actual detail timestamp must be read
+from the live metadata and must remain in that original four-second
+window. The corrected validator uses exactly 06–09, with an additional
+synthetic test that **rejects** 05/10 and wrong minute/timezone. It
+does not relax the exact host PID, UID/GID, SIGSEGV, executable, core
+presence, or unique 32-hex run-nonce checks. No core has been exported.
 
 ## Gate B — read-only metadata preflight ONLY
 
