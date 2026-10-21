@@ -50,7 +50,7 @@ git diff --name-status aaf7a5fe921f22aaf4575002d7a809e9d2adb471 HEAD
 PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23af_source_test.py
 ```
 
-Expect **eight added files only**, eight offline tests and OK.
+Expect **eight added files only**, nine offline tests and OK.
 No ROS, Podman, GDB, core reads, hardware or kernel modifications.
 
 ## Stage B: rootless disconnected build only
@@ -63,7 +63,9 @@ capture protected log, refuse preexisting evidence:
 ```bash
 (
 set -euo pipefail
+set -C
 umask 077
+test "$(id -u)" -ne 0
 D="$HOME/.local/state/leroy-m23af"
 mkdir -p "$D"
 test ! -e "$D/build-01.log"
@@ -97,7 +99,9 @@ Start from exact saved image **ID**, not mutable tag. One fresh log,
 ```bash
 (
 set -euo pipefail
+set -C
 umask 077
+test "$(id -u)" -ne 0
 D="$HOME/.local/state/leroy-m23af"
 LOG="$D/control-01.log"
 test ! -e "$LOG"
@@ -105,6 +109,12 @@ IMAGE_ID="$(cat "$D/image-id-01.txt")"
 test "$IMAGE_ID" = "$(podman image inspect localhost/leroy-sensors:m23af-shutdown-maps-v1 --format '{{.Id}}')"
 test "$(podman image inspect localhost/leroy-sensors:m23ac-loaded-rectify-v1 --format '{{.Id}}')" = \
   "a3ca7cef00be950a52da0685407f54e12bc2d14b7a0a327e745c3e5adc9392f6"
+ENVS="$(podman image inspect localhost/leroy-sensors:m23af-shutdown-maps-v1 \
+  --format '{{range .Config.Env}}{{println .}}{{end}}')"
+for VALUE in 'M23AF_ARM=' 'M23AC_ARM=' 'M23AB_ARM=' 'M23AA_ARM=' 'M23R_TRACE_ONLY=0'; do
+  grep -Fxq "$VALUE" <<<"$ENVS"
+done
+! grep -q '^LD_PRELOAD=' <<<"$ENVS"
 if timeout --signal=TERM --kill-after=5s 120s \
   podman run --rm --pull=never --network=none --ipc=private --pid=private \
   --cap-drop=all --security-opt=no-new-privileges --read-only \
