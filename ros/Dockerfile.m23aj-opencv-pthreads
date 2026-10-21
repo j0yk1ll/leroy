@@ -1,0 +1,48 @@
+# M23AJ unrun prototype; source archive bytes must be independently attested.
+# Standalone diagnostic only; do not overwrite system/production OpenCV.
+FROM localhost/leroy-sensors:m23af-shutdown-maps-v1
+
+ENV PYTHONDONTWRITEBYTECODE=1
+COPY m23aj_source_gate.py /opt/m23aj/m23aj_source_gate.py
+COPY m23aj_sources/ /opt/m23aj-source/
+
+RUN chmod 700 /opt/m23aj-source \
+    && chmod 600 /opt/m23aj-source/* \
+    && python3 -B -c 'import sys; from pathlib import Path; sys.path.insert(0,"/opt/m23aj"); from m23aj_source_gate import verify_source_set; verify_source_set(Path("/opt/m23aj-source")); print("M23AJ_SOURCE_CONTRACT=PASS")' \
+    && command -v dpkg-source \
+    && command -v cmake \
+    && command -v make \
+    && dpkg-source --no-check -x \
+       /opt/m23aj-source/opencv_4.6.0+dfsg-13.1ubuntu1.dsc \
+       /tmp/m23aj-opencv-source \
+    && cmake -S /tmp/m23aj-opencv-source -B /tmp/m23aj-opencv-build \
+       -DCMAKE_BUILD_TYPE=Release \
+       -DCMAKE_INSTALL_PREFIX=/opt/m23aj-opencv \
+       -DCMAKE_INSTALL_LIBDIR=lib \
+       -DBUILD_SHARED_LIBS=ON \
+       -DBUILD_LIST=core,flann,imgproc,imgcodecs,features2d,calib3d \
+       -DWITH_TBB=OFF -DWITH_OPENMP=OFF -DWITH_PTHREADS_PF=ON \
+       -DPARALLEL_ENABLE_PLUGINS=OFF \
+       -DCMAKE_DISABLE_FIND_PACKAGE_TBB=TRUE \
+       -DWITH_IPP=OFF \
+       -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF \
+       -DBUILD_EXAMPLES=OFF -DBUILD_opencv_python3=OFF \
+       -DBUILD_JAVA=OFF \
+    && grep -Fxq 'WITH_TBB:BOOL=OFF' /tmp/m23aj-opencv-build/CMakeCache.txt \
+    && grep -Fxq 'WITH_OPENMP:BOOL=OFF' /tmp/m23aj-opencv-build/CMakeCache.txt \
+    && grep -Fxq 'WITH_PTHREADS_PF:BOOL=ON' /tmp/m23aj-opencv-build/CMakeCache.txt \
+    && cmake --build /tmp/m23aj-opencv-build --parallel 2 \
+    && cmake --install /tmp/m23aj-opencv-build \
+    && test -f /opt/m23aj-opencv/lib/libopencv_core.so.4.6.0 \
+    && readelf -d /opt/m23aj-opencv/lib/libopencv_core.so.4.6.0 \
+       | grep -Fq 'libopencv_core.so.406' \
+    && if readelf -d /opt/m23aj-opencv/lib/libopencv_core.so.4.6.0 \
+       | grep -E 'NEEDED.*libtbb'; then \
+         echo M23AJ_BUILD_BLOCKED=TBB_LINKED; exit 2; \
+       fi \
+    && echo M23AJ_PTHREADS_BUILD_CONTRACT=PASS
+
+# Default remains non-ROS; the separately reviewed runtime runner
+# must choose a deterministic isolated component/control and prove
+# all loaded OpenCV/TBB mappings, not just DT_NEEDED of the new core.
+CMD ["/bin/false"]
