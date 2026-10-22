@@ -51,6 +51,56 @@ no network, no production process** and a fresh immutable
 `offline-build-02.log`; no automatic retries if it fails again.
 Operator must use the new exact Git commit and rerun source tests.
 
+## M23AY-03: Jazzy dynamically loaded component vs. generated executable
+
+Operator's second disconnected build **compiled usb_cam successfully**
+(`Finished <<< usb_cam [14.4s]`), then M23AY's original binary
+auditor blocked with `diagnostic node did not load isolated core library`.
+Host evidence: immutable `offline-build-02.log`, SHA256
+`6c88813a948d1865686b21a363ae762924f01641adeb42874bf698fd8c1fec8f`.
+No camera operation, no image accepted.
+
+Exact ROS 2 **Jazzy** upstream source explains why requiring BOTH the
+component DSO and the standalone generated executable to have an
+`ldd -r` dependency on `libusb_cam.so` is overly strict:
+
+- `rclcpp_components_register_node.cmake` uses `add_executable`
+  and links the generated wrapper against `class_loader::class_loader`,
+  `rclcpp::rclcpp` and `rclcpp_components::component`, **not**
+  the usb_cam component target.
+  Source: https://github.com/ros2/rclcpp/blob/jazzy/rclcpp_components/cmake/rclcpp_components_register_node.cmake
+- The generated `node_main.cpp.in` constructs
+  `class_loader::ClassLoader(library_name)` to dynamically load
+  `libusb_cam_node.so` at runtime. Source:
+  https://github.com/ros2/rclcpp/blob/jazzy/rclcpp_components/src/node_main.cpp.in
+
+The amended binary audit therefore:
+1. **Still strictly requires** `libusb_cam_node.so`'s `ldd -r`
+   closure to resolve `libusb_cam.so` from
+   `/opt/m23ay-install/lib/libusb_cam.so`, rejecting legacy underlay.
+2. Requires the **standalone executable's compiled strings** to
+   identify `libusb_cam_node.so` and `usb_cam::UsbCamNode`;
+   this is evidence of the intended dynamic component reference,
+   not execution.
+3. Still checks `ldd -r` closure, ELF architecture,
+   unresolved symbols and TBB dependencies on all three binaries,
+   plus diagnostic strings in the component/core.
+4. Does NOT demand that the standalone wrapper itself statically
+   links `libusb_cam.so`; that would conflict with Jazzy's
+   confirmed dynamic loader design.
+
+Six new/updated negative source tests (19 total) verify that missing
+component core, wrong plugin class/file, and missing symbols block,
+while a standalone wrapper without a direct core ELF dependency is
+allowed **only with a verified component DSO**.
+
+No acceptance criterion for frame sequence, timestamps or camera
+continuity was weakened. This remains an offline diagnostic binary
+build stage. Use the new exact revision, fresh immutable
+`offline-build-03.log`, and STOP on any next failure. Preserve
+the original logs 01 and 02 and do not rebuild the accepted
+M23AJ parent or delete diagnostic images.
+
 ## Stage A — safe host-only source tests
 
 Create a fresh sparse checkout, reusing neither /tmp nor production.
@@ -82,10 +132,10 @@ Pin the actual commit SHA supplied alongside the operator command.
 )
 ~~~
 
-Require **13/13** tests and inert status markers:
+Require **19/19** tests and inert status markers:
 M23AY_STATUS=NO_ROS_OR_DEVICE_BY_DEFAULT and
 M23AX_STATUS=INERT_NO_ROS_NO_DEVICE_BY_DEFAULT. The unit tests
-are source-only; the corrected 13-test suite must be run anew before this attempt.
+are source-only; the corrected 19-test suite must be run anew before this attempt.
 
 ## Stage B — pinned-image, no-network no-device builder
 
@@ -98,7 +148,7 @@ private host log. No running Podman containers and no device mappings.
   umask 077
   DIR="$HOME/.local/state/leroy-m23ay-source"
   LOGDIR="$HOME/.local/state/leroy-m23ay"
-  LOG="$LOGDIR/offline-build-02.log"
+  LOG="$LOGDIR/offline-build-03.log"
   TAG="localhost/leroy-sensors:m23ay-acquisition-diagnostic-v1"
   PINNED="334b9b35fe09156cfd0615be572eaecf96fdbebc3d75bf4fdd39a141d73d6025"
   test "$(id -u)" -ne 0
