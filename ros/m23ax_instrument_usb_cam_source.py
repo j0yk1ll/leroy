@@ -152,8 +152,8 @@ def instrument(sources):
     # whether dequeue succeeded, and the ROS header stamp. Observer M23K
     # records separate raw/rect callback stamps and steady receipt times.
     node = replace_once(
-        node, "#include <memory>\\n",
-        "#include <cstdint>\\n#include <iostream>\\n#include <memory>\\n",
+        node, "#include <memory>\n",
+        "#include <cstdint>\n#include <iostream>\n#include <memory>\n",
         "node_std_stream_headers")
     node = replace_once(
         node, "  *m_camera_info_msg = m_camera_info->getCameraInfo();\n"
