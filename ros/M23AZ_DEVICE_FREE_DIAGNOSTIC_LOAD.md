@@ -79,6 +79,23 @@ Use the new exact source SHA. Rerun offline tests first; then if PASS,
 ONE new no-device attempt to fresh immutable `dlopen-02.log`.
 No automatic retry or hardware/production permission on failure.
 
+## M23AZ corrected test fixture — source unit gate still pending
+
+At source revision `d21abb6f0459c25ece9bfabfec789f84c190d651`,
+operator's first corrected offline 26-test suite returned **25 pass, 1 FAIL**:
+`test_missing_installed_node_forbidden` expected `libraries missing`,
+but the fixture simulated **every file except the core library**
+missing. The new Ament package-index preflight correctly blocked first
+with `diagnostic usb_cam ament package index missing`.
+
+The test fixture is now scoped to mark **only**
+`/opt/m23ay-install/lib/libusb_cam_node.so` missing, leaving the Ament
+package index and diagnostic core intact. This changes only the
+offline negative test; no runtime guard, Ament preflight, diagnostic
+image or camera driver is changed. Rerun all **26** tests against the
+new pinned source commit before any device-free dlopen-02 attempt.
+Do not treat the prior failed suite as PASS; preserve dlopen-01.
+
 ## Host test procedure
 
 Source branch `feature/m23az-device-free-component-load-smoke`
