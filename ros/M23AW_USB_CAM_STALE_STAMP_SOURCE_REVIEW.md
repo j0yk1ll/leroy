@@ -59,7 +59,7 @@ Podman device mapping or recording.**
   test "$(id -u)" -ne 0
   SOURCE="$HOME/.local/state/leroy-m23aw-source"
   LOGDIR="$HOME/.local/state/leroy-m23aw"
-  LOG="$LOGDIR/source-control-flow-01.log"
+  LOG="$LOGDIR/source-control-flow-03.log"
   IMAGE_ID=334b9b35fe09156cfd0615be572eaecf96fdbebc3d75bf4fdd39a141d73d6025
   test ! -e "$SOURCE"
   mkdir -p "$LOGDIR"
@@ -83,7 +83,7 @@ Podman device mapping or recording.**
   podman run --rm --pull=never \
     --network=none --ipc=private --pid=private \
     --cap-drop=all --security-opt=no-new-privileges \
-    --read-only --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+    --read-only --tmpfs /tmp:rw,nosuid,nodev,size=16m,notmpcopyup \
     --memory=512m --pids-limit=64 \
     --volume "$SOURCE/ros/m23aw_stale_stamp_source_audit.py:/opt/m23aw-source-audit.py:ro" \
     --entrypoint /usr/bin/python3 \
@@ -98,6 +98,35 @@ Expected host-side 11 source unit tests, inert default
 image source check `M23AW_VERDICT=STALE_STAMP_SOURCE_CONTROL_FLOW_PLAUSIBLE`
 with all safety/source limitations explicitly `false`
 for actual cause and publisher duplication proved.
+
+### M23AW-03: OCI ENOSPC correction after host diagnosis
+
+The first operator corrected host unit tests PASS 11/11 at commit
+`988cffe280892b752ca18112af3b13492409d815`, but the pinned-image
+source check did not start. An immutable 63-byte log
+`source-control-flow-02.log` (SHA256
+`468cdafb4ee71d7cb0c93d0277578052bec09413b4ddf5559bccc58564c19346`)
+contains `Error: OCI runtime error: crun: write: No space left on device`.
+Read-only host diagnostics show the Podman graphroot has 179 GB free
+and ~58.5 million free inodes; the runroot, /tmp and /dev/shm have
+ample free space and inodes.
+
+**Likely specific cause:** The earlier command supplied
+`--tmpfs /tmp:...size=16m`. Podman defaults to **tmpcopyup**, copying
+the image's underlying /tmp into the new tmpfs at startup.
+The pinned M23AJ Dockerfile creates `/tmp/m23aj-opencv-source` and
+`/tmp/m23aj-opencv-build` and does not remove these large OpenCV trees.
+This can overflow the isolated 16 MiB *container tmpfs* despite ample
+host disk. `notmpcopyup` creates an empty tmpfs overlay, and the
+source auditor does not need the image's /tmp contents.
+This requires actual corrected no-device Podman inspection before PASS.
+Podman docs: https://docs.podman.io/en/stable/markdown/podman-run.1.html
+
+**Correction:** use `--tmpfs /tmp:rw,nosuid,nodev,size=16m,notmpcopyup`
+and a **new immutable** `source-control-flow-03.log`. Do not delete
+image/cache/evidence, don't `podman prune`, don't open the camera.
+Check exact `M23AW_VERDICT=STALE_STAMP_SOURCE_CONTROL_FLOW_PLAUSIBLE`
+and report Podman exit code independently. Do not overwrite -02.
 
 The image inspection does not connect a V4L2 device. It only
 reads the immutable on-image patched usb_cam C++ text. This
