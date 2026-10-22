@@ -86,6 +86,14 @@ def audit():
         if "ELF64" not in hdr or "Advanced Micro Devices X86-64" not in hdr:
             raise Blocked("wrong diagnostic executable architecture: " + key)
         closure = run_command(["ldd", "-r", str(target)])
+        # Preserve only relevant dependency lines as bounded provenance,
+        # before a fail-closed check could abort this disposable build.
+        relevant = [line.strip() for line in closure.splitlines()
+                    if any(token in line for token in
+                           ("libusb_cam", "libopencv_core", "libtbb"))]
+        print("M23AY_ELF_LOADER_JSON=" + json.dumps({
+            "binary": key, "relevant_dependencies": relevant[:16]
+        }, sort_keys=True), flush=True)
         # The component DSO must resolve diagnostic libusb_cam.so; the
         # generated standalone wrapper loads that DSO with class_loader.
         verify_link_output(closure, require_diagnostic=True,
