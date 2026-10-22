@@ -30,9 +30,11 @@ class Blocked(ValueError):
     pass
 
 
-def gate(env, *, exists=Path.is_file, globs=None):
+def gate(env, *, exists=Path.is_file, globs=None, usb_bus_exists=None):
     if globs is None:
         globs = lambda pattern: list(Path("/").glob(pattern.lstrip("/")))
+    if usb_bus_exists is None:
+        usb_bus_exists = lambda: Path("/dev/bus/usb").exists()
     for key, required in ENVIRONMENT.items():
         if env.get(key) != required:
             raise Blocked("missing or wrong isolation gate: " + key)
@@ -47,7 +49,7 @@ def gate(env, *, exists=Path.is_file, globs=None):
     for pattern in DENIED_DEVICE_PATTERNS:
         if list(globs(pattern)):
             raise Blocked("camera/serial device exposed: " + pattern)
-    if Path("/dev/bus/usb").exists():
+    if usb_bus_exists():
         raise Blocked("USB bus exposed in device-free guest")
     return True
 
