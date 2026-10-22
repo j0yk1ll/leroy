@@ -16,6 +16,8 @@ import sys
 NODE = "/opt/m23ay-install/lib/libusb_cam_node.so"
 CORE = "/opt/m23ay-install/lib/libusb_cam.so"
 OPENCV = "/opt/m23aj-opencv/lib"
+# Exact Ament search roots: diagnostic usb_cam resource takes precedence; no legacy workspace.
+AMENT_PREFIX_PATH = "/opt/m23ay-install:/opt/ros/jazzy"
 DENIED_DEVICE_PATTERNS = ("/dev/video*", "/dev/ttyACM*", "/dev/ttyUSB*")
 ENVIRONMENT = {
     "M23AZ_OFFLINE_DLOPEN_APPROVED": "YES_NO_DEVICES",
@@ -30,7 +32,8 @@ class Blocked(ValueError):
     pass
 
 
-def gate(env, *, exists=Path.is_file, globs=None, usb_bus_exists=None):
+def gate(env, *, exists=Path.is_file, is_dir=Path.is_dir,
+         globs=None, usb_bus_exists=None):
     if globs is None:
         globs = lambda pattern: list(Path("/").glob(pattern.lstrip("/")))
     if usb_bus_exists is None:
@@ -38,6 +41,18 @@ def gate(env, *, exists=Path.is_file, globs=None, usb_bus_exists=None):
     for key, required in ENVIRONMENT.items():
         if env.get(key) != required:
             raise Blocked("missing or wrong isolation gate: " + key)
+    # ROS/ament plugin static constructors may terminate the whole Python
+    # interpreter on dlopen when AMENT_PREFIX_PATH is absent; verify this
+    # BEFORE entering ctypes.CDLL, not in a recoverable exception handler.
+    if env.get("AMENT_PREFIX_PATH") != AMENT_PREFIX_PATH:
+        raise Blocked("AMENT_PREFIX_PATH missing or wrong order: diagnostic first")
+    for prefix in AMENT_PREFIX_PATH.split(":"):
+        if not is_dir(Path(prefix)):
+            raise Blocked("AMENT_PREFIX_PATH prefix directory missing: " + prefix)
+    if not exists(Path("/opt/m23ay-install/share/ament_index/resource_index/packages/usb_cam")):
+        raise Blocked("diagnostic usb_cam ament package index missing")
+    if not exists(Path("/opt/ros/jazzy/share/ament_index/resource_index/packages/rclcpp_components")):
+        raise Blocked("ROS Jazzy rclcpp_components ament package index missing")
     if env.get("LD_PRELOAD"):
         raise Blocked("LD_PRELOAD forbidden")
     if env.get("LD_LIBRARY_PATH", "").split(":")[:2] != [
