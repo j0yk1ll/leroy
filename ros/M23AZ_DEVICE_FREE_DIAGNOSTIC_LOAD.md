@@ -43,6 +43,42 @@ safe repeated dlclose/unload, real frame timing, DDS behavior,
 physical camera setup, the original duplicate's root cause, or
 production acceptance. An automatic camera trial is forbidden.
 
+## First host attempt: C++ ament environment not initialized
+
+The operator's initial no-device dlopen container exited **139**
+before any component load/map verdict. The preserved log
+`~/.local/state/leroy-m23az/dlopen-01.log` has SHA256
+`4cc8671009076f777f50ad9a868a9ba9cb8e2e6723220e0eb826da2d79453d35`
+and reports:
+
+```text
+terminate called after throwing an instance of 'std::runtime_error'
+  what(): Environment variable 'AMENT_PREFIX_PATH' is not set or empty
+```
+
+The prior command supplied `LD_LIBRARY_PATH` but not ROS 2 / ament's
+package resource search path. A static initializer in a ROS-related
+shared library can throw during ctypes.CDLL, before control returns
+to Python; an uncaught native exception can terminate the process.
+Exit 139 is preserved as a crash, but is not evidence of physical
+camera acquisition, node shutdown, or ROS message continuity.
+
+Correction: pass the exact isolated
+`AMENT_PREFIX_PATH=/opt/m23ay-install:/opt/ros/jazzy` to the
+device-free container, keeping the diagnostic prefix FIRST and
+excluding original workspace prefixes. Probe fails closed BEFORE
+native CDLL unless the value is exact, both prefix directories exist,
+and installed ament package index entries for the diagnostic `usb_cam`
+and Jazzy `rclcpp_components` exist. These are necessary preconditions,
+not a guarantee that arbitrary static constructors are safe.
+Seven new negative tests verify missing/empty/wrong order and missing
+resource markers, plus that no native load occurs when env is missing.
+Total source tests now 26.
+
+Use the new exact source SHA. Rerun offline tests first; then if PASS,
+ONE new no-device attempt to fresh immutable `dlopen-02.log`.
+No automatic retry or hardware/production permission on failure.
+
 ## Host test procedure
 
 Source branch `feature/m23az-device-free-component-load-smoke`
@@ -75,7 +111,7 @@ instructions.
 )
 ~~~
 
-Require **19 source unit tests** and inert default:
+Require **26 source unit tests** and inert default:
 `M23AZ_STATUS=INERT_NO_ROS_NO_DEVICES`.
 
 ### B. One isolated dynamic-loader observation, no ROS or camera
@@ -92,7 +128,7 @@ single read-only instrumented probe source. New immutable host log.
   test "$(id -u)" -ne 0
   SOURCE="$HOME/.local/state/leroy-m23az-source"
   LOGDIR="$HOME/.local/state/leroy-m23az"
-  LOG="$LOGDIR/dlopen-01.log"
+  LOG="$LOGDIR/dlopen-02.log"
   TAG="localhost/leroy-sensors:m23ay-acquisition-diagnostic-v1"
   ID="9ff2faf53109f88333e79c998b6946caa49f09fc807d2da422c1adcd47bda571"
   test -z "$(podman ps -q)"
@@ -110,6 +146,7 @@ single read-only instrumented probe source. New immutable host log.
     --env LEROY_NAV2_DRY_RUN=1 \
     --env ROS_DOMAIN_ID=170 \
     --env ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    --env AMENT_PREFIX_PATH=/opt/m23ay-install:/opt/ros/jazzy \
     --env LD_PRELOAD= \
     --env LD_LIBRARY_PATH=/opt/m23ay-install/lib:/opt/m23aj-opencv/lib:/opt/ros/jazzy/lib \
     --volume "$SOURCE/ros/m23az_component_dlopen_probe.py:/opt/m23az-dlopen.py:ro" \
