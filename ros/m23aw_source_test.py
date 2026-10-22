@@ -98,8 +98,14 @@ class Tests(unittest.TestCase):
 
     def test_publisher_gets_current_stored_stamp(self):
         cpp, node = fixtures()
+        # Negative mutation belongs in the publisher source, NOT usb_cam.cpp.
+        # A mutation on the wrong fixture was a no-op and falsely exercised
+        # the unmodified successful path (operator caught this).
+        self.assertIn("get_image_timestamp()", node)
+        changed_node = node.replace("get_image_timestamp()", "get_monotonic_time()")
+        self.assertNotEqual(changed_node, node)
         with self.assertRaisesRegex(m.Blocked, "publish/get_image/stamp"):
-            m.inspect(cpp.replace("get_image_timestamp()", "get_monotonic_time()"), node)
+            m.inspect(cpp, changed_node)
 
     def test_publisher_requires_both_header_parts(self):
         cpp, node = fixtures()
