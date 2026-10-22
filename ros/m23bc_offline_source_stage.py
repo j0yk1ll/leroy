@@ -41,7 +41,7 @@ def contract(supervisor, observer):
     new_sup = once(new_sup, OLD_BASELINE,
         'COUNTER_PATH = ("' + BINARY_ROOT + '"\n'
         '                "' + COUNTER_NAME + '")', "M23K_OBSERVER_BINARY")
-    if "ros2\", \"launch" not in new_sup:
+    if '["ros2", "launch", camera_launch_path]' not in new_sup:
         raise Blocked("M23K supervisor original launch contract absent")
     if new_sup.count('start_new_session=True') != 2:
         raise Blocked("M23K process groups changed")
