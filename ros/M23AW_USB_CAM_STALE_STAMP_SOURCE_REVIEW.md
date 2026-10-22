@@ -85,7 +85,7 @@ Podman device mapping or recording.**
     --cap-drop=all --security-opt=no-new-privileges \
     --read-only --tmpfs /tmp:rw,nosuid,nodev,size=16m \
     --memory=512m --pids-limit=64 \
-    --mount "type=bind,src=$SOURCE/ros/m23aw_stale_stamp_source_audit.py,dst=/opt/m23aw-source-audit.py,ro=true" \
+    --volume "$SOURCE/ros/m23aw_stale_stamp_source_audit.py:/opt/m23aw-source-audit.py:ro" \
     --entrypoint /usr/bin/python3 \
     "$IMAGE_ID" -B /opt/m23aw-source-audit.py --check \
     >"$LOG" 2>&1
