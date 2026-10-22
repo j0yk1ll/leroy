@@ -18,6 +18,10 @@ def good_loader(with_core=True):
     return value + "    libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6\n"
 
 
+def good_launcher_strings():
+    return "libusb_cam_node.so\nusb_cam::UsbCamNode\n"
+
+
 def good_strings():
     return ("M23AX_PUBLISH pub_index=\n"
             "M23AX_FATAL=METADATA_LOG_LIMIT\n"
@@ -60,15 +64,43 @@ class OfflineM23AYTests(unittest.TestCase):
 
     def test_validate_bounded_publisher_markers(self):
         self.assertTrue(m.verify_symbols(
-            good_strings(), "mmap_dequeued\nselect_eintr\nmmap_dqbuf_eagain\n"))
+            good_strings(), "mmap_dequeued\nselect_eintr\nmmap_dqbuf_eagain\n",
+            good_launcher_strings()))
 
     def test_missing_publisher_marker_blocks(self):
         with self.assertRaisesRegex(m.Blocked, "missing publisher"):
-            m.verify_symbols("M23AX_PUBLISH pub_index=", "mmap_dequeued")
+            m.verify_symbols("M23AX_PUBLISH pub_index=", "mmap_dequeued", good_launcher_strings())
 
     def test_missing_acquisition_marker_blocks(self):
         with self.assertRaisesRegex(m.Blocked, "missing acquisition"):
-            m.verify_symbols(good_strings(), "mmap_dequeued\nselect_eintr")
+            m.verify_symbols(good_strings(), "mmap_dequeued\nselect_eintr", good_launcher_strings())
+
+    def test_launcher_dlopen_component_without_direct_core(self):
+        self.assertTrue(m.verify_link_output(good_loader(False),
+                                             require_diagnostic=True,
+                                             require_core=False))
+        self.assertTrue(m.verify_symbols(
+            good_strings(), "mmap_dequeued\nselect_eintr\nmmap_dqbuf_eagain\n",
+            good_launcher_strings()))
+
+    def test_launcher_missing_component_filename_is_blocked(self):
+        with self.assertRaisesRegex(m.Blocked, "component loader reference"):
+            m.verify_symbols(
+                good_strings(), "mmap_dequeued\nselect_eintr\nmmap_dqbuf_eagain\n",
+                "usb_cam::UsbCamNode")
+
+    def test_launcher_wrong_plugin_class_is_blocked(self):
+        with self.assertRaisesRegex(m.Blocked, "component loader reference"):
+            m.verify_symbols(
+                good_strings(), "mmap_dequeued\nselect_eintr\nmmap_dqbuf_eagain\n",
+                "libusb_cam_node.so\nwrong_plugin")
+
+    def test_audit_still_requires_component_core(self):
+        src = (Path(__file__).resolve().parent /
+               "m23ay_binary_audit.py").read_text()
+        self.assertIn('require_core=key == "node"', src)
+        self.assertIn("libusb_cam_node.so", src)
+        self.assertNotIn('require_core=key in ("node", "executable")', src)
 
     def test_explicit_offline_gate_required(self):
         with patch.dict(m.os.environ, {"M23AY_OFFLINE_BINARY_ONLY": ""}):
