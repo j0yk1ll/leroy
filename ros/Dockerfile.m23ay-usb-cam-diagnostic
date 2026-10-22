@@ -33,7 +33,7 @@ RUN python3 -B /opt/m23ay/m23ay_source_test.py \
     && test -f /opt/m23ay-install/lib/libusb_cam_node.so \
     && . /opt/m23ay-install/local_setup.sh \
     && export LD_LIBRARY_PATH="/opt/m23ay-install/lib:/opt/m23aj-opencv/lib:${LD_LIBRARY_PATH:-}" \
-    && python3 -B /opt/m23ay/m23ay_binary_audit.py --audit \
+    && M23AY_OFFLINE_BINARY_ONLY=YES python3 -B /opt/m23ay/m23ay_binary_audit.py --audit \
     && echo M23AY_OFFLINE_INSTRUMENTED_USB_CAM_BUILD=PASS
 
 # Inert image: NEVER use a robot/production entrypoint.
