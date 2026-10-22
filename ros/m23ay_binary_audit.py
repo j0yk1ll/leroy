@@ -39,7 +39,7 @@ def verify_link_output(output, *, require_diagnostic=False, require_core=False):
     return True
 
 
-def verify_symbols(node_strings, core_strings):
+def verify_symbols(node_strings, core_strings, executable_strings):
     for marker in ("M23AX_PUBLISH pub_index=", "M23AX_FATAL=METADATA_LOG_LIMIT",
                    " dequeue_count=", " v4l2_seq=", " ros_stamp_ns="):
         if marker not in node_strings:
@@ -47,6 +47,14 @@ def verify_symbols(node_strings, core_strings):
     for marker in ("mmap_dequeued", "select_eintr", "mmap_dqbuf_eagain"):
         if marker not in core_strings:
             raise Blocked("missing acquisition diagnostic string: " + marker)
+    # In ROS 2 Jazzy, rclcpp_components_register_node creates a standalone
+    # wrapper that dynamically loads libusb_cam_node.so through class_loader.
+    # The executable MUST embed that component's name, but it need not have
+    # a static DT_NEEDED for libusb_cam.so; the component .so MUST resolve
+    # its own diagnostic core through the isolated install prefix.
+    for marker in ("libusb_cam_node.so", "usb_cam::UsbCamNode"):
+        if marker not in executable_strings:
+            raise Blocked("standalone launcher missing component loader reference: " + marker)
     return True
 
 
@@ -78,8 +86,13 @@ def audit():
         if "ELF64" not in hdr or "Advanced Micro Devices X86-64" not in hdr:
             raise Blocked("wrong diagnostic executable architecture: " + key)
         closure = run_command(["ldd", "-r", str(target)])
+        # The component DSO must resolve diagnostic libusb_cam.so; the
+        # generated standalone wrapper loads that DSO with class_loader.
         verify_link_output(closure, require_diagnostic=True,
-                           require_core=key in ("node", "executable"))
+                           require_core=key == "node")
+        print("M23AY_LOADER_CORE_CHECK=" + key + ":" +
+              ("REQUIRED_AND_PASS" if key == "node" else "NOT_DIRECTLY_REQUIRED"),
+              flush=True)
         observed[key] = {
             "loader_checked": True,
             "relocations_resolved": True,
@@ -88,11 +101,15 @@ def audit():
     verify_symbols(
         run_command(["strings", "-a", str(paths["node"])]),
         run_command(["strings", "-a", str(paths["core"])]),
+        run_command(["strings", "-a", str(paths["executable"])]),
     )
     return {
         "verdict": "OFFLINE_INSTRUMENTED_USB_CAM_ELF_LOADER_PASS",
         "installed_modules": sorted(paths),
         "diagnostic_core_resolved_in_overlay": True,
+        "component_dso_requires_diagnostic_core": True,
+        "generated_launcher_uses_component_dlopen": True,
+        "generated_launcher_static_core_link_required": False,
         "pthreads_opencv_loader_precedence": True,
         "string_evidence_compiled_into_libraries": True,
         "ldd_r_closure_verified": True,
