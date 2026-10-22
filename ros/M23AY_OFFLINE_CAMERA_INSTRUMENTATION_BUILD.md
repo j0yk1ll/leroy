@@ -18,6 +18,39 @@ and actual acquisition/publication diagnostic strings in those
 binaries. ELF closure is not complete ABI certification. The new image
 defaults to CMD ["/bin/false"] and cannot automatically start ROS.
 
+## M23AY-02 corrective investigation — colcon argument parser
+
+Operator's first offline build exited `2` **before C++ compilation**.
+Source copy instrumentation printed `M23AX_SOURCE_OVERLAY_WRITTEN=ISOLATED_COPY_ONLY`,
+but the installed `colcon build` CLI rejected the optional argument
+`--allow-overriding usb_cam`:
+
+```text
+colcon build: error: argument --packages-select: unrecognized argument: --allow-overriding
+M23AY_BUILD_EXIT=2
+```
+
+The first immutable host log is
+`~/.local/state/leroy-m23ay/offline-build-01.log`,
+SHA256 `622875cef115bc89b507ac640919b834318c17d4b63ea7cb0f96daed8c214436`.
+Preserve it. The source copy was created **inside a failed disposable
+build stage**, not on the host or pinned original image.
+
+The revised Dockerfile removes `--allow-overriding` because it is not
+part of this installed colcon CLI. It STILL compiles only the selected
+`usb_cam` source package to a fresh `/opt/m23ay-install` prefix,
+rebuilds both core and node against the same changed C++ header,
+and requires `ldd -r` to actually resolve the core from this
+new prefix rather than the original workspace. An additional
+host unit test checks this command compatibility and ABI overlay
+contract (13 source tests total instead of 12). No acceptance or
+loader check is relaxed.
+
+This second attempt is allowed only **offline, with no device mapping,
+no network, no production process** and a fresh immutable
+`offline-build-02.log`; no automatic retries if it fails again.
+Operator must use the new exact Git commit and rerun source tests.
+
 ## Stage A — safe host-only source tests
 
 Create a fresh sparse checkout, reusing neither /tmp nor production.
@@ -49,10 +82,10 @@ Pin the actual commit SHA supplied alongside the operator command.
 )
 ~~~
 
-Require **12/12** tests and inert status markers:
+Require **13/13** tests and inert status markers:
 M23AY_STATUS=NO_ROS_OR_DEVICE_BY_DEFAULT and
 M23AX_STATUS=INERT_NO_ROS_NO_DEVICE_BY_DEFAULT. The unit tests
-are source-only; operator execution is still outstanding.
+are source-only; the corrected 13-test suite must be run anew before this attempt.
 
 ## Stage B — pinned-image, no-network no-device builder
 
@@ -65,7 +98,7 @@ private host log. No running Podman containers and no device mappings.
   umask 077
   DIR="$HOME/.local/state/leroy-m23ay-source"
   LOGDIR="$HOME/.local/state/leroy-m23ay"
-  LOG="$LOGDIR/offline-build-01.log"
+  LOG="$LOGDIR/offline-build-02.log"
   TAG="localhost/leroy-sensors:m23ay-acquisition-diagnostic-v1"
   PINNED="334b9b35fe09156cfd0615be572eaecf96fdbebc3d75bf4fdd39a141d73d6025"
   test "$(id -u)" -ne 0
@@ -96,7 +129,7 @@ private host log. No running Podman containers and no device mappings.
 
 No network access or device access is required. Source and toolchains
 are already in the immutable parent. Build failures are blockers:
-preserve the first immutable log and do not automatically retry.
+preserve both the first failed immutable log and any later fresh log; never automatically retry.
 The build uses at most two CMake compilation workers.
 
 For any subsequent **runtime** Podman self-audit, use notmpcopyup on
