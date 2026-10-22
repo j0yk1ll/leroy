@@ -41,6 +41,9 @@ def complete_camera_log(camera_text):
     last_marker, total, returned = final[0]
     if total < 3 or total > m23ba.CAP or returned != total:
         raise Blocked("publisher completion totals invalid")
+    if re.search(r"process has died|Segmentation fault|M23AX_FATAL=",
+                 camera_text, re.IGNORECASE):
+        raise Blocked("camera process crash or metadata overflow")
     presend = m23ba.parse_publisher(camera_text)
     if len(presend) != total:
         raise Blocked("publisher completion count differs from logged attempts")
@@ -48,9 +51,6 @@ def complete_camera_log(camera_text):
         raise Blocked("pre-send event after publisher completion")
     if any("M23AX_PUBLISH" in line for line in lines[:last_marker]) is False:
         raise Blocked("no pre-send events before publisher completion")
-    if re.search(r"process has died|Segmentation fault|M23AX_FATAL=",
-                 camera_text, re.IGNORECASE):
-        raise Blocked("camera process crash or metadata overflow")
     # M23AU established that 'ros2 launch' may exit 0 while a child dies.
     # Demand exactly one actual clean child exit marker for both processes.
     for child in CHILDREN:
