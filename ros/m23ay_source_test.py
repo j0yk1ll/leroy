@@ -75,12 +75,23 @@ class OfflineM23AYTests(unittest.TestCase):
             with self.assertRaisesRegex(m.Blocked, "offline build"):
                 m.audit()
 
+
+    def test_colcon_cli_does_not_require_optional_override_extension(self):
+        doc = (Path(__file__).resolve().parent /
+               "Dockerfile.m23ay-usb-cam-diagnostic").read_text()
+        self.assertIn("--base-paths /opt/m23ax-source/usb_cam", doc)
+        self.assertIn("--install-base /opt/m23ay-install", doc)
+        self.assertIn("--packages-select usb_cam", doc)
+        self.assertNotIn("--allow-overriding", doc)
+        self.assertIn("M23AY_OFFLINE_BINARY_ONLY=YES", doc)
+
     def test_build_file_no_runtime_launch(self):
         doc = (Path(__file__).resolve().parent /
                "Dockerfile.m23ay-usb-cam-diagnostic").read_text()
         self.assertIn("FROM localhost/leroy-sensors:m23aj-pthreads-opencv-v2", doc)
         self.assertIn("M23AX_OFFLINE_BUILD_ONLY=YES", doc)
-        self.assertIn("--allow-overriding usb_cam", doc)
+        self.assertIn("--packages-select usb_cam", doc)
+        self.assertNotIn("--allow-overriding", doc)
         self.assertIn("--network", "podman build --network none")
         self.assertIn('CMD ["/bin/false"]', doc)
         self.assertNotIn("robot.launch.py", doc)
