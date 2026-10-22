@@ -10,6 +10,7 @@ def approved():
     return {
         **m.ENVIRONMENT,
         "LD_PRELOAD": "",
+        "AMENT_PREFIX_PATH": m.AMENT_PREFIX_PATH,
         "LD_LIBRARY_PATH": "/opt/m23ay-install/lib:/opt/m23aj-opencv/lib:/opt/ros/jazzy/lib",
     }
 
@@ -29,6 +30,7 @@ def maps():
 def gate(env, **overrides):
     args = {
         "exists": lambda path: True,
+        "is_dir": lambda path: True,
         "globs": lambda pattern: [],
         "usb_bus_exists": lambda: False,
     }
@@ -49,6 +51,47 @@ class Tests(unittest.TestCase):
         env.pop("M23AZ_OFFLINE_DLOPEN_APPROVED")
         with self.assertRaisesRegex(m.Blocked, "M23AZ_OFFLINE"):
             gate(env)
+
+    def test_missing_ament_prefix_fails_before_dlopen(self):
+        env = approved()
+        env.pop("AMENT_PREFIX_PATH")
+        with self.assertRaisesRegex(m.Blocked, "AMENT_PREFIX_PATH"):
+            gate(env)
+
+    def test_empty_ament_prefix_rejected(self):
+        env = approved()
+        env["AMENT_PREFIX_PATH"] = ""
+        with self.assertRaisesRegex(m.Blocked, "AMENT_PREFIX_PATH"):
+            gate(env)
+
+    def test_legacy_ament_prefix_first_rejected(self):
+        env = approved()
+        env["AMENT_PREFIX_PATH"] = (
+            "/leroy_ws/install/usb_cam:" + m.AMENT_PREFIX_PATH)
+        with self.assertRaisesRegex(m.Blocked, "wrong order"):
+            gate(env)
+
+    def test_missing_ament_prefix_directory_rejected(self):
+        with self.assertRaisesRegex(m.Blocked, "prefix directory"):
+            gate(approved(), is_dir=lambda p: str(p) != "/opt/m23ay-install")
+
+    def test_missing_diagnostic_package_index_rejected(self):
+        with self.assertRaisesRegex(m.Blocked, "diagnostic usb_cam ament"):
+            gate(approved(), exists=lambda p: not str(p).endswith(
+                "/resource_index/packages/usb_cam"))
+
+    def test_missing_ros_components_index_rejected(self):
+        with self.assertRaisesRegex(m.Blocked, "rclcpp_components ament"):
+            gate(approved(), exists=lambda p: not str(p).endswith(
+                "/resource_index/packages/rclcpp_components"))
+
+    def test_missing_ament_prefix_does_not_enter_ctypes(self):
+        env = approved()
+        env.pop("AMENT_PREFIX_PATH")
+        with patch.dict(m.os.environ, env, clear=True), \
+             patch.object(m.ctypes, "CDLL",
+                          side_effect=AssertionError("native initializer entered")):
+            self.assertEqual(m.main(["--run"]), 2)
 
     def test_wrong_ros_domain(self):
         env = approved()
