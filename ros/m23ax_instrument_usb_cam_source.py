@@ -71,6 +71,19 @@ def instrument(sources):
         "  std::vector<capture_format_t> m_supported_formats;\n"
         "  M23AXAcquisition m_m23ax_acquisition;",
         "header_member")
+    # Preserve ordering: a successful mmap V4L2 dequeue is processed,
+    # requeued, and only then labelled as a fresh frame.
+    if camera.count("case io_method_t::IO_METHOD_MMAP:") < 1 or \
+       camera.count("case io_method_t::IO_METHOD_USERPTR:") < 1:
+        raise Blocked("mmap capture branch not found")
+    mmap = camera.split("case io_method_t::IO_METHOD_MMAP:", 1)[1].split(
+        "case io_method_t::IO_METHOD_USERPTR:", 1)[0]
+    order = ["VIDIOC_DQBUF", "m_image.stamp = usb_cam::utils::calc_img_timestamp",
+             "process_image(m_buffers[buf.index].start, m_image.data, buf.bytesused);",
+             "VIDIOC_QBUF"]
+    indexes = [mmap.find(part) for part in order]
+    if -1 in indexes or indexes != sorted(indexes) or len(set(indexes)) != 4:
+        raise Blocked("mmap dequeue/timestamp/process/requeue source order changed")
     camera = replace_once(
         camera, "void UsbCam::grab_image()\n{\n",
         "void UsbCam::grab_image()\n{\n"
@@ -138,6 +151,10 @@ def instrument(sources):
     # Each record includes the event index, kernel sequence/timestamp,
     # whether dequeue succeeded, and the ROS header stamp. Observer M23K
     # records separate raw/rect callback stamps and steady receipt times.
+    node = replace_once(
+        node, "#include <memory>\\n",
+        "#include <cstdint>\\n#include <iostream>\\n#include <memory>\\n",
+        "node_std_stream_headers")
     node = replace_once(
         node, "  *m_camera_info_msg = m_camera_info->getCameraInfo();\n"
         "  m_camera_info_msg->header = m_image_msg->header;\n"
