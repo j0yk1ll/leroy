@@ -39,6 +39,7 @@ class UsbCam {
       }
       // Get timestamp from V4L2 image buffer
       m_image.stamp = usb_cam::utils::calc_img_timestamp(buf.timestamp, m_epoch_time_shift_us);
+      process_image(m_buffers[buf.index].start, m_image.data, buf.bytesused);
       if (-1 == usb_cam::utils::xioctl(m_fd, static_cast<int>(VIDIOC_QBUF), &buf)) {
         throw std::runtime_error("Unable to exchange buffer with the driver");
       }
@@ -58,7 +59,8 @@ void UsbCam::grab_image()
 
 // enables/disables auto focus
 """
-    node = """bool UsbCamNode::take_and_send_image()
+    node = """#include <memory>
+bool UsbCamNode::take_and_send_image()
 {
   m_camera->get_image(reinterpret_cast<char *>(&m_image_msg->data[0]));
   auto stamp = m_camera->get_image_timestamp();
