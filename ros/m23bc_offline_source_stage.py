@@ -13,8 +13,8 @@ import sys
 
 from m23bb_evidence_source_contract import Blocked, once, transform
 
-SUPERVISOR_INPUT = Path("/opt/m23bc-input/m23k_camera_path_probe.py")
-CPP_INPUT = Path("/opt/m23bc-input/m23k_cpp")
+SUPERVISOR_INPUT = Path("/opt/m23bc-code/m23k_camera_path_probe.py")
+CPP_INPUT = Path("/opt/m23bc-code/m23k_cpp")
 OUT = Path("/opt/m23bc-variant")
 CPP_OUT = Path("/opt/m23bc-counter-source")
 BINARY_ROOT = "/opt/m23bc-counter-install/lib/leroy_m23k_camera_counter/"
@@ -72,7 +72,7 @@ def stage():
     (CPP_OUT / "src/m23k_camera_header_counter.cpp").write_text(new_cpp)
     OUT.mkdir(mode=0o755)
     (OUT / "m23k_camera_path_probe.py").write_text(new_sup)
-    shutil.copy2("/opt/m23bc-input/m23bb_host_evidence_adapter.py",
+    shutil.copy2("/opt/m23bc-code/m23bb_host_evidence_adapter.py",
                  OUT / "m23bb_host_evidence_adapter.py")
     print("M23BC_STAGED=NEW_SOURCE_COPY_ONLY", flush=True)
 
