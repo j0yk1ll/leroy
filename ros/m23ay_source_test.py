@@ -1,0 +1,92 @@
+"""M23AY: offline-only static loader-contract and Dockerfile tests, no device."""
+from pathlib import Path
+from unittest.mock import patch
+import unittest
+import m23ay_binary_audit as m
+
+
+def good_loader(with_core=True):
+    value = (
+        "    linux-vdso.so.1 (0x7f0000000000)\n"
+        "    libopencv_core.so.406 => /opt/m23aj-opencv/lib/libopencv_core.so.406\n"
+    )
+    if with_core:
+        value += (
+            "    libusb_cam.so => /opt/m23ay-install/lib/libusb_cam.so "
+            "(0x7f0000000000)\n"
+        )
+    return value + "    libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6\n"
+
+
+def good_strings():
+    return ("M23AX_PUBLISH pub_index=\n"
+            "M23AX_FATAL=METADATA_LOG_LIMIT\n"
+            " dequeue_count=\n v4l2_seq=\n ros_stamp_ns=\n")
+
+
+class OfflineM23AYTests(unittest.TestCase):
+    def test_default_safe(self):
+        with patch.object(m, "audit", side_effect=AssertionError("binary audit invoked")):
+            self.assertEqual(m.main([]), 0)
+
+    def test_good_overlay_library_resolution(self):
+        self.assertTrue(m.verify_link_output(good_loader(), require_core=True,
+                                             require_diagnostic=True))
+
+    def test_detect_missing_core(self):
+        with self.assertRaisesRegex(m.Blocked, "did not load isolated core"):
+            m.verify_link_output(good_loader(False), require_core=True)
+
+    def test_detect_legacy_underlay(self):
+        payload = good_loader() + (
+            "libusb_cam_node.so => "
+            "/leroy_ws/install/usb_cam/lib/libusb_cam_node.so\n"
+        )
+        with self.assertRaisesRegex(m.Blocked, "legacy"):
+            m.verify_link_output(payload, require_diagnostic=True)
+
+    def test_detect_missing_dependency(self):
+        with self.assertRaisesRegex(m.Blocked, "unresolved"):
+            m.verify_link_output(good_loader() + " libfoo.so => not found")
+
+    def test_detect_undefined_symbol(self):
+        with self.assertRaisesRegex(m.Blocked, "unresolved"):
+            m.verify_link_output(good_loader() + "undefined symbol: _ZN3fooE")
+
+    def test_detect_tbb(self):
+        with self.assertRaisesRegex(m.Blocked, "oneTBB"):
+            m.verify_link_output(good_loader() +
+                                 "libtbb.so.12 => /usr/lib/libtbb.so.12")
+
+    def test_validate_bounded_publisher_markers(self):
+        self.assertTrue(m.verify_symbols(
+            good_strings(), "mmap_dequeued\nselect_eintr\nmmap_dqbuf_eagain\n"))
+
+    def test_missing_publisher_marker_blocks(self):
+        with self.assertRaisesRegex(m.Blocked, "missing publisher"):
+            m.verify_symbols("M23AX_PUBLISH pub_index=", "mmap_dequeued")
+
+    def test_missing_acquisition_marker_blocks(self):
+        with self.assertRaisesRegex(m.Blocked, "missing acquisition"):
+            m.verify_symbols(good_strings(), "mmap_dequeued\nselect_eintr")
+
+    def test_explicit_offline_gate_required(self):
+        with patch.dict(m.os.environ, {"M23AY_OFFLINE_BINARY_ONLY": ""}):
+            with self.assertRaisesRegex(m.Blocked, "offline build"):
+                m.audit()
+
+    def test_build_file_no_runtime_launch(self):
+        doc = (Path(__file__).resolve().parent /
+               "Dockerfile.m23ay-usb-cam-diagnostic").read_text()
+        self.assertIn("FROM localhost/leroy-sensors:m23aj-pthreads-opencv-v2", doc)
+        self.assertIn("M23AX_OFFLINE_BUILD_ONLY=YES", doc)
+        self.assertIn("--allow-overriding usb_cam", doc)
+        self.assertIn("--network", "podman build --network none")
+        self.assertIn('CMD ["/bin/false"]', doc)
+        self.assertNotIn("robot.launch.py", doc)
+        self.assertNotIn("leroy-entrypoint", doc)
+        self.assertNotIn("V4L2_CID_", doc)
+
+
+if __name__ == "__main__":
+    unittest.main()
