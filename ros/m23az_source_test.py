@@ -124,8 +124,12 @@ class Tests(unittest.TestCase):
             gate(approved(), usb_bus_exists=lambda: True)
 
     def test_missing_installed_node_forbidden(self):
+        # Let the Ament resource indexes and diagnostic core exist.
+        # The only absent file is the node component itself; otherwise
+        # an earlier Ament-index preflight masks this negative control.
+        node_path = m.Path(m.NODE)
         with self.assertRaisesRegex(m.Blocked, "libraries missing"):
-            gate(approved(), exists=lambda p: str(p) == m.CORE)
+            gate(approved(), exists=lambda p: p != node_path)
 
     def test_valid_actual_mapping(self):
         result = m.mapped_libraries(maps())
