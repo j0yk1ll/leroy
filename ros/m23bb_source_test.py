@@ -59,7 +59,7 @@ class Tests(unittest.TestCase):
     def test_source_transform_paths_and_flush(self):
         sup, obs = p.transform(SUP, OBS)
         self.assertIn("from m23bb_host_evidence_adapter import staged_paths", sup)
-        self.assertIn("COUNTER_LOG, CAMERA_LAUNCH_LOG = staged_paths()", sup)
+        self.assertIn("CAMERA_LAUNCH_LOG, COUNTER_LOG = staged_paths()", sup)
         self.assertIn('CAMERA_LAUNCH_LOG.open("xb")', sup)
         self.assertIn('COUNTER_LOG.open("xb")', sup)
         self.assertIn('<< " " << receipt_ns() << std::endl;', obs)
