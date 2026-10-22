@@ -33,7 +33,7 @@ def transform(supervisor, observer):
     new_paths = (
         '# M23BB: host-bind preflight executes BEFORE running M23K subprocesses.\n'
         'from m23bb_host_evidence_adapter import staged_paths\n'
-        'COUNTER_LOG, CAMERA_LAUNCH_LOG = staged_paths()'
+        'CAMERA_LAUNCH_LOG, COUNTER_LOG = staged_paths()'
     )
     supervisor = once(supervisor, old_paths, new_paths, "M23K_PATHS")
     # The original exclusive-create xb path is preserved, not converted
