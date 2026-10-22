@@ -1,0 +1,38 @@
+# M23BC: OFFLINE ONLY, synthetic host-text evidence and M23K observer build.
+# Operator MUST verify immutable M23AY image ID before running builder.
+# THIS IMAGE HAS NO CAMERA/ROBOT ENTRYPOINT OR LIVE AUTHORIZATION.
+FROM localhost/leroy-sensors:m23ay-acquisition-diagnostic-v1
+
+ENV PYTHONDONTWRITEBYTECODE=1 CMAKE_BUILD_PARALLEL_LEVEL=2
+COPY m23k_cpp /opt/m23bc-code/m23k_cpp
+COPY m23k_camera_path_probe.py /opt/m23bc-code/m23k_camera_path_probe.py
+COPY m23bb_host_evidence_adapter.py /opt/m23bc-code/m23bb_host_evidence_adapter.py
+COPY m23bb_evidence_source_contract.py /opt/m23bc-code/m23bb_evidence_source_contract.py
+COPY m23bc_offline_source_stage.py /opt/m23bc-code/m23bc_offline_source_stage.py
+COPY m23bc_synthetic_persistence.py /opt/m23bc-code/m23bc_synthetic_persistence.py
+COPY m23bc_binary_audit.py /opt/m23bc-code/m23bc_binary_audit.py
+COPY m23bc_source_test.py /opt/m23bc-code/m23bc_source_test.py
+
+# No ROS graph construction, no camera driver run, no network dependencies.
+# Unit tests include ONLY synthetic payloads. Compile both local M23K
+# observer executables without ever starting them.
+RUN PYTHONPATH=/opt/m23bc-code python3 -B /opt/m23bc-code/m23bc_source_test.py \
+    && M23BC_OFFLINE_BUILD_ONLY=YES_NO_DEVICE python3 -B \
+       /opt/m23bc-code/m23bc_offline_source_stage.py --stage \
+    && test -f /opt/m23bc-variant/m23k_camera_path_probe.py \
+    && test -f /opt/m23bc-variant/m23bb_host_evidence_adapter.py \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && colcon --log-base /tmp/m23bc-colcon-log build \
+       --base-paths /opt/m23bc-counter-source \
+       --build-base /tmp/m23bc-counter-build \
+       --install-base /opt/m23bc-counter-install \
+       --merge-install \
+       --packages-select leroy_m23k_camera_counter \
+       --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    && M23BC_OFFLINE_BINARY_ONLY=YES_NO_DEVICE python3 -B \
+       /opt/m23bc-code/m23bc_binary_audit.py --audit \
+    && echo M23BC_OFFLINE_OBSERVER_BUILD=PASS
+
+# Avoid accidentally activating ROS or a V4L2 camera on podman run.
+CMD ["/bin/false"]
