@@ -44,11 +44,14 @@ def complete_camera_log(camera_text):
     if re.search(r"process has died|Segmentation fault|M23AX_FATAL=",
                  camera_text, re.IGNORECASE):
         raise Blocked("camera process crash or metadata overflow")
+    # Ordering violation must be diagnosed BEFORE totals disagree:
+    # events logged after a final publisher summary invalidate closure even
+    # if counters are otherwise adjusted to match.
+    if any("M23AX_PUBLISH" in line for line in lines[last_marker + 1:]):
+        raise Blocked("pre-send event after publisher completion")
     presend = m23ba.parse_publisher(camera_text)
     if len(presend) != total:
         raise Blocked("publisher completion count differs from logged attempts")
-    if any("M23AX_PUBLISH" in line for line in lines[last_marker + 1:]):
-        raise Blocked("pre-send event after publisher completion")
     if any("M23AX_PUBLISH" in line for line in lines[:last_marker]) is False:
         raise Blocked("no pre-send events before publisher completion")
     # M23AU established that 'ros2 launch' may exit 0 while a child dies.
