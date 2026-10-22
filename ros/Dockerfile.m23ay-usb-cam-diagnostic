@@ -26,7 +26,6 @@ RUN python3 -B /opt/m23ay/m23ay_source_test.py \
        --install-base /opt/m23ay-install \
        --merge-install \
        --packages-select usb_cam \
-       --allow-overriding usb_cam \
        --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     && test -x /opt/m23ay-install/lib/usb_cam/usb_cam_node_exe \
     && test -f /opt/m23ay-install/lib/libusb_cam.so \
