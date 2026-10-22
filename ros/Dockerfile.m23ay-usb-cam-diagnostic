@@ -3,7 +3,7 @@
 # THIS IS NOT a live camera image approval or a production Dockerfile.
 FROM localhost/leroy-sensors:m23aj-pthreads-opencv-v2
 
-ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONDONTWRITEBYTECODE=1 CMAKE_BUILD_PARALLEL_LEVEL=2
 COPY m23ax_instrument_usb_cam_source.py /opt/m23ay/m23ax_instrument_usb_cam_source.py
 COPY m23ay_binary_audit.py /opt/m23ay/m23ay_binary_audit.py
 COPY m23ay_source_test.py /opt/m23ay/m23ay_source_test.py
