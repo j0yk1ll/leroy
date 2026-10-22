@@ -109,9 +109,9 @@ def instrument(sources):
         "}"
     )
     cpp = once(cpp, destructor, amended, "node_teardown_epilogue")
-    if (cpp.count("M23BE_PUBLISHER_FINAL attempts=") != 1:
+    if cpp.count("M23BE_PUBLISHER_FINAL attempts=") != 1:
         raise Blocked("missing unique final marker after transform")
-    if (cpp.count("M23BF_FATAL=INCOMPLETE_PUBLISHER_TEARDOWN") != 1:
+    if cpp.count("M23BF_FATAL=INCOMPLETE_PUBLISHER_TEARDOWN") != 1:
         raise Blocked("missing teardown count rejection")
     if cpp.count("++m_m23bf_publish_returns;") != 1:
         raise Blocked("missing unique publish return count")
