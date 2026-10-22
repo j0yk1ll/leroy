@@ -102,6 +102,48 @@ class OfflineM23AYTests(unittest.TestCase):
         self.assertIn("libusb_cam_node.so", src)
         self.assertNotIn('require_core=key in ("node", "executable")', src)
 
+    def test_mocked_audit_accepts_ros_jazzy_dynamic_executable(self):
+        def fake_command(argv):
+            target = argv[-1]
+            if argv[0] == "readelf":
+                return "Class: ELF64\\nMachine: Advanced Micro Devices X86-64\\n"
+            if argv[0] == "ldd":
+                return good_loader(target.endswith("/libusb_cam_node.so"))
+            if argv[0] == "strings":
+                if target.endswith("/libusb_cam_node.so"):
+                    return good_strings()
+                if target.endswith("/libusb_cam.so"):
+                    return "mmap_dequeued\\nselect_eintr\\nmmap_dqbuf_eagain\\n"
+                if target.endswith("/usb_cam_node_exe"):
+                    return good_launcher_strings()
+            raise AssertionError("unexpected ELF command: " + repr(argv))
+
+        env = {"M23AY_OFFLINE_BINARY_ONLY": "YES",
+               "LD_LIBRARY_PATH": "/opt/m23ay-install/lib:/opt/m23aj-opencv/lib"}
+        with patch.dict(m.os.environ, env), \
+             patch.object(m.Path, "is_file", return_value=True), \
+             patch.object(m, "run_command", side_effect=fake_command):
+            result = m.audit()
+        self.assertTrue(result["component_dso_requires_diagnostic_core"])
+        self.assertTrue(result["generated_launcher_uses_component_dlopen"])
+        self.assertFalse(result["generated_launcher_static_core_link_required"])
+
+    def test_mocked_audit_blocks_unresolved_component_core(self):
+        def fake_command(argv):
+            if argv[0] == "readelf":
+                return "Class: ELF64\\nMachine: Advanced Micro Devices X86-64\\n"
+            if argv[0] == "ldd":
+                return good_loader(False)
+            raise AssertionError("should fail before strings audit")
+
+        env = {"M23AY_OFFLINE_BINARY_ONLY": "YES",
+               "LD_LIBRARY_PATH": "/opt/m23ay-install/lib:/opt/m23aj-opencv/lib"}
+        with patch.dict(m.os.environ, env), \
+             patch.object(m.Path, "is_file", return_value=True), \
+             patch.object(m, "run_command", side_effect=fake_command):
+            with self.assertRaisesRegex(m.Blocked, "did not load isolated core"):
+                m.audit()
+
     def test_explicit_offline_gate_required(self):
         with patch.dict(m.os.environ, {"M23AY_OFFLINE_BINARY_ONLY": ""}):
             with self.assertRaisesRegex(m.Blocked, "offline build"):
