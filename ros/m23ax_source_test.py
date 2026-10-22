@@ -111,7 +111,7 @@ class Tests(unittest.TestCase):
         key = "src/usb_cam.cpp"
         self.assertIn("VIDIOC_DQBUF", originals[key])
         originals[key] = originals[key].replace("VIDIOC_DQBUF", "VIDIOC_WRONG")
-        with self.assertRaisesRegex(m.Blocked, "mmap_dqbuf_eagain"):
+        with self.assertRaisesRegex(m.Blocked, "mmap dequeue"):
             m.instrument(originals)
 
     def test_mutated_mmap_requeue_refused(self):
