@@ -106,11 +106,28 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23be_trace_completion_contract_test.py
 PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23be_trace_completion_contract.py
 ```
 
-Expected (NOT YET OBSERVED):
+**First operator run:** At prior head `d0f8fa3f9a154b143d8c3c067fe3e1a8394974a6`,
+24 tests ran with **two failed negative-case assertions**. The
+`test_epilogue_attempts_disagree_with_samples` fixture modified
+`attempts` without modifying `publish_returns`, so an earlier,
+correct totals preflight rejected it before the intended mismatch.
+The post-final publication test also hit the totals mismatch
+predicate before the more specific post-final ordering predicate.
+Both runs were correctly blocked; **neither is a PASS**.
+
+The corrective source commit changes only the fixture's two counters
+to the same value, making the logged-attempt mismatch independently
+testable. The parser also now checks for forbidden `M23AX_PUBLISH`
+lines after its final summary **before** checking total counts.
+It continues to reject both conditions, with no relaxed acceptance
+predicate. The complete 24-test suite must be rerun on the updated
+pinned head; until then the M23BE source gate is **PENDING**.
+
+Expected after corrected operator rerun (NOT YET OBSERVED):
 `Ran 24 tests`, `OK`,
 `M23BE_STATUS=INERT_NO_ROS_NO_DEVICE`.
 
-A PASS validates only the synthetic parser/contract; no actual
+A PASS would validate only the synthetic parser/contract; no actual
 real camera file currently satisfies the new publisher epilogue.
 
 ## Separate future hold points
