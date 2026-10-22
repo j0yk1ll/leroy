@@ -71,7 +71,12 @@ class Tests(unittest.TestCase):
             m.assess(synthetic.CAM.decode(), synthetic.OBS.decode())
 
     def test_epilogue_attempts_disagree_with_samples(self):
-        src = camera().replace("attempts=3", "attempts=4")
+        # Keep both reported summary counters internally consistent, so
+        # the mismatched event count (3 entries versus 4 reported) is
+        # the ONLY intended failing predicate in this negative fixture.
+        src = camera().replace(
+            "attempts=3 publish_returns=3",
+            "attempts=4 publish_returns=4")
         with self.assertRaisesRegex(m.Blocked, "completion count differs"):
             m.assess(src, observer())
 
