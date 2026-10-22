@@ -118,7 +118,19 @@ Include these supporting source files in the sparse checkout:
 `ros/m23bf_publisher_completion_source_test.py`,
 `ros/m23bf_publisher_completion_source.py`.
 
-Expected, NOT YET OPERATOR-OBSERVED:
+**First operator run:** The first source gate at prior PR head
+`786f1a72e601dc80340af4edfead02522a472644` stopped
+during Python import with `SyntaxError: invalid syntax` at the
+first post-transform `cpp.count` assertion, line 112. **Zero M23BF
+tests were executed** and no source gate passed. The two adjacent
+`if (cpp.count(...)` conditions contained an unmatched opening
+parenthesis. These source predicates have been corrected to
+`if cpp.count(...) != 1:`; no diagnostic counters, completion
+marker semantics or safety checks were removed or weakened.
+Only the new pinned revision may be tested, and a complete
+24-test rerun remains **PENDING**.
+
+Expected after correction, NOT YET OPERATOR-OBSERVED:
 `Ran 24 tests`, `OK`,
 `M23BF_STATUS=INERT_NO_WRITES_NO_ROS_NO_DEVICE`.
 
