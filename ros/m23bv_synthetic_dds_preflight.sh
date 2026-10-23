@@ -46,10 +46,13 @@ printf 'M23BV_DDS_PREFLIGHT_EXIT=%s\n' "$rc"
 printf 'M23BV_DDS_PREFLIGHT_LOG=%s\n' "$log"
 sha256sum "$log"
 grep -E 'M23BV_|Traceback|RuntimeError|Error:|TypeError:' "$log" | tail -n 85 || true
-if [[ "$rc" != 0 ]] || ! grep -qx 'M23BV_SYNTHETIC_DDS_CAMERA_TRANSPORT=PASS' "$log"; then
+if [[ "$rc" != 0 ]] || \
+   ! grep -qx 'M23BV_SYNTHETIC_DDS_CAMERA_TRANSPORT=PASS' "$log" || \
+   ! grep -qx 'M23BV_SYNTHETIC_CLOSED_BAG_DERIVATION=PASS' "$log"; then
   echo 'M23BV_DDS_PREFLIGHT=BLOCKED' >&2
   exit 2
 fi
 echo 'M23BV_DDS_PREFLIGHT=PASS'
+echo 'M23BV_CLOSED_BAG_DERIVATION=PASS'
 echo 'M23BV_PHYSICAL_ACCESS=NONE'
 echo 'M23BV_PRODUCTION_CAPTURE_OR_CALIBRATION=NOT_AUTHORIZED'
