@@ -19,7 +19,7 @@ from rclpy.utilities import get_rmw_implementation_identifier
 from sensor_msgs.msg import CameraInfo, Image, Imu
 
 from m23bv_qos_guard import snapshot, validate_camera_graph
-from m23bv_derive_closed_bag import fingerprints, new_reader, scan, ros_decode
+from m23bv_derive_closed_bag import derive, fingerprints, new_reader, scan, ros_decode
 from m23bv_window import select
 
 IMAGE_RECT = '/camera/image_rect'
@@ -201,6 +201,58 @@ def main():
             raise RuntimeError('BLOCKED_BAG_MUTATED_BY_READONLY_AUDIT')
         print('M23BV_DDS_SYNTHETIC_WINDOW=' + json.dumps(report, sort_keys=True), flush=True)
         print('M23BV_DDS_BAG_CDR_AND_WINDOW=PASS', flush=True)
+
+        # End-to-end test of the actual M23BV derived-bag writer on a real
+        # closed, synthetic Jazzy sqlite3 source. Test-only thresholds are
+        # explicitly supplied; the physical production defaults stay intact.
+        # Independent readers compare ORIGINAL serialized CDR payloads and
+        # rosbag receipt timestamps against every selected source record.
+        import rosbag2_py
+        selected = []
+        raw_reader, _ = new_reader(bag_dir, rosbag2_py)
+        try:
+            for take in keep:
+                if not raw_reader.has_next():
+                    raise RuntimeError('BLOCKED_SOURCE_READER_SHORT')
+                row = raw_reader.read_next()
+                if take:
+                    selected.append(row)
+            if raw_reader.has_next():
+                raise RuntimeError('BLOCKED_SOURCE_READER_EXTRA')
+        finally:
+            if callable(getattr(raw_reader, 'close', None)):
+                raw_reader.close()
+            del raw_reader
+        source_hashes_before = fingerprints(bag_dir)
+        derived_dir = scratch / 'derived'
+        derivation = derive(
+            bag_dir, derived_dir, baglib=rosbag2_py, decode=ros_decode(),
+            min_counts={'image': 80, 'info': 80, 'imu': 700})
+        if source_hashes_before != fingerprints(bag_dir):
+            raise RuntimeError('BLOCKED_SOURCE_CHANGED_AFTER_DERIVATION')
+        if not fingerprints(derived_dir):
+            raise RuntimeError('BLOCKED_DERIVED_BAG_NOT_FINALIZED')
+        output_reader, _ = new_reader(derived_dir, rosbag2_py)
+        try:
+            for expected in selected:
+                if not output_reader.has_next():
+                    raise RuntimeError('BLOCKED_DERIVED_RECORDS_SHORT')
+                actual = output_reader.read_next()
+                if tuple(actual) != tuple(expected):
+                    raise RuntimeError('BLOCKED_DERIVED_CDR_RECEIPT_OR_ORDER_MISMATCH')
+            if output_reader.has_next():
+                raise RuntimeError('BLOCKED_DERIVED_RECORDS_EXTRA')
+        finally:
+            if callable(getattr(output_reader, 'close', None)):
+                output_reader.close()
+            del output_reader
+        if derivation['source_messages_copied_byte_for_byte'] != len(selected):
+            raise RuntimeError('BLOCKED_DERIVED_COPY_COUNT')
+        print('M23BV_DERIVED_SYNTHETIC_MESSAGES=' + str(len(selected)), flush=True)
+        print('M23BV_DERIVED_SOURCE_SHA256_UNCHANGED=PASS', flush=True)
+        print('M23BV_DERIVED_CDR_AND_RECEIPT_EXACT_MATCH=PASS', flush=True)
+        print('M23BV_DERIVED_SQLITE_FINALIZATION=PASS', flush=True)
+        print('M23BV_SYNTHETIC_CLOSED_BAG_DERIVATION=PASS', flush=True)
         print('M23BV_SYNTHETIC_DDS_CAMERA_TRANSPORT=PASS', flush=True)
         print('M23BV_ACTUAL_HARDWARE_OR_PRODUCTION_CAPTURE=NOT_TESTED', flush=True)
     return 0
