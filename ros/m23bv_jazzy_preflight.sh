@@ -26,13 +26,15 @@ fi
 
 log="$(mktemp --tmpdir="$M23BV_LOG_DIR" m23bv_jazzy_XXXXXXXX.log)"
 set +e
-podman run --rm --pull=never \
+# Keep stdin attached: the container's bash -s reads the heredoc below.
+podman run --rm -i --pull=never \
   --network none --ipc private --pid private \
   --cap-drop all --security-opt no-new-privileges \
   --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m \
   -e ROS_DOMAIN_ID=177 -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   --entrypoint /bin/bash "$IMAGE" -s >"$log" 2>&1 <<'IN_CONTAINER'
 set -Eeuo pipefail
+echo 'M23BV_JAZZY_CONTAINER_SCRIPT_STARTED=PASS'
 if [[ -e /dev/video2 || -e /dev/ttyACM0 ]]; then
   echo "M23BV_DEVICE_ISOLATION=BLOCKED"
   exit 2
