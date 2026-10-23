@@ -1,0 +1,205 @@
+# M23AZ — device-free dynamic load of the M23AY diagnostic component
+
+## Current evidence and limits
+
+M23AY first and second offline builds were intentionally rejected by
+colcon CLI and overstrict executable loader checks. The third offline
+build finally passed, with diagnostic image ID:
+
+`9ff2faf53109f88333e79c998b6946caa49f09fc807d2da422c1adcd47bda571`
+
+Build-03 SHA256 `962be1ef77d0b45d61cf124fd6b6bfba9aa887b4127ed66411d39cd54ab08536`.
+The image was compiled from the pinned M23AJ pthreads OpenCV parent
+with M23AX acquisition/publication metadata instrumentation and a
+strict `ldd -r` library closure. The component DSO resolves the new
+`/opt/m23ay-install/lib/libusb_cam.so`; the Jazzy standalone executable
+uses class_loader at runtime and is not required to have a direct
+core DT_NEEDED.
+
+**The instrumented component has never been loaded into a process
+outside linker audit yet.** M23AZ tests that gap, but with no ROS
+node instance, no camera and no V4L2 devices.
+
+## Scope
+
+`m23az_component_dlopen_probe.py` is INERT by default.
+`--run` is allowed only with an exact, device-free approval,
+isolated ROS env, empty LD_PRELOAD, camera/OpenCV loader precedence,
+existing diagnostic ELF files, and no V4L2 or MCU serial device
+nodes or USB bus exposed. `ctypes.CDLL(..., RTLD_NOW|RTLD_LOCAL)`
+loads the *component shared library* only. It does not instantiate
+`UsbCamNode`, initialize rclcpp/RMW, create an executor, publish,
+subscribe, open cameras, record pixels, issue V4L2 ioctl, or load a
+robot bridge.
+
+The script checks live process `/proc/self/maps` after dynamic load
+for exact isolated diagnostic `libusb_cam_node.so` + `libusb_cam.so`
+and pthreads OpenCV core, refusing any mapped oneTBB, legacy camera
+core/component library, or mixed system OpenCV. It reports library
+maps as bounded text, not pixels.
+
+This is **dlopen/process-mapping evidence only**. It cannot prove
+safe repeated dlclose/unload, real frame timing, DDS behavior,
+physical camera setup, the original duplicate's root cause, or
+production acceptance. An automatic camera trial is forbidden.
+
+## First host attempt: C++ ament environment not initialized
+
+The operator's initial no-device dlopen container exited **139**
+before any component load/map verdict. The preserved log
+`~/.local/state/leroy-m23az/dlopen-01.log` has SHA256
+`4cc8671009076f777f50ad9a868a9ba9cb8e2e6723220e0eb826da2d79453d35`
+and reports:
+
+```text
+terminate called after throwing an instance of 'std::runtime_error'
+  what(): Environment variable 'AMENT_PREFIX_PATH' is not set or empty
+```
+
+The prior command supplied `LD_LIBRARY_PATH` but not ROS 2 / ament's
+package resource search path. A static initializer in a ROS-related
+shared library can throw during ctypes.CDLL, before control returns
+to Python; an uncaught native exception can terminate the process.
+Exit 139 is preserved as a crash, but is not evidence of physical
+camera acquisition, node shutdown, or ROS message continuity.
+
+Correction: pass the exact isolated
+`AMENT_PREFIX_PATH=/opt/m23ay-install:/opt/ros/jazzy` to the
+device-free container, keeping the diagnostic prefix FIRST and
+excluding original workspace prefixes. Probe fails closed BEFORE
+native CDLL unless the value is exact, both prefix directories exist,
+and installed ament package index entries for the diagnostic `usb_cam`
+and Jazzy `rclcpp_components` exist. These are necessary preconditions,
+not a guarantee that arbitrary static constructors are safe.
+Seven new negative tests verify missing/empty/wrong order and missing
+resource markers, plus that no native load occurs when env is missing.
+Total source tests now 26.
+
+Use the new exact source SHA. Rerun offline tests first; then if PASS,
+ONE new no-device attempt to fresh immutable `dlopen-02.log`.
+No automatic retry or hardware/production permission on failure.
+
+## M23AZ corrected test fixture — source unit gate still pending
+
+At source revision `d21abb6f0459c25ece9bfabfec789f84c190d651`,
+operator's first corrected offline 26-test suite returned **25 pass, 1 FAIL**:
+`test_missing_installed_node_forbidden` expected `libraries missing`,
+but the fixture simulated **every file except the core library**
+missing. The new Ament package-index preflight correctly blocked first
+with `diagnostic usb_cam ament package index missing`.
+
+The test fixture is now scoped to mark **only**
+`/opt/m23ay-install/lib/libusb_cam_node.so` missing, leaving the Ament
+package index and diagnostic core intact. This changes only the
+offline negative test; no runtime guard, Ament preflight, diagnostic
+image or camera driver is changed. Rerun all **26** tests against the
+new pinned source commit before any device-free dlopen-02 attempt.
+Do not treat the prior failed suite as PASS; preserve dlopen-01.
+
+## Host test procedure
+
+Source branch `feature/m23az-device-free-component-load-smoke`
+is stacked on M23AY and does not alter the pinned diagnostic image.
+Use exact Git revision and image ID specified by the accompanying
+instructions.
+
+### A. No-device host unit tests
+
+~~~bash
+(
+  set -euo pipefail
+  umask 077
+  DIR="$HOME/.local/state/leroy-m23az-source"
+  test "$(id -u)" -ne 0
+  test ! -e "$DIR"
+  git clone --filter=blob:none --depth=1 --single-branch --no-checkout \
+    --branch feature/m23az-device-free-component-load-smoke \
+    https://github.com/j0yk1ll/leroy.git "$DIR"
+  cd "$DIR"
+  git sparse-checkout init --no-cone
+  git sparse-checkout set --no-cone \
+    '/ros/m23az_component_dlopen_probe.py' \
+    '/ros/m23az_source_test.py'
+  git checkout --detach
+  test -z "$(git status --porcelain)"
+  PYTHONDONTWRITEBYTECODE=1 python3 -B ros/m23az_source_test.py
+  PYTHONDONTWRITEBYTECODE=1 python3 -B \
+    ros/m23az_component_dlopen_probe.py
+)
+~~~
+
+Require **26 source unit tests** and inert default:
+`M23AZ_STATUS=INERT_NO_ROS_NO_DEVICES`.
+
+### B. One isolated dynamic-loader observation, no ROS or camera
+
+Only if A passed. This container receives **no --device, no --privileged,
+no host /dev, no network, no camera, no robot-volume mappings**, and a
+single read-only instrumented probe source. New immutable host log.
+
+~~~bash
+(
+  set -euo pipefail
+  set -C
+  umask 077
+  test "$(id -u)" -ne 0
+  SOURCE="$HOME/.local/state/leroy-m23az-source"
+  LOGDIR="$HOME/.local/state/leroy-m23az"
+  LOG="$LOGDIR/dlopen-02.log"
+  TAG="localhost/leroy-sensors:m23ay-acquisition-diagnostic-v1"
+  ID="9ff2faf53109f88333e79c998b6946caa49f09fc807d2da422c1adcd47bda571"
+  test -z "$(podman ps -q)"
+  test -z "$(git -C "$SOURCE" status --porcelain)"
+  test ! -e "$LOG"
+  test "$(podman image inspect "$TAG" --format '{{.Id}}')" = "$ID"
+  mkdir -p "$LOGDIR"
+  if podman run --rm --pull=never --network=none \
+    --ipc=private --pid=private \
+    --cap-drop=all --security-opt=no-new-privileges \
+    --read-only --tmpfs /tmp:rw,nosuid,nodev,size=16m,notmpcopyup \
+    --memory=1g --pids-limit=64 \
+    --env M23AZ_OFFLINE_DLOPEN_APPROVED=YES_NO_DEVICES \
+    --env LEROY_M20_SENSOR_ONLY=1 \
+    --env LEROY_NAV2_DRY_RUN=1 \
+    --env ROS_DOMAIN_ID=170 \
+    --env ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    --env AMENT_PREFIX_PATH=/opt/m23ay-install:/opt/ros/jazzy \
+    --env LD_PRELOAD= \
+    --env LD_LIBRARY_PATH=/opt/m23ay-install/lib:/opt/m23aj-opencv/lib:/opt/ros/jazzy/lib \
+    --volume "$SOURCE/ros/m23az_component_dlopen_probe.py:/opt/m23az-dlopen.py:ro" \
+    --entrypoint /usr/bin/python3 \
+    "$TAG" -B /opt/m23az-dlopen.py --run >"$LOG" 2>&1
+  then RC=0; else RC=$?; fi
+  echo "M23AZ_DLOPEN_EXIT=$RC"
+  sed -n '1,40p' "$LOG"
+  sha256sum "$LOG"
+  test "$RC" -eq 0
+  grep -Fxq 'M23AZ_VERDICT=OFFLINE_DIAGNOSTIC_COMPONENT_DLOPEN_PASS' "$LOG"
+)
+~~~
+
+The container's default image command `/bin/false` is bypassed only
+by a Python script with explicit gate. It never runs usb_cam_node_exe,
+ROS components, ros2 launch, MCU bridge, or the robot stack.
+The guest has no camera device mapping. If it crashes, exits nonzero,
+detects unexpected library mappings or reports a blocker, stop and
+preserve the exact log. No automatic retries.
+
+The notmpcopyup option is essential: the large M23AJ OpenCV source
+and build trees reside under the image's /tmp, and copying them into
+a 16 MiB tmpfs previously caused OCI ENOSPC.
+
+## Acceptance boundary
+
+M23AZ PASS means only: *this exact immutable M23AY diagnostic
+component can load once in a no-device process and its observed
+camera/OpenCV/TBB maps conform to the isolated loader contract*.
+It does NOT validate unloading, camera frames, capture rates,
+rectified path, root cause attribution or runtime shutdown.
+M23AU's raw-header timestamp fault and production acceptance remain
+BLOCKED. Future physical camera-only runs need a separate, explicit
+operator authorization after review of a host-preserved text-only
+publisher/subscriber evidence protocol and hardware isolation.
+
+M23AZ_CAMERA_RETEST_AUTHORIZED=FALSE
+M23AZ_PRODUCTION_ACCEPTANCE=BLOCKED
