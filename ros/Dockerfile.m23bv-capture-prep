@@ -13,6 +13,8 @@ COPY m23bv_sensor_qos.yaml /opt/m23bv/m23bv_sensor_qos.yaml
 COPY m23bv_camera_only.launch.py /opt/m23bv/m23bv_camera_only.launch.py
 COPY m23bv_qos_guard.py /opt/m23bv/m23bv_qos_guard.py
 COPY m23bv_sensor_only_run.sh /usr/local/bin/leroy-m23bv-sensor-run
+# Keep the identical script source beside offline tests that inspect it.
+COPY m23bv_sensor_only_run.sh /opt/m23bv/m23bv_sensor_only_run.sh
 COPY m23bv_bounded_capture.py /opt/m23bv/m23bv_bounded_capture.py
 COPY m23bv_window.py /opt/m23bv/m23bv_window.py
 COPY m23bv_derive_closed_bag.py /opt/m23bv/m23bv_derive_closed_bag.py
