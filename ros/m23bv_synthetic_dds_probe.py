@@ -248,6 +248,30 @@ def main():
             del output_reader
         if derivation['source_messages_copied_byte_for_byte'] != len(selected):
             raise RuntimeError('BLOCKED_DERIVED_COPY_COUNT')
+
+        # Independent M23I-corrected M23A input contract, read-only from the
+        # completed derived bag. Loaded from separately pinned M23I source;
+        # this DOES NOT rely on the M23BV selection/derive verdict.
+        from m23bv_m23i_independent_preflight import inspect_bag
+        independent = inspect_bag(
+            derived_dir, storage_id='sqlite3', mode='monocular_imu',
+            provenance='synthetic',
+            camera_frame='camera_optical_frame', imu_frame='imu_link')
+        print('M23BV_M23I_INDEPENDENT_REPORT=' +
+              json.dumps(independent, sort_keys=True), flush=True)
+        if independent['verdict'] != 'REPLAY_INPUT_CONTRACT_PASS' or independent['faults']:
+            raise RuntimeError('BLOCKED_M23I_INDEPENDENT_REPLAY_AUDIT')
+        if independent['counts'] != report['retained_counts']:
+            raise RuntimeError('BLOCKED_M23I_INDEPENDENT_COUNTS')
+        if independent['matched_image_info_pairs'] != report['retained_counts']['image']:
+            raise RuntimeError('BLOCKED_M23I_INDEPENDENT_IMAGE_INFO_MATCHES')
+        if independent['max_header_gap_ms']['image'] > 250.0 or independent['max_header_gap_ms']['imu'] > 300.0:
+            raise RuntimeError('BLOCKED_M23I_INDEPENDENT_TIMING')
+        if (independent['device_access'] or independent['xrslam_executed'] or
+                independent['physical_motion_authorized'] or
+                independent['camera_imu_physical_offset_validated']):
+            raise RuntimeError('BLOCKED_M23I_UNSAFE_CLAIMS')
+        print('M23BV_M23I_INDEPENDENT_DERIVED_AUDIT=PASS', flush=True)
         print('M23BV_DERIVED_SYNTHETIC_MESSAGES=' + str(len(selected)), flush=True)
         print('M23BV_DERIVED_SOURCE_SHA256_UNCHANGED=PASS', flush=True)
         print('M23BV_DERIVED_CDR_AND_RECEIPT_EXACT_MATCH=PASS', flush=True)
