@@ -1,0 +1,37 @@
+# M23BV: additive candidate only. NEVER replaces the accepted M20/M23H image.
+# The BASE image still owns the proven M20 IMU/serial-command allowlist.
+ARG M23BV_BASE=localhost/leroy-sensors:m23h-bounded-recording
+FROM ${M23BV_BASE}
+
+# A pinned existing image provides only its alternative OpenCV libraries.
+# The alternative LD_LIBRARY_PATH is applied at launch to rectifier ONLY;
+# it is NOT exported globally for cv_bridge or other Python processes.
+COPY --from=localhost/leroy-ros:xrslam-pthreads-opencv-v2 \
+    /opt/m23aj-opencv /opt/m23aj-opencv
+
+COPY m23bv_sensor_qos.yaml /opt/m23bv/m23bv_sensor_qos.yaml
+COPY m23bv_camera_only.launch.py /opt/m23bv/m23bv_camera_only.launch.py
+COPY m23bv_qos_guard.py /opt/m23bv/m23bv_qos_guard.py
+COPY m23bv_sensor_only_run.sh /usr/local/bin/leroy-m23bv-sensor-run
+COPY m23bv_bounded_capture.py /opt/m23bv/m23bv_bounded_capture.py
+COPY m23bv_window.py /opt/m23bv/m23bv_window.py
+COPY m23bv_derive_closed_bag.py /opt/m23bv/m23bv_derive_closed_bag.py
+COPY m23bv_offline_tests.py /opt/m23bv/m23bv_offline_tests.py
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/m23bv:/opt/m23h:/opt/m23g:/opt/m20:/opt/m18
+
+RUN chmod 0755 /usr/local/bin/leroy-m23bv-sensor-run \
+        /opt/m23bv/m23bv_qos_guard.py \
+        /opt/m23bv/m23bv_derive_closed_bag.py \
+    && bash -n /usr/local/bin/leroy-m23bv-sensor-run \
+    && python3 -u /opt/m23bv/m23bv_offline_tests.py \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && test -d /opt/m23aj-opencv/lib \
+    && test -x "$(ros2 pkg prefix image_proc)/lib/image_proc/rectify_node" \
+    && python3 -c 'import rosbag2_py, rclpy, yaml; print("M23BV_JAZZY_IMPORTS=PASS")' \
+    && echo M23BV_OFFLINE_DERIVED_IMAGE_SOURCE_BUILD=PASS
+
+# Safe default: NO device access, recorder, ROS graph, or IMU.
+ENTRYPOINT ["python3", "-u", "/opt/m23bv/m23bv_offline_tests.py"]
