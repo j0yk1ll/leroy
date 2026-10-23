@@ -8,7 +8,8 @@ for script in m23bv_sensor_only_run.sh m23bv_offline_gate.sh m23bv_podman_build_
 done
 for py in m23bv_camera_only.launch.py m23bv_qos_guard.py \
           m23bv_bounded_capture.py m23bv_window.py \
-          m23bv_derive_closed_bag.py m23bv_offline_tests.py m23bv_synthetic_dds_probe.py; do
+          m23bv_derive_closed_bag.py m23bv_offline_tests.py m23bv_synthetic_dds_probe.py \
+          m23bv_m23i_independent_preflight.py; do
   python3 - "$py" <<'PY'
 import ast, sys
 from pathlib import Path
