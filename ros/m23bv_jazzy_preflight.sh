@@ -84,12 +84,16 @@ with tempfile.TemporaryDirectory(prefix="m23bv-jazzy-", dir="/tmp") as td:
     writer.open(
         rosbag2_py.StorageOptions(uri=str(dest), storage_id="sqlite3"),
         rosbag2_py.ConverterOptions("cdr", "cdr"))
-    meta_kwargs = {"name": "/imu/data_raw", "type": "sensor_msgs/msg/Imu",
-                   "serialization_format": "cdr"}
-    try:
-        topic = rosbag2_py.TopicMetadata(**meta_kwargs, offered_qos_profiles="")
-    except TypeError:
-        topic = rosbag2_py.TopicMetadata(**meta_kwargs)
+    # This pinned Jazzy binding requires id:int and a list of QoS entries.
+    # Do not use the older string offered_qos_profiles signature.
+    topic = rosbag2_py.TopicMetadata(
+        id=0,
+        name="/imu/data_raw",
+        type="sensor_msgs/msg/Imu",
+        serialization_format="cdr",
+        offered_qos_profiles=[],
+    )
+    print("M23BV_JAZZY_TOPIC_METADATA=PASS", flush=True)
     writer.create_topic(topic)
     imu = Imu()
     imu.header.frame_id = "imu_link"
