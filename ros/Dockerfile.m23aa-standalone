@@ -1,0 +1,24 @@
+# No-device, one-arm-at-a-time standalone/component stock Jazzy rectifier test.
+# Inherits previously accepted immutable M23Y v2 image; never alters it.
+FROM localhost/leroy-sensors:m23y-synthetic-drain-v2
+
+ENV M23AA_ARM= \
+    M23R_TRACE_ONLY=0 \
+    M23X_ARM= \
+    PYTHONPATH=/opt/m23aa:/opt/m23y:/opt/m23x:/opt/m23s:/opt/m23r:/opt/m23p:/opt/m23o:/opt/m23n:/opt/m23m:/opt/m23l:/opt/m23k:/opt/m20 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY m23aa_component_rectifier.launch.py /opt/m23aa/m23aa_component_rectifier.launch.py
+COPY m23aa_standalone_rectifier.launch.py /opt/m23aa/m23aa_standalone_rectifier.launch.py
+COPY m23aa_compare.py /opt/m23aa/m23aa_compare.py
+COPY m23aa_source_test.py /opt/m23aa/m23aa_source_test.py
+COPY Dockerfile.m23aa-standalone /opt/m23aa/Dockerfile.m23aa-standalone
+COPY M23AA_STANDALONE_RECTIFIER_TEST.md /opt/m23aa/M23AA_STANDALONE_RECTIFIER_TEST.md
+
+# Static checks and installed executable test only. Do not run ROS during build.
+RUN PYTHONDONTWRITEBYTECODE=1 python3 -B /opt/m23aa/m23aa_source_test.py \
+    && test -x /opt/ros/jazzy/lib/image_proc/rectify_node \
+    && test -x /opt/m23y-cpp-install/lib/leroy_m23y_drain_publisher/m23y_drained_publisher \
+    && echo M23AA_BUILD_CONTRACT=PASS
+
+CMD ["/bin/bash", "-lc", ". /opt/ros/jazzy/setup.sh && . /leroy_ws/install/setup.sh && . /opt/m23y-cpp-install/local_setup.sh && python3 -u /opt/m23aa/m23aa_compare.py"]
