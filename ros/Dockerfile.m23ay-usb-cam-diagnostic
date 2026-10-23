@@ -1,0 +1,39 @@
+# M23AY: separate, offline-only diagnostic camera source compilation.
+# An immutable parent image ID MUST be verified by the host before build.
+# THIS IS NOT a live camera image approval or a production Dockerfile.
+FROM localhost/leroy-sensors:m23aj-pthreads-opencv-v2
+
+ENV PYTHONDONTWRITEBYTECODE=1 CMAKE_BUILD_PARALLEL_LEVEL=2
+COPY m23ax_instrument_usb_cam_source.py /opt/m23ay/m23ax_instrument_usb_cam_source.py
+COPY m23ay_binary_audit.py /opt/m23ay/m23ay_binary_audit.py
+COPY m23ay_source_test.py /opt/m23ay/m23ay_source_test.py
+COPY Dockerfile.m23ay-usb-cam-diagnostic /opt/m23ay/Dockerfile.m23ay-usb-cam-diagnostic
+
+# One pure-offline source-copy patch step. No host volume, no device.
+# Build core library, node component and node executable from SAME header.
+RUN python3 -B /opt/m23ay/m23ay_source_test.py \
+    && M23AX_OFFLINE_BUILD_ONLY=YES python3 -B \
+       /opt/m23ay/m23ax_instrument_usb_cam_source.py --write \
+    && test -e /opt/m23ax-source/usb_cam/package.xml \
+    && test -f /opt/m23ax-source/usb_cam/src/usb_cam.cpp \
+    && test -f /opt/m23ax-source/usb_cam/src/ros2/usb_cam_node.cpp \
+    && test -f /opt/m23ax-source/usb_cam/include/usb_cam/usb_cam.hpp \
+    && . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && colcon --log-base /tmp/m23ay-build-logs build \
+       --base-paths /opt/m23ax-source/usb_cam \
+       --build-base /tmp/m23ay-build \
+       --install-base /opt/m23ay-install \
+       --merge-install \
+       --packages-select usb_cam \
+       --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    && test -x /opt/m23ay-install/lib/usb_cam/usb_cam_node_exe \
+    && test -f /opt/m23ay-install/lib/libusb_cam.so \
+    && test -f /opt/m23ay-install/lib/libusb_cam_node.so \
+    && . /opt/m23ay-install/local_setup.sh \
+    && export LD_LIBRARY_PATH="/opt/m23ay-install/lib:/opt/m23aj-opencv/lib:${LD_LIBRARY_PATH:-}" \
+    && M23AY_OFFLINE_BINARY_ONLY=YES python3 -B /opt/m23ay/m23ay_binary_audit.py --audit \
+    && echo M23AY_OFFLINE_INSTRUMENTED_USB_CAM_BUILD=PASS
+
+# Inert image: NEVER use a robot/production entrypoint.
+CMD ["/bin/false"]
