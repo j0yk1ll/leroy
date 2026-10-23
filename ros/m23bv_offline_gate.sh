@@ -3,12 +3,12 @@
 set -Eeuo pipefail
 cd "$(dirname -- "${BASH_SOURCE[0]}")"
 export PYTHONDONTWRITEBYTECODE=1
-for script in m23bv_sensor_only_run.sh m23bv_offline_gate.sh m23bv_podman_build_offline.sh; do
+for script in m23bv_sensor_only_run.sh m23bv_offline_gate.sh m23bv_podman_build_offline.sh m23bv_synthetic_dds_preflight.sh; do
   bash -n "$script"
 done
 for py in m23bv_camera_only.launch.py m23bv_qos_guard.py \
           m23bv_bounded_capture.py m23bv_window.py \
-          m23bv_derive_closed_bag.py m23bv_offline_tests.py; do
+          m23bv_derive_closed_bag.py m23bv_offline_tests.py m23bv_synthetic_dds_probe.py; do
   python3 - "$py" <<'PY'
 import ast, sys
 from pathlib import Path
