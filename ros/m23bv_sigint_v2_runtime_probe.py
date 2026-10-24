@@ -340,7 +340,10 @@ def main():
                     raise RuntimeError("BLOCKED_HEALTHY_CHECKER_PASS_MISSING:" + marker)
             print("M23BV_READY_TEST_RECTIFIED_FRAMES=" + str(len(received)), flush=True)
             print("M23BV_READY_TEST_ACTUAL_CANDIDATE_QOS=PASS", flush=True)
-            print("M23BV_READY_TEST_HEALTHY=PASS", flush=True)
+            if qos_order_mode == "as_pinned":
+                print("M23BV_READY_TEST_HEALTHY=PASS", flush=True)
+            else:
+                print("M23BV_V2_QOS_ORDER_HEALTHY=PASS_ONLY", flush=True)
         else:
             if re.search(r"\[rectify_node-\d+\]: process started with pid", out):
                 raise RuntimeError("BLOCKED_RECTIFIER_STARTED_AFTER_FAILED_READINESS")
@@ -361,8 +364,8 @@ def main():
             print("M23BV_READY_TEST_NEGATIVE_NO_RECTIFIER=PASS", flush=True)
             print("M23BV_READY_TEST_FAIL_CLOSED_" + case.upper() + "=PASS", flush=True)
         print("M23BV_READY_TEST_CHILDREN_REAPED=PASS", flush=True)
-        print("M23BV_READY_CANDIDATE_RUNTIME_" + case.upper() + "=PASS", flush=True)
         if qos_order_mode == "as_pinned":
+            print("M23BV_READY_CANDIDATE_RUNTIME_" + case.upper() + "=PASS", flush=True)
             print("M23BV_SIGINT_V2_CANDIDATE_RUNTIME_" +
                   case.upper() + "=PASS", flush=True)
         else:
