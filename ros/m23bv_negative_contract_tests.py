@@ -210,6 +210,16 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertNotIn('ros2 launch /opt/m23bv/m23bv_camera_only.launch.py', source)
         self.assertNotIn('set_wheels(', source)
 
+    def test_camera_ready_gate_requires_reliable_matched_frames_and_zero_exit(self):
+        source = (HERE / "m23bv_synthetic_launch_tree_probe.py").read_text()
+        self.assertIn('STARTUP_MODES = ("as_is", "camera_first_3s", "camera_ready")', source)
+        self.assertIn('len(images.intersection(infos)) >= 10', source)
+        self.assertIn('ReliabilityPolicy.RELIABLE', source)
+        self.assertIn('M23BV_CAMERA_READINESS=BLOCKED_NO_RELIABLE_MATCHED_SOURCE', source)
+        self.assertIn('"        if event.returncode == 0:', source)
+        self.assertIn('Shutdown(reason=\'BLOCKED_CAMERA_READINESS\')', source)
+        self.assertIn('M23BV_GRAPH_READY_GATED_RECTIFIER_START=PASS', source)
+
     def test_launch_tree_wrapper_is_pinned_and_device_free(self):
         runner = (HERE / "m23bv_synthetic_launch_tree_preflight.sh").read_text()
         self.assertIn('EXPECTED_ID=57d886bf0b903e08ff1dc9f766d3daea28f44a20bcf9fd34733e7d3eab3029ec', runner)
