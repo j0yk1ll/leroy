@@ -115,6 +115,26 @@ class Stage2ASyntheticSource(unittest.TestCase):
         self.assertIn('M23BV_V3_STAGE2A_NEGATIVE_BAD_IMU_STAMP=PASS', self.probe)
         self.assertIn('M23BV_V3_STAGE2A_NEGATIVE_UNEXPECTED_TOPIC=PASS', self.probe)
 
+    def test_bad_camera_stamps_block_real_v3_readiness(self):
+        self.assertIn('"bad_camera_stamp"', self.probe)
+        self.assertIn("bad_camera_stamp)", self.runner)
+        self.assertIn('os.environ.get("M23BV_V3_STAGE2A_CASE") == "bad_camera_stamp"',
+                      self.fake_camera)
+        self.assertIn("sec, nsec = 0, 0", self.fake_camera)
+        self.assertIn("NEGATIVE_BAD_CAMERA_STAMP_NOT_REJECTED", self.probe)
+        self.assertIn("M23BV_CANDIDATE_CAMERA_READINESS=BLOCKED_TIMEOUT_OR_QOS",
+                      self.probe)
+        self.assertIn('M23BV_CANDIDATE_CAMERA_READINESS=PASS" not in output',
+                      self.probe)
+        self.assertIn("len(child_started) == 3 and len(child_clean) == 2",
+                      self.probe)
+        self.assertIn('len(checker_failed) == 1', self.probe)
+        self.assertIn('child_started == child_clean | set(checker_failed)',
+                      self.probe)
+        self.assertIn('output.count("process has died") == 1', self.probe)
+        self.assertIn("BAD_CAMERA_STAMP_LAUNCH_NOT_FAIL_CLOSED", self.probe)
+        self.assertIn("M23BV_V3_STAGE2A_NEGATIVE_BAD_CAMERA_STAMP=PASS", self.probe)
+
     def test_child_shutdown_must_be_clean(self):
         self.assertIn("rc == 0 and not forced", self.probe)
         self.assertIn('"process has died" not in output', self.probe)
