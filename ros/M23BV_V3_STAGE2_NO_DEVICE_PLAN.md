@@ -94,17 +94,30 @@ observer. The wrapper uses the unchanged immutable V3 image ID, Podman
 `--network none`, read-only filesystem, private /tmp and **no device or
 bind mounts**. It requires no preexisting production container.
 
-Three source-implemented cases: `healthy` checks actual graph/RMW DDS
-QoS, at least 100 matching 16x16 synthetic raw/CameraInfo/rectified
-stamps, at least 300 synthetic IMU messages and at least 3 seconds of
-common message-receipt overlap; `missing_imu` must reject a source
-with no IMU publisher; `imu_qos_reliable` must reject a wrong
-synthetic IMU offered reliability even though BEST_EFFORT subscribers
-might be able to receive it. All cases require four clean child exits,
-zero launch exit, verified V3 source/CPP/checker pins, a clean SIGINT
-and no remaining child PIDs. Unknown graph nodes/topics also reject.
-Additional negative tests for corrupted timestamps, unexpected graph
-endpoints, early rectifier exit and forced shutdown remain **PENDING**.
+Five source-implemented cases. `healthy` checks actual graph/RMW
+DDS QoS, at least 100 matching 16x16 synthetic
+raw/CameraInfo/rectified stamps, at least 300 synthetic IMU messages
+and at least 3 seconds of common message-receipt overlap;
+`missing_imu` rejects an absent source; `imu_qos_reliable` rejects
+a RELIABLE synthetic IMU source where the contract requires
+BEST_EFFORT even though DDS may still deliver messages;
+`bad_imu_stamp` publishes zero-stamped IMU samples and requires the
+real subscribed payload validator to reject them; and
+`unexpected_topic` advertises a synthetic
+`/stage2a/unexpected_imu` topic and requires the **exact graph
+allowlist** to reject it. The two newly added negative cases require
+at least 30 matching camera stamps before they may be counted as
+successful negative evidence. All five cases require clean exits for
+all four child processes, parent exit zero, verified V3
+source/CPP/checker pins, clean SIGINT and no surviving child PIDs.
+Further negative tests for camera timestamp corruption, early
+rectifier exit and forced shutdown remain **PENDING**.
+
+**Operator-host evidence (first revision):** `healthy`, `missing_imu`
+and `imu_qos_reliable` all PASS with zero process exit and clean
+shutdown; evidence is recorded in PR #152's conversation. The two
+additional negative cases are **NEW SOURCE CHANGES, UNTESTED** and do
+not modify the outcome or evidence of the prior three cases.
 
 **Crucial limit:** This is a **synthetic coexistence test**, not an
 execution of the actual M20 combined observer, real MCU START/STOP/ACK,
@@ -179,6 +192,11 @@ M23BV_V3_STAGE2A_CASE=healthy \
 M23BV_V3_STAGE2A_CASE=missing_imu \
   bash ros/m23bv_v3_stage2_synthetic_preflight.sh
 M23BV_V3_STAGE2A_CASE=imu_qos_reliable \
+  bash ros/m23bv_v3_stage2_synthetic_preflight.sh
+# After the revised no-device source tests pass:
+M23BV_V3_STAGE2A_CASE=bad_imu_stamp \
+  bash ros/m23bv_v3_stage2_synthetic_preflight.sh
+M23BV_V3_STAGE2A_CASE=unexpected_topic \
   bash ros/m23bv_v3_stage2_synthetic_preflight.sh
 ```
 
