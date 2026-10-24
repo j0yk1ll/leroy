@@ -48,6 +48,7 @@ def audit_recorded_geometry(recorded, published_by_stamp):
         info_by_stamp[stamp] = info
     seen = set()
     frames = 0
+    orientation_counts = [0, 0]
     total_pixels = 0
     max_error = 0.0
     sum_mean_error = 0.0
@@ -58,7 +59,9 @@ def audit_recorded_geometry(recorded, published_by_stamp):
         if stamp in seen or stamp not in info_by_stamp or stamp not in published_by_stamp:
             raise RuntimeError('BLOCKED_V3_GEOMETRY_UNMATCHED_STAMP')
         seen.add(stamp)
-        metrics = audit_image(rect, info_by_stamp[stamp], published_by_stamp[stamp])
+        phase = published_by_stamp[stamp]
+        orientation_counts[phase % 2] += 1
+        metrics = audit_image(rect, info_by_stamp[stamp], phase)
         frames += 1
         total_pixels += metrics['pixels']
         max_error = max(max_error, metrics['max_error'])
@@ -67,6 +70,11 @@ def audit_recorded_geometry(recorded, published_by_stamp):
         min_zero_border = min(min_zero_border, metrics['zero_border_pixels'])
     if (frames < 90 or len(recorded[INFO]) < 90 or len(recorded[IMU]) < 700):
         raise RuntimeError('BLOCKED_V3_GEOMETRY_CDR_COUNTS')
+    if min(orientation_counts) < 20:
+        raise RuntimeError('BLOCKED_V3_GEOMETRY_GRADIENT_ORIENTATION_COVERAGE')
+    print('M23BV_V3_GEOMETRY_ORIENTATIONS_JSON=' +
+          json.dumps({'horizontal': orientation_counts[0],
+                      'vertical': orientation_counts[1]}, sort_keys=True), flush=True)
     print('M23BV_V3_GEOMETRY_RECORDED_FRAMES=' + str(frames), flush=True)
     print('M23BV_V3_GEOMETRY_CHECKED_PIXELS=' + str(total_pixels), flush=True)
     print('M23BV_V3_GEOMETRY_MAX_ABS_ERROR=' + str(round(max_error, 3)), flush=True)
@@ -197,8 +205,9 @@ def main():
                     img.encoding, img.is_bigendian, img.step = 'mono8', 0, WIDTH
                     # Deliberately distinct simple source fixture: every
                     # x/y location varies, without wrapping uint8.
-                    img.data = bytes(32 + x + 2 * y + phase
-                                     for y in range(HEIGHT) for x in range(WIDTH))
+                    img.data = bytes(
+                        16 + (2 * x + y if phase % 2 == 0 else x + 2 * y) + phase
+                        for y in range(HEIGHT) for x in range(WIDTH))
                     ci = CameraInfo()
                     publish_stamp(ci, stamp, 'camera_optical_frame')
                     ci.height, ci.width = HEIGHT, WIDTH
