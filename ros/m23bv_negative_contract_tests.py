@@ -651,6 +651,111 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertIn("M23BV_DERIVED_CDR_AND_RECEIPT_EXACT_MATCH=PASS", probe)
         self.assertIn("M23BV_M23I_INDEPENDENT_DERIVED_AUDIT=PASS", probe)
 
+    def test_v3_geometric_oracle_spatial_fidelity_and_corruption(self):
+        # Pure stdlib independent math: no cv2, ROS nodes or devices.
+        import m23bv_v3_geometry_oracle as geo
+        from copy import deepcopy
+        self.assertEqual((geo.WIDTH, geo.HEIGHT), (80, 60))
+        self.assertNotEqual(geo.D[0], 0.)
+        self.assertNotEqual(geo.D[2], 0.)
+        self.assertNotEqual(geo.D[3], 0.)
+        self.assertEqual(geo.source_pixel(0, 0, 0), 32)
+        self.assertEqual(geo.source_pixel(79, 59, 12), 241)
+        self.assertEqual(geo.distorted_coordinate(geo.CX, geo.CY),
+                         (geo.CX, geo.CY))
+        self.assertNotEqual(geo.distorted_coordinate(0, 0), (0., 0.))
+        self.assertGreater(abs(geo.reference_pixel(39, 30, 5) -
+                               geo.source_pixel(39, 30, 5)), 0.)
+
+        stamp = START
+        phase = 7
+        pixels = bytes(min(255, round(geo.reference_pixel(x, y, phase)))
+                       for y in range(geo.HEIGHT) for x in range(geo.WIDTH))
+        calibration = N(
+            header=header(stamp), width=geo.WIDTH, height=geo.HEIGHT,
+            distortion_model="plumb_bob", d=list(geo.D), k=list(geo.K),
+            r=list(geo.R), p=list(geo.P), roi=N(do_rectify=False))
+        rect = N(header=header(stamp), width=geo.WIDTH, height=geo.HEIGHT,
+                 encoding="mono8", is_bigendian=0, step=geo.WIDTH,
+                 data=pixels)
+        metrics = geo.audit_image(rect, calibration, phase)
+        self.assertEqual(metrics["pixels"], 4800)
+        self.assertGreaterEqual(metrics["warped_pixels"], geo.MIN_WARPED_PIXELS)
+        self.assertGreaterEqual(metrics["zero_border_pixels"],
+                                geo.MIN_FULL_BORDER_PIXELS)
+
+        def mutate_pixel(dst):
+            data = bytearray(dst.data)
+            data[30 * geo.WIDTH + 40] = 255 - data[30 * geo.WIDTH + 40]
+            dst.data = bytes(data)
+
+        mutations = (
+            ("single_wrong_pixel", lambda im, ci, p: mutate_pixel(im)),
+            ("unrectified_identity_image", lambda im, ci, p:
+             setattr(im, "data", geo.source_image(p))),
+            ("bad_camera_info_stamp", lambda im, ci, p:
+             setattr(ci, "header", header(stamp + STEP))),
+            ("bad_image_frame", lambda im, ci, p:
+             setattr(im.header, "frame_id", "incorrect")),
+            ("bad_distortion", lambda im, ci, p:
+             setattr(ci, "d", [0.] * 5)),
+            ("bad_camera_matrix", lambda im, ci, p:
+             setattr(ci, "k", [0.] * 9)),
+            ("wrong_rectification_matrix", lambda im, ci, p:
+             setattr(ci, "r", [0.] * 9)),
+            ("bad_projection", lambda im, ci, p:
+             setattr(ci, "p", [0.] * 12)),
+            ("bad_step", lambda im, ci, p:
+             setattr(im, "step", geo.WIDTH - 1)),
+            ("bad_encoding", lambda im, ci, p:
+             setattr(im, "encoding", "rgb8")),
+            ("wrong_phase", lambda im, ci, p: None),
+            ("truncated_image", lambda im, ci, p:
+             setattr(im, "data", im.data[:-1])),
+        )
+        for name, mutate in mutations:
+            with self.subTest(case=name):
+                im, ci = deepcopy(rect), deepcopy(calibration)
+                mutate(im, ci, phase)
+                chosen_phase = phase + 4 if name == "wrong_phase" else phase
+                with self.assertRaisesRegex(ValueError,
+                                            "BLOCKED_V3_GEOMETRY_"):
+                    geo.audit_image(im, ci, chosen_phase)
+
+    def test_v3_geometric_cdr_wrapper_never_touches_hardware(self):
+        geo = (HERE / "m23bv_v3_geometry_oracle.py").read_text()
+        probe = (HERE / "m23bv_v3_geometry_probe.py").read_text()
+        wrapper = (HERE / "m23bv_v3_geometry_preflight.sh").read_text()
+        self.assertNotIn("import cv2", geo)
+        self.assertNotIn("import rclpy", geo)
+        self.assertNotIn("initUndistortRectifyMap", geo)
+        self.assertNotIn("cv2.remap", geo)
+        self.assertIn("MAX_ERROR = 4.0", geo)
+        self.assertIn("MIN_WARPED_PIXELS", geo)
+        self.assertIn("MIN_FULL_BORDER_PIXELS", geo)
+        self.assertIn("M23BV_V3_GEOMETRY_FULL_IMAGE_CDR_ORACLE=PASS", probe)
+        self.assertIn("M23BV_V3_GEOMETRY_CHECKED_PIXELS=", probe)
+        self.assertIn("M23BV_V3_GEOMETRY_MIN_WARPED_PIXELS_PER_FRAME=", probe)
+        self.assertIn("m23bv_rectify_reliable_node", probe)
+        self.assertIn("EXPECTED_CPP_BLOB = '7e5d199e633f7cf0dac266a656ae70849df07f71'", probe)
+        self.assertIn("M23BV_DERIVED_CDR_AND_RECEIPT_EXACT_MATCH=PASS", probe)
+        self.assertIn("M23BV_M23I_INDEPENDENT_DERIVED_AUDIT=PASS", probe)
+        self.assertIn("M23BV_RELIABLE_V3_EXPECTED_IMAGE_ID", wrapper)
+        self.assertIn("base64 -w0 m23bv_v3_geometry_oracle.py", wrapper)
+        self.assertIn("base64 -w0 m23bv_m23i_independent_preflight.py", wrapper)
+        self.assertIn("cat m23bv_v3_geometry_probe.py", wrapper)
+        for expected in ("M23BV_V3_GEOMETRY_FULL_IMAGE_CDR_ORACLE=PASS",
+                         "M23BV_V3_GEOMETRY_DATA_INTEGRITY=PASS",
+                         "M23BV_DDS_GRAPH_QOS=PASS",
+                         "M23BV_M23I_INDEPENDENT_DERIVED_AUDIT=PASS"):
+            self.assertIn(expected, wrapper)
+        for token in ("--network none", "--ipc private", "--pid private",
+                      "--cap-drop all", "--read-only", "--pull=never", "--tmpfs /tmp"):
+            self.assertIn(token, wrapper)
+        for forbidden in ("--device ", "--volume ", "--privileged", "apt-get",
+                          "m23bv_sensor_only_run.sh"):
+            self.assertNotIn(forbidden, wrapper)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
