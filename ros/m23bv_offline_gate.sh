@@ -5,7 +5,8 @@ cd "$(dirname -- "${BASH_SOURCE[0]}")"
 export PYTHONDONTWRITEBYTECODE=1
 for script in m23bv_sensor_only_run.sh m23bv_offline_gate.sh m23bv_podman_build_offline.sh m23bv_synthetic_dds_preflight.sh \
           m23bv_synthetic_launch_tree_preflight.sh \
-          m23bv_ready_candidate_build_offline.sh; do
+          m23bv_ready_candidate_build_offline.sh \
+          m23bv_ready_candidate_runtime_preflight.sh; do
   bash -n "$script"
 done
 for py in m23bv_camera_only.launch.py m23bv_qos_guard.py \
@@ -13,7 +14,8 @@ for py in m23bv_camera_only.launch.py m23bv_qos_guard.py \
           m23bv_derive_closed_bag.py m23bv_offline_tests.py m23bv_synthetic_dds_probe.py \
           m23bv_m23i_independent_preflight.py m23bv_negative_contract_tests.py \
           m23bv_synthetic_launch_tree_probe.py \
-          m23bv_camera_ready_gate.py m23bv_camera_ready_candidate.launch.py; do
+          m23bv_camera_ready_gate.py m23bv_camera_ready_candidate.launch.py \
+          m23bv_ready_candidate_runtime_probe.py; do
   python3 - "$py" <<'PY'
 import ast, sys
 from pathlib import Path
