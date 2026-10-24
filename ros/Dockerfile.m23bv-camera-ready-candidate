@@ -1,0 +1,20 @@
+# M23BV camera-readiness design candidate. Not the accepted image or physical runner.
+# Build only from the locally verified ACCEPTED M23BV derived image ID.
+ARG M23BV_BASE=localhost/leroy-sensors:m23bv-capture-prep
+FROM ${M23BV_BASE}
+
+# These are NEW, separately named prototype files. Do NOT overwrite the
+# original M23BV camera launch, M20 serial observer, recorder or sensor runner.
+COPY m23bv_camera_ready_gate.py /opt/m23bv/m23bv_camera_ready_gate.py
+COPY m23bv_camera_ready_candidate.launch.py /opt/m23bv/m23bv_camera_ready_candidate.launch.py
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && python3 -m py_compile \
+        /opt/m23bv/m23bv_camera_ready_gate.py \
+        /opt/m23bv/m23bv_camera_ready_candidate.launch.py \
+    && python3 -c 'import launch, launch_ros, rclpy, sensor_msgs; print("M23BV_READY_JAZZY_IMPORTS=PASS")' \
+    && echo M23BV_READY_CANDIDATE_SOURCE_BUILD=PASS
+
+# Original base image ENTRYPOINT runs offline unit tests; never starts ROS,
+# physical camera, IMU, STM32, recorder, Nav2 or motor bridge by default.
