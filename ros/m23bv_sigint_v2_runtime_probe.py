@@ -8,6 +8,7 @@ No production or physical launch is ever imported/called/executed.
 """
 import ast
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -261,6 +262,20 @@ def main():
                             success = True
                             break
                     if not success:
+                        # Fail CLOSED on the same original 19s healthy threshold.
+                        # Report both independent predicates BEFORE teardown
+                        # to distinguish missed frames from actual DDS QoS.
+                        if case == "healthy":
+                            graph = snapshot(observer, get_rmw_implementation_identifier())
+                            graph_ok = rect_graph(observer)
+                            print("M23BV_SIGINT_V2_HEALTHY_RECT_FRAMES=" +
+                                  str(len(received)), flush=True)
+                            print("M23BV_SIGINT_V2_HEALTHY_GRAPH_OK=" +
+                                  ("TRUE" if graph_ok else "FALSE"), flush=True)
+                            print("M23BV_SIGINT_V2_HEALTHY_GRAPH_JSON=" +
+                                  json.dumps(graph, sort_keys=True), flush=True)
+                            print("M23BV_SIGINT_V2_HEALTHY_LAUNCH_PARENT_ACTIVE=" +
+                                  str(proc.poll() is None).upper(), flush=True)
                         raise RuntimeError("BLOCKED_EXPECTED_LAUNCH_RESULT_TIMEOUT")
                     parent_rc = stop_parent(proc)
                     print("M23BV_READY_TEST_PARENT_EXIT=" + str(parent_rc), flush=True)
