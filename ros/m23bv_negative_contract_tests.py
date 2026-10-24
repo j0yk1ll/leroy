@@ -200,6 +200,27 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
                         rc = module.capture(Path(tmp), "mock", spawn=spawn, pause=lambda _: None)
         return rc, events, capture.getvalue()
 
+    def test_launch_tree_synthetic_source_never_executes_physical_launcher(self):
+        source = (HERE / "m23bv_synthetic_launch_tree_probe.py").read_text()
+        self.assertIn('ast.unparse(call)', source)
+        self.assertIn('rectifier = rectifier_expression()', source)
+        self.assertIn('["ros2", "launch", str(launch_path)]', source)
+        self.assertIn('BLOCKED_PHYSICAL_DEVICE_PRESENT', source)
+        self.assertIn('M23BV_SYNTHETIC_LAUNCH_LIFECYCLE=PASS', source)
+        self.assertNotIn('ros2 launch /opt/m23bv/m23bv_camera_only.launch.py', source)
+        self.assertNotIn('set_wheels(', source)
+
+    def test_launch_tree_wrapper_is_pinned_and_device_free(self):
+        runner = (HERE / "m23bv_synthetic_launch_tree_preflight.sh").read_text()
+        self.assertIn('EXPECTED_ID=57d886bf0b903e08ff1dc9f766d3daea28f44a20bcf9fd34733e7d3eab3029ec', runner)
+        for setting in ('--network none', '--ipc private', '--pid private',
+                        '--cap-drop all', '--read-only', 'ROS_DOMAIN_ID=179'):
+            with self.subTest(setting=setting):
+                self.assertIn(setting, runner)
+        self.assertNotIn('--device ', runner)
+        self.assertNotIn('--privileged', runner)
+        self.assertNotIn('--volume', runner)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
