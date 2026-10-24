@@ -29,7 +29,7 @@ CPP_SHA = "7e5d199e633f7cf0dac266a656ae70849df07f71"
 CHECKER = Path("/opt/m23bv/m23bv_camera_ready_gate.py")
 CHECKER_SHA = "777db7cbeb0ce6c3669a837f1530f7b1499dd9dd"
 CASE = os.environ.get("M23BV_V3_STAGE2A_CASE")
-CASES = ("healthy", "missing_imu", "imu_qos_reliable")
+CASES = ("healthy", "missing_imu", "imu_qos_reliable", "bad_imu_stamp", "unexpected_topic")
 ALLOWED_TOPICS = {
     "/camera/image_raw", "/camera/camera_info", "/camera/image_rect",
     "/camera/image_raw/compressed", "/camera/image_raw/compressedDepth",
@@ -115,17 +115,25 @@ qos = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=100,
                  durability=DurabilityPolicy.VOLATILE)
 publisher = (None if case == "missing_imu" else
              node.create_publisher(Imu, "/imu/data_raw", qos))
+# Purely synthetic and deliberately forbidden by the exact graph inventory.
+extra = (node.create_publisher(Imu, "/stage2a/unexpected_imu", qos)
+         if case == "unexpected_topic" else None)
 try:
     while running and rclpy.ok():
         if publisher is not None:
             msg = Imu()
             stamp = time.time_ns()
             msg.header.stamp.sec, msg.header.stamp.nanosec = divmod(stamp, 1000000000)
+            if case == "bad_imu_stamp":
+                msg.header.stamp.sec = 0
+                msg.header.stamp.nanosec = 0
             msg.header.frame_id = "imu_link"
             msg.orientation_covariance[0] = -1.
             msg.angular_velocity.z = 0.001
             msg.linear_acceleration.z = 9.81
             publisher.publish(msg)
+            if extra is not None:
+                extra.publish(msg)
         time.sleep(1 / 50)
 finally:
     node.destroy_node()
@@ -355,6 +363,8 @@ def main():
                                      qos(ReliabilityPolicy.BEST_EFFORT))
         ok = False
         blocked_qos = False
+        blocked_bad_imu_stamp = False
+        blocked_unknown_topic = False
         last_graph = "WAIT"
         rc = None
         forced = True
@@ -368,9 +378,27 @@ def main():
                 while time.monotonic() < deadline:
                     require(proc.poll() is None, "LAUNCH_EARLY_EXIT")
                     rclpy.spin_once(observer, timeout_sec=0.005)
-                    require(not faults, "INVALID_MESSAGE:" + repr(faults))
-                    last_graph = evaluate_graph(observer)
+                    if CASE == "bad_imu_stamp":
+                        require(all(f == "BLOCKED_SYNTHETIC_IMU_LAYOUT" for f in faults),
+                                "UNEXPECTED_INVALID_MESSAGE:" + repr(faults))
+                    else:
+                        require(not faults, "INVALID_MESSAGE:" + repr(faults))
+                    try:
+                        last_graph = evaluate_graph(observer)
+                    except RuntimeError as exc:
+                        # Do not accept an arbitrary graph exception as proof
+                        # that the intended forbidden topic was detected.
+                        require(CASE == "unexpected_topic" and
+                                str(exc) == "BLOCKED_UNKNOWN_TOPICS:['/stage2a/unexpected_imu']",
+                                "UNEXPECTED_GRAPH_FAULT:" + str(exc))
+                        blocked_unknown_topic = True
+                        last_graph = "BLOCKED_UNKNOWN_TOPICS"
                     joint = set(raw) & set(info) & set(rect)
+                    if CASE == "bad_imu_stamp" and faults and len(joint) >= 30:
+                        blocked_bad_imu_stamp = True
+                        break
+                    if CASE == "unexpected_topic" and blocked_unknown_topic and len(joint) >= 30:
+                        break
                     if last_graph == "BLOCKED_IMU_OFFERED_QOS":
                         blocked_qos = True
                         # Exercise real camera readiness and compiled V3 rectifier
@@ -398,6 +426,16 @@ def main():
                 if CASE == "imu_qos_reliable":
                     require(blocked_qos, "NEGATIVE_IMU_QOS_NOT_REJECTED")
                     print("M23BV_V3_STAGE2A_NEGATIVE_IMU_QOS=PASS", flush=True)
+                elif CASE == "bad_imu_stamp":
+                    require(blocked_bad_imu_stamp and len(joint) >= 30 and
+                            last_graph == "PASS" and not imus,
+                            "NEGATIVE_BAD_IMU_STAMP_NOT_REJECTED")
+                    print("M23BV_V3_STAGE2A_NEGATIVE_BAD_IMU_STAMP=PASS", flush=True)
+                elif CASE == "unexpected_topic":
+                    require(blocked_unknown_topic and len(joint) >= 30 and
+                            len(imus) >= 20,
+                            "NEGATIVE_UNEXPECTED_TOPIC_NOT_REJECTED")
+                    print("M23BV_V3_STAGE2A_NEGATIVE_UNEXPECTED_TOPIC=PASS", flush=True)
                 elif CASE == "missing_imu":
                     require(not imus and last_graph != "PASS" and
                             len(set(raw) & set(info) & set(rect)) >= 30,
