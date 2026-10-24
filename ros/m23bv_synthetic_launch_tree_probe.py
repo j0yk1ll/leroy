@@ -8,6 +8,7 @@ Two real launch-managed children: a synthetic ROS camera publisher and the
 real Jazzy image_proc rectifier. Never opens any camera, serial port or MCU.
 """
 import ast
+import json
 import os
 from pathlib import Path
 import re
@@ -26,6 +27,7 @@ from m23bv_qos_guard import IMAGE, INFO, RAW, _endpoints, snapshot
 
 CAMERA_SOURCE = Path("/opt/m23bv/m23bv_camera_only.launch.py")
 DOMAIN = "179"
+STARTUP_MODES = ("as_is", "camera_first_3s")
 
 CAMERA_PROGRAM = r'''#!/usr/bin/env python3
 import time
@@ -115,20 +117,28 @@ def prepare_launch(folder):
     rectifier = rectifier_expression()
     # The *unchanged physical* camera guard is deliberately NOT called:
     # this is a distinct synthetic launch, not a bypass for physical capture.
+    startup = os.environ.get("M23BV_LAUNCH_STARTUP_MODE", "as_is")
+    if startup not in STARTUP_MODES:
+        raise RuntimeError("BLOCKED_INVALID_STARTUP_MODE")
     launch_src = (
         "import os, sys\n"
         "from launch import LaunchDescription\n"
-        "from launch.actions import ExecuteProcess\n"
+        "from launch.actions import ExecuteProcess, TimerAction\n"
         "from launch_ros.actions import Node\n"
         "ALT_OPENCV = '/opt/m23aj-opencv/lib'\n"
         "def generate_launch_description():\n"
         f"    camera = ExecuteProcess(cmd=[sys.executable, '-u', {str(camera)!r}], "
         "name='m23bv_synthetic_camera', output='screen')\n"
         f"    rectifier = {rectifier}\n"
-        "    return LaunchDescription([camera, rectifier])\n"
+        ("    return LaunchDescription([camera, rectifier])\n"
+         if startup == "as_is" else
+         "    return LaunchDescription([camera, TimerAction(period=3.0, actions=[rectifier])])\n")
     )
     ast.parse(launch_src, filename=str(launch_path))
     launch_path.write_text(launch_src)
+    print("M23BV_LAUNCH_STARTUP_MODE=" + startup, flush=True)
+    print("M23BV_PRODUCTION_LAUNCH_TIMING_REPRODUCED=" +
+          ("TRUE" if startup == "as_is" else "FALSE"), flush=True)
     print("M23BV_RECTIFIER_LAUNCH_AST_FROM_PINNED_SOURCE=PASS", flush=True)
     return launch_path
 
@@ -218,6 +228,9 @@ def main():
                         except ValueError as exc:
                             last_error = str(exc)
                     if not graph_pass:
+                        print("M23BV_LAUNCH_GRAPH_JSON=" +
+                              json.dumps(snapshot(node, get_rmw_implementation_identifier()),
+                                         sort_keys=True), flush=True)
                         raise RuntimeError("BLOCKED_LAUNCH_GRAPH:" + last_error)
                     print("M23BV_LAUNCH_TREE_GRAPH_QOS=PASS", flush=True)
 
