@@ -115,6 +115,49 @@ branch, a distinct operator-supervised camera-only attempt requires a renewed
 physical safety review and new explicit authorization for that attempt.
 No runtime verification of this amendment has been performed.
 
+## Second physical camera-only attempt: BLOCKED; exact rectifier transport correction
+
+The second bounded Stage 1 trial on 2026-10-24 also **BLOCKED**.
+The operator verified the private runtime log SHA-256:
+`549e2fc3eadfd6bf55f4767b3c5da5302a942eec2214b697c78f5583f3e53db3`.
+The log supplied direct runtime evidence of a working readiness stage and
+successful startup of the compiled V3 rectifier:
+
+```text
+M23BV_CANDIDATE_CAMERA_QOS=RELIABLE_VOLATILE
+M23BV_CANDIDATE_MATCHED_CAMERA_FRAMES=10
+M23BV_CANDIDATE_CAMERA_READINESS=PASS
+[INFO] [m23bv_rectify_reliable_node-3]: process started with pid [82]
+M23BV_V3_STAGE1_LAUNCH_EXIT=0
+M23BV_V3_STAGE1_LAUNCH_REAPED=PASS
+M23BV_V3_STAGE1_RESULT=BLOCKED_UNEXPECTED_TOPICS:/camera/image_rect/compressed,/camera/image_rect/compressedDepth,/camera/image_rect/theora,/camera/image_rect/zstd
+M23BV_V3_STAGE1_PROCESS_EXIT=2
+```
+
+The camera and rectifier children **both finished cleanly** after an
+observer-requested SIGINT. Their clean exit does not establish the 90
+matching rectified frame requirement or full DDS endpoint acceptance. The
+operator reported no surviving Stage 1 container. The later
+`/camera/image_rect/{compressed,compressedDepth,theora,zstd}` names are
+normal image_transport advertising for the V3 rectified publisher.
+
+The narrow corrective change adds **only these four actually observed**
+rectified transport topics, retaining the previously observed four raw
+transport names. No wildcard/prefix exception is introduced. Unknown graph
+nodes/topics remain fatal, and actual RELIABLE QoS, synchronized image
+timestamps, 90 matched frames and clean child shutdown are still mandatory.
+Neither prior physical attempt is recategorized as a PASS.
+
+The operator subsequently granted **standing authorization within Stage 1
+camera-only scope**, not permission for MCU, recording, locomotion, or
+camera-unplug negatives. An additional chat permission request is unnecessary
+for that same scope, but **before each physical attempt** the operator must
+physically reverify both motor rails disconnected, secured chassis, E-stop,
+supervision and immediate power kill, record a *new* dated owner-private
+approval, and satisfy the runner's interactive checks. Never auto-retry.
+The present source amendment requires fresh operator-host no-device tests;
+it is **not** physical runtime evidence.
+
 ## No-device review and source checks
 
 Source-only validation is allowed before signoff (these do not run Podman
@@ -124,7 +167,7 @@ or launch ROS). Review the diff, run `bash -n` on the new `.sh`,
 Check protected `git rev-parse HEAD:<path>` and working-tree blob SHA.
 These are **SOURCE CHECKS**, not observed physical outcomes.
 
-## Bounded behavior (NOT yet executed on camera)
+## Bounded behavior (physical attempts still blocked)
 
 After the authorized operator completes device/calibration inventory, the host script requires clean target branch,
 protected Git blob pins, stable camera by-id identity, exact calibration
@@ -148,12 +191,13 @@ and independently inventories DDS endpoints:
   (K, D, R, P), at least 90 matching unique
   raw/CameraInfo/rectified stamps with plausible timing;
 - V3 original readiness gate log must show its 10 matched frames and PASS;
-- only the four observed image_transport subtopics
-  `/camera/image_raw/{compressed,compressedDepth,theora,zstd}` are additionally
-  allowed; all other unknown nodes/topics (including MCU, motion, TF, Nav2,
-  XRSLAM or recorder) block. An abnormal camera or V3 rectifier child exit also
-  blocks, even when the ROS launch parent returns 0. No bag is recorded and no
-  MCU serial port opened.
+- only the **eight** observed image_transport subtopics
+  `/camera/image_raw/{compressed,compressedDepth,theora,zstd}` and
+  `/camera/image_rect/{compressed,compressedDepth,theora,zstd}` are
+  additionally allowed. All other unknown nodes/topics (including MCU, motion,
+  TF, Nav2, XRSLAM or recorder) block. An abnormal camera or V3 rectifier
+  child exit also blocks, even when the ROS launch parent returns 0. No bag is
+  recorded and no MCU serial port opened.
 
 **Conservative assumption:** Stage 1 expects `rgb8`; a legitimate `bgr8`
 or other physical encoding must produce a NO-GO pending inspection and
