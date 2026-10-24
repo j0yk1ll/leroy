@@ -9,7 +9,7 @@ done
 for py in m23bv_camera_only.launch.py m23bv_qos_guard.py \
           m23bv_bounded_capture.py m23bv_window.py \
           m23bv_derive_closed_bag.py m23bv_offline_tests.py m23bv_synthetic_dds_probe.py \
-          m23bv_m23i_independent_preflight.py; do
+          m23bv_m23i_independent_preflight.py m23bv_negative_contract_tests.py; do
   python3 - "$py" <<'PY'
 import ast, sys
 from pathlib import Path
@@ -17,6 +17,7 @@ ast.parse(Path(sys.argv[1]).read_text(), filename=sys.argv[1])
 PY
 done
 python3 -u m23bv_offline_tests.py
+python3 -u m23bv_negative_contract_tests.py
 printf 'M23BV_HOST_OFFLINE_CONTRACT=PASS\n'
 printf 'M23BV_ACTUAL_JAZZY_RUNTIME=UNTESTED\n'
 printf 'M23BV_PHYSICAL_DEVICE_ACCESS=NONE\n'
