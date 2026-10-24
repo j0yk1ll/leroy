@@ -1,4 +1,4 @@
-# M23BV V3 Stage 1: CAMERA ONLY (review candidate; **NOT AUTHORIZED**)
+# M23BV V3 Stage 1: CAMERA ONLY (operator-authorized; **inventory/physical acceptance PENDING**)
 
 **Stacked draft PR base:** `feature/m23bv-hardware-free-capture-correction` (PR #150).
 **Review branch:** `feature/m23bv-v3-stage1-camera-only-optin`.
@@ -19,7 +19,7 @@ legacy `m23bv_camera_only.launch.py` and **does not test V3**.
   separate `/opt/m23bv_reliable_rectifier_proto/ws/install/setup.bash` overlay.
 - It invokes only `/opt/m23bv/m23bv_reliable_rectifier_v3_candidate.launch.py`,
   with the existing SIGINT-v2 readiness gate and fail-closed camera-exit handler.
-- No new image is built or tagged. Only camera `/dev/video2` can be mapped (camera `rw` for V4L2 streaming; no `mknod`);
+- No new image is built or tagged. Operator-identified host camera `/dev/video8` must be confirmed via a stable `/dev/v4l/by-id/...` symlink, and is mapped **only** to `/dev/video2` **inside** the container (camera `rw` for V4L2 streaming; no `mknod`);
   calibration and the observer are read-only mounts. No MCU serial device,
   M20 observer, recorder, XRSLAM, Nav2 or motor graph is started.
 - The existing legacy camera launch, sensor runner, V3 candidate launch, M20
@@ -37,13 +37,31 @@ The code additionally requires an interactive exact-phrase confirmation,
 four Stage 1 signoff variables, and an operator/dated approval-record file; these only
 record human assertions and cannot measure motor isolation or E-stop state.
 
-Before authorized operation, independently establish the host's camera
-`/dev/v4l/by-id/...` symlink resolves to `/dev/video2` (without opening the
+Before camera execution, independently establish the host's camera
+`/dev/v4l/by-id/...` symlink resolves **exactly** to `/dev/video8` (without opening the
 device); real calibration file provenance and expected SHA-256 (correct
 physical camera, resolution 640x480 and plumb_bob intrinsics); pinned
 container image ID; owner-private log directory and available disk; ROS 2
 Jazzy and Podman identity; intended USB mapping and operator emergency
 abort authority. Missing information is **NO-GO**.
+
+## Operator signoff received; remaining NO-GO conditions
+
+On **2026-10-24**, the operator explicitly attested in conversation that both
+motor-power rails are physically disconnected, the chassis is secured,
+the E-stop has been verified, and a supervisor can immediately remove power.
+The operator explicitly authorized **Stage 1 camera-only**, with no MCU serial,
+motors, recording, Nav2 or XRSLAM, and identified the host camera as
+`/dev/video8`. This is **operator testimony**, not remotely verified physical
+isolation or hardware runtime evidence. The invocation still requires an
+owner-private dated approval record and a second interactive confirmation.
+
+**Execution remains BLOCKED** until the actual by-id symlink points to
+`/dev/video8`, the physical camera identity is matched to its original
+640×480 `plumb_bob` calibration, the host calibration file and SHA-256 are
+pinned, and image/permission/runtime inventory is verified. The approved
+scope does not include unplug/disconnect tests, recording, MCU serial access,
+or robot motion.
 
 ## No-device review and source checks
 
@@ -56,13 +74,13 @@ These are **SOURCE CHECKS**, not observed physical outcomes.
 
 ## Bounded behavior (NOT yet executed on camera)
 
-After authorization, the host script requires clean target branch,
+After the authorized operator completes device/calibration inventory, the host script requires clean target branch,
 protected Git blob pins, stable camera by-id identity, exact calibration
 SHA-256, no other running Podman container, and exact immutable V3 image
 ID. Failing any check blocks before `podman run`. The launch is bounded:
 48-second in-container ROS observer, 75-second outer timeout with SIGINT,
-then escalation and shutdown. Both scripts attempt cleanup; forced cleanup
-is **not accepted**.
+then escalation and shutdown. Both scripts attempt cleanup; forced cleanup,
+nonzero ROS launch exit, or surviving output reader is **not accepted**.
 
 The observer subscribes to image_rect to activate Jazzy's lazy rectifier,
 and independently inventories DDS endpoints:
@@ -114,11 +132,12 @@ serial approval, with original M20 START/STOP/ACK semantics untouched.
 PR #150 must remain **DRAFT / UNMERGED**; Stages 3/4 remain outside
 this candidate.
 
-## Review-only operator host commands (DO NOT START HARDWARE)
+## Operator host commands (do not start hardware before full Stage 0 inventory)
 
 From a clean worktree, fetch the new branch then run the no-device source
-checks listed in the chat. `m23bv_v3_stage1_camera_run.sh` **is not** one
-of those commands and is prohibited pending separately confirmed Stage 0.
+checks listed in the chat. `m23bv_v3_stage1_camera_run.sh` **is not** a
+source-only check; its invocation opens the authorized USB camera and must
+follow completed identity, calibration, image, safety and private-log review.
 
 ## Known acceptance limitations
 
