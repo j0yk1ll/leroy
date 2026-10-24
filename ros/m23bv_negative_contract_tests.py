@@ -281,6 +281,32 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertIn('ros2 launch /opt/m23bv/m23bv_camera_only.launch.py &', runner)
         self.assertNotIn('m23bv_camera_ready_candidate.launch.py', runner)
 
+    def test_ready_candidate_runtime_uses_exact_candidate_ast_without_device(self):
+        source = (HERE / "m23bv_ready_candidate_runtime_probe.py").read_text()
+        self.assertIn('EXPECTED_BLOB = "bce577236278768308b1f475dd85e10a5da287c0"', source)
+        self.assertIn('git_blob(payload) != EXPECTED_BLOB', source)
+        self.assertIn('assigns["rectifier"]', source)
+        self.assertIn('assigns["ready"]', source)
+        self.assertIn('ast.unparse(funcs[name])', source)
+        self.assertIn('len(received) >= 90 and rect_graph(observer)', source)
+        self.assertIn('BLOCKED_RECTIFIER_STARTED_AFTER_FAILED_READINESS', source)
+        self.assertIn('M23BV_READY_TEST_CHILDREN_REAPED=PASS', source)
+        self.assertIn('BLOCKED_DEVICE_PRESENT', source)
+        self.assertNotIn('ros2 launch /opt/m23bv/m23bv_camera_ready_candidate.launch.py', source)
+
+    def test_ready_candidate_runtime_wrapper_pins_image_and_has_no_devices(self):
+        source = (HERE / "m23bv_ready_candidate_runtime_preflight.sh").read_text()
+        self.assertIn('EXPECTED_ID=2a557fc07aead1ba680cc4024d27a5d67227cf659754114487911f6264690c40', source)
+        for required in ('--network none', '--ipc private', '--pid private',
+                         '--cap-drop all', '--read-only', '--pull=never',
+                         'ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST'):
+            with self.subTest(setting=required):
+                self.assertIn(required, source)
+        for forbidden in ('--device ', '--privileged', '--volume', '/dev/video2:/dev'):
+            self.assertNotIn(forbidden, source)
+        self.assertIn('healthy|best_effort|missing_info|camera_exit', source)
+        self.assertIn('M23BV_PRODUCTION_OR_PHYSICAL_CAPTURE=NOT_AUTHORIZED', source)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
