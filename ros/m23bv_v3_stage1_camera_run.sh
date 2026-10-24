@@ -47,7 +47,9 @@ PINS
    -L "$M23BV_STAGE1_CAMERA_ID_PATH" ]] || fail STABLE_CAMERA_ID_MISSING
 camera_dev="$(readlink -f -- "$M23BV_STAGE1_CAMERA_ID_PATH")" ||
   fail CAMERA_ID_NOT_RESOLVABLE
-[[ "$camera_dev" == /dev/video2 && -c "$camera_dev" ]] || fail CAMERA_ID_MISMATCH
+# The operator-confirmed host device is /dev/video8.  The immutable V3 launch
+# intentionally continues to see /dev/video2 ONLY inside the container.
+[[ "$camera_dev" == /dev/video8 && -c "$camera_dev" ]] || fail CAMERA_ID_MISMATCH
 cal="${M23BV_STAGE1_CALIBRATION_FILE:-}"
 hash="${M23BV_STAGE1_CALIBRATION_SHA256:-}"
 [[ "$cal" == /* && -f "$cal" && ! -L "$cal" && -r "$cal" &&
@@ -74,6 +76,8 @@ printf 'M23BV_V3_STAGE1_APPROVAL_SHA256=%s\n' \
 echo "M23BV_V3_STAGE1_IMAGE_ID=$IMAGE_ID" >>"$log"
 echo "M23BV_V3_STAGE1_CALIBRATION_SHA256=$hash" >>"$log"
 echo "M23BV_V3_STAGE1_CAMERA_SYMLINK=$M23BV_STAGE1_CAMERA_ID_PATH" >>"$log"
+echo "M23BV_V3_STAGE1_CAMERA_HOST_DEVICE=$camera_dev" >>"$log"
+echo "M23BV_V3_STAGE1_CAMERA_CONTAINER_DEVICE=/dev/video2" >>"$log"
 echo 'M23BV_V3_STAGE1_SOURCE_PINS=PASS' >>"$log"
 cleanup() {
   # Treat unexpected host exit as an abort. No automatic re-run.
