@@ -370,10 +370,14 @@ def main():
                     rclpy.spin_once(observer, timeout_sec=0.005)
                     require(not faults, "INVALID_MESSAGE:" + repr(faults))
                     last_graph = evaluate_graph(observer)
+                    joint = set(raw) & set(info) & set(rect)
                     if last_graph == "BLOCKED_IMU_OFFERED_QOS":
                         blocked_qos = True
-                        break
-                    joint = set(raw) & set(info) & set(rect)
+                        # Exercise real camera readiness and compiled V3 rectifier
+                        # before recording a successful *negative* QoS rejection.
+                        # A publisher mismatch is never permitted to pass health.
+                        if len(joint) >= 30:
+                            break
                     if (CASE == "healthy" and last_graph == "PASS" and
                             len(joint) >= 100 and len(imus) >= 300):
                         t0 = max(raw[min(joint)], imus[min(imus)])
