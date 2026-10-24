@@ -32,6 +32,7 @@ CHECKER = Path("/opt/m23bv/m23bv_camera_ready_gate.py")
 EXPECTED_CHECKER_BLOB = "777db7cbeb0ce6c3669a837f1530f7b1499dd9dd"
 CASES = ("healthy", "best_effort", "missing_info", "camera_exit")
 DOMAIN = "170"
+QOS_ORDER_MODES = ("as_pinned", "ready_then_3s")
 
 CAMERA_PROGRAM = r'''#!/usr/bin/env python3
 import os
@@ -101,7 +102,7 @@ def git_blob(payload):
     return hashlib.sha1(b"blob " + str(len(payload)).encode() + b"\0" + payload).hexdigest()
 
 
-def create_test_launch(folder):
+def create_test_launch(folder, qos_order_mode):
     if not SOURCE.is_file():
         raise RuntimeError("BLOCKED_CANDIDATE_SOURCE_ABSENT")
     payload = SOURCE.read_bytes()
@@ -127,7 +128,24 @@ def create_test_launch(folder):
         raise RuntimeError("BLOCKED_CANDIDATE_EVENT_HANDLERS")
     rectifier = ast.unparse(assigns["rectifier"])
     checker = ast.unparse(assigns["ready"])
-    callbacks = "\n".join(textwrap.indent(ast.unparse(funcs[name]), "    ")
+    handlers = {name: ast.unparse(funcs[name])
+                for name in ("ready_exited", "camera_exited")}
+    if qos_order_mode == "ready_then_3s":
+        # DIAGNOSTIC ONLY: test whether the rectifier's lazy DDS choice
+        # changes after 3s of camera graph settlement following ready=0.
+        # This is NOT a candidate source parity/production acceptance test.
+        old = "return [rectifier]"
+        if handlers["ready_exited"].count(old) != 1:
+            raise RuntimeError("BLOCKED_QOS_ORDER_HANDLER_UNEXPECTED")
+        handlers["ready_exited"] = handlers["ready_exited"].replace(
+            old, "return [TimerAction(period=3.0, actions=[rectifier])]", 1)
+        print("M23BV_V2_QOS_ORDER_HANDLER_EXACT=FALSE", flush=True)
+        print("M23BV_V2_QOS_ORDER_TIMER_TEST_ONLY=TRUE", flush=True)
+    elif qos_order_mode == "as_pinned":
+        print("M23BV_V2_QOS_ORDER_HANDLER_EXACT=TRUE", flush=True)
+    else:
+        raise RuntimeError("BLOCKED_QOS_ORDER_MODE")
+    callbacks = "\n".join(textwrap.indent(handlers[name], "    ")
                           for name in ("ready_exited", "camera_exited"))
     returned_expr = ast.unparse(returned[0])
     if ("OnProcessExit" not in returned_expr or
@@ -140,7 +158,7 @@ def create_test_launch(folder):
     launch_script = (
         "import os, sys\n"
         "from launch import LaunchDescription\n"
-        "from launch.actions import ExecuteProcess, RegisterEventHandler, EmitEvent\n"
+        "from launch.actions import ExecuteProcess, RegisterEventHandler, EmitEvent, TimerAction\n"
         "from launch.event_handlers import OnProcessExit\n"
         "from launch.events import Shutdown\n"
         "from launch_ros.actions import Node\n"
@@ -171,7 +189,10 @@ def create_test_launch(folder):
         raise RuntimeError("BLOCKED_INVALID_SYNTHETIC_LAUNCH_RETURN_TYPE")
     print("M23BV_CANDIDATE_SYNTHETIC_LAUNCH_DESCRIPTION=PASS", flush=True)
     script_path.write_text(launch_script)
-    print("M23BV_CANDIDATE_EVENT_HANDLERS_FROM_PINNED_SOURCE=PASS", flush=True)
+    if qos_order_mode == "as_pinned":
+        print("M23BV_CANDIDATE_EVENT_HANDLERS_FROM_PINNED_SOURCE=PASS", flush=True)
+    else:
+        print("M23BV_V2_QOS_ORDER_HANDLER_EXPERIMENTAL=PASS_ONLY", flush=True)
     print("M23BV_CANDIDATE_RECTIFIER_FROM_PINNED_SOURCE=PASS", flush=True)
     return script_path
 
@@ -213,6 +234,12 @@ def main():
     case = os.environ.get("M23BV_READY_TEST_CASE")
     if case not in CASES:
         raise RuntimeError("BLOCKED_UNSUPPORTED_TEST_CASE")
+    qos_order_mode = os.environ.get("M23BV_V2_QOS_ORDER_MODE", "as_pinned")
+    if qos_order_mode not in QOS_ORDER_MODES:
+        raise RuntimeError("BLOCKED_QOS_ORDER_MODE")
+    if qos_order_mode != "as_pinned" and case != "healthy":
+        raise RuntimeError("BLOCKED_QOS_ORDER_NEGATIVE_MODE")
+    print("M23BV_V2_QOS_ORDER_MODE=" + qos_order_mode, flush=True)
     required = {"ROS_DOMAIN_ID": DOMAIN,
                 "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
                 "LEROY_M20_SENSOR_ONLY": "1",
@@ -228,7 +255,7 @@ def main():
     print("M23BV_READY_RUNTIME_TEST_STARTED=" + case, flush=True)
     with tempfile.TemporaryDirectory(prefix="m23bv-ready-test-", dir="/tmp") as scratch:
         scratch = Path(scratch)
-        launch_path = create_test_launch(scratch)
+        launch_path = create_test_launch(scratch, qos_order_mode)
         received = []
         rclpy.init(args=[])
         observer = rclpy.create_node("m23bv_ready_test_observer",
@@ -335,7 +362,12 @@ def main():
             print("M23BV_READY_TEST_FAIL_CLOSED_" + case.upper() + "=PASS", flush=True)
         print("M23BV_READY_TEST_CHILDREN_REAPED=PASS", flush=True)
         print("M23BV_READY_CANDIDATE_RUNTIME_" + case.upper() + "=PASS", flush=True)
-        print("M23BV_SIGINT_V2_CANDIDATE_RUNTIME_" + case.upper() + "=PASS", flush=True)
+        if qos_order_mode == "as_pinned":
+            print("M23BV_SIGINT_V2_CANDIDATE_RUNTIME_" +
+                  case.upper() + "=PASS", flush=True)
+        else:
+            print("M23BV_V2_QOS_ORDER_DIAGNOSTIC=PASS_ONLY", flush=True)
+            print("M23BV_AS_PINNED_V2_HEALTHY=UNRESOLVED", flush=True)
         print("M23BV_ACTUAL_DEVICE_CAMERA_OR_MCU=NOT_TESTED", flush=True)
         print("M23BV_PHYSICAL_ACCESS=NONE", flush=True)
     return 0
