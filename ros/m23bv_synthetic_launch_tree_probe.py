@@ -27,7 +27,7 @@ from m23bv_qos_guard import IMAGE, INFO, RAW, _endpoints, snapshot
 
 CAMERA_SOURCE = Path("/opt/m23bv/m23bv_camera_only.launch.py")
 DOMAIN = "179"
-STARTUP_MODES = ("as_is", "camera_first_3s")
+STARTUP_MODES = ("as_is", "camera_first_3s", "camera_ready")
 
 CAMERA_PROGRAM = r'''#!/usr/bin/env python3
 import time
@@ -85,6 +85,76 @@ if __name__ == "__main__":
 '''
 
 
+CAMERA_READY_PROGRAM = r'''#!/usr/bin/env python3
+"""Synthetic graph/data readiness checker; zero means permission to start rectifier."""
+import os
+import time
+import rclpy
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import Image, CameraInfo
+
+RAW = "/camera/image_raw"
+INFO = "/camera/camera_info"
+
+
+def stamp(msg):
+    h = msg.header
+    if h.frame_id != "camera_optical_frame" or msg.width != 16 or msg.height != 16:
+        return None
+    return h.stamp.sec * 1_000_000_000 + h.stamp.nanosec
+
+
+def good_pub(node, topic):
+    endpoints = [
+        ep for ep in node.get_publishers_info_by_topic(topic)
+        if ep.node_name == "usb_cam" and ep.node_namespace == "/camera"
+    ]
+    return (len(endpoints) == 1 and
+            endpoints[0].qos_profile.reliability == ReliabilityPolicy.RELIABLE and
+            endpoints[0].qos_profile.durability == DurabilityPolicy.VOLATILE)
+
+
+def main():
+    if (os.environ.get("ROS_DOMAIN_ID") != "179" or
+            os.environ.get("ROS_AUTOMATIC_DISCOVERY_RANGE") != "LOCALHOST"):
+        print("M23BV_CAMERA_READINESS=BLOCKED_ISOLATION", flush=True)
+        return 2
+    rclpy.init(args=[])
+    node = rclpy.create_node("m23bv_camera_ready_gate",
+                             start_parameter_services=False, enable_rosout=False)
+    qos = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=20,
+                     reliability=ReliabilityPolicy.RELIABLE,
+                     durability=DurabilityPolicy.VOLATILE)
+    images, infos = set(), set()
+    node.create_subscription(Image, RAW,
+                             lambda msg: images.add(t) if (t := stamp(msg)) is not None else None,
+                             qos)
+    node.create_subscription(CameraInfo, INFO,
+                             lambda msg: infos.add(t) if (t := stamp(msg)) is not None else None,
+                             qos)
+    deadline = time.monotonic() + 15.0
+    try:
+        while time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.05)
+            if (good_pub(node, RAW) and good_pub(node, INFO) and
+                    len(images.intersection(infos)) >= 10):
+                print("M23BV_CAMERA_READY_RELIABLE_PUBLISHERS=PASS", flush=True)
+                print("M23BV_CAMERA_READY_SYNCHRONIZED_FRAMES=10", flush=True)
+                print("M23BV_SYNTH_LAUNCH_CAMERA_READY=PASS", flush=True)
+                return 0
+        print("M23BV_CAMERA_READINESS=BLOCKED_NO_RELIABLE_MATCHED_SOURCE", flush=True)
+        return 2
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+
+
 def rectifier_expression():
     tree = ast.parse(CAMERA_SOURCE.read_text(), filename=str(CAMERA_SOURCE))
     fun = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
@@ -113,6 +183,9 @@ def rectifier_expression():
 def prepare_launch(folder):
     camera = folder / "synthetic_usb_cam.py"
     camera.write_text(CAMERA_PROGRAM)
+    ready_script = folder / "camera_ready.py"
+    if os.environ.get("M23BV_LAUNCH_STARTUP_MODE", "as_is") == "camera_ready":
+        ready_script.write_text(CAMERA_READY_PROGRAM)
     launch_path = folder / "m23bv_synthetic_tree.launch.py"
     rectifier = rectifier_expression()
     # The *unchanged physical* camera guard is deliberately NOT called:
@@ -123,7 +196,9 @@ def prepare_launch(folder):
     launch_src = (
         "import os, sys\n"
         "from launch import LaunchDescription\n"
-        "from launch.actions import ExecuteProcess, TimerAction\n"
+        "from launch.actions import ExecuteProcess, TimerAction, RegisterEventHandler, EmitEvent\n"
+        "from launch.event_handlers import OnProcessExit\n"
+        "from launch.events import Shutdown\n"
         "from launch_ros.actions import Node\n"
         "ALT_OPENCV = '/opt/m23aj-opencv/lib'\n"
         "def generate_launch_description():\n"
@@ -132,7 +207,19 @@ def prepare_launch(folder):
         f"    rectifier = {rectifier}\n" +
         ("    return LaunchDescription([camera, rectifier])\n"
          if startup == "as_is" else
-         "    return LaunchDescription([camera, TimerAction(period=3.0, actions=[rectifier])])\n")
+         "    return LaunchDescription([camera, TimerAction(period=3.0, actions=[rectifier])])\n"
+         if startup == "camera_first_3s" else
+         (
+             f"    ready = ExecuteProcess(cmd=[sys.executable, '-u', {str(ready_script)!r}], "
+             "name='m23bv_camera_ready', output='screen')\n"
+             "    def on_ready_exit(event, context):\n"
+             "        if event.returncode == 0:\n"
+             "            return [rectifier]\n"
+             "        return [EmitEvent(event=Shutdown(reason='BLOCKED_CAMERA_READINESS'))]\n"
+             "    gate = RegisterEventHandler(OnProcessExit(target_action=ready, "
+             "on_exit=on_ready_exit))\n"
+             "    return LaunchDescription([gate, camera, ready])\n"
+         ))
     )
     ast.parse(launch_src, filename=str(launch_path))
     launch_path.write_text(launch_src)
@@ -140,6 +227,8 @@ def prepare_launch(folder):
     print("M23BV_PRODUCTION_LAUNCH_TIMING_REPRODUCED=" +
           ("TRUE" if startup == "as_is" else "FALSE"), flush=True)
     print("M23BV_RECTIFIER_LAUNCH_AST_FROM_PINNED_SOURCE=PASS", flush=True)
+    if startup == "camera_ready":
+        print("M23BV_CAMERA_READINESS_HANDSHAKE_REQUIRED=TRUE", flush=True)
     return launch_path
 
 
@@ -270,6 +359,12 @@ def main():
             raise RuntimeError("BLOCKED_SYNTHETIC_CAMERA_START_UNVERIFIED")
         if "M23BV_SYNTH_LAUNCH_CAMERA_STOP=PASS" not in output:
             raise RuntimeError("BLOCKED_SYNTHETIC_CAMERA_STOP_UNVERIFIED")
+        if os.environ.get("M23BV_LAUNCH_STARTUP_MODE") == "camera_ready":
+            if "M23BV_SYNTH_LAUNCH_CAMERA_READY=PASS" not in output:
+                raise RuntimeError("BLOCKED_CAMERA_READY_HANDSHAKE_MISSING")
+            if len(set(started)) < 3:
+                raise RuntimeError("BLOCKED_CAMERA_READY_CHILD_PID_MISSING")
+            print("M23BV_GRAPH_READY_GATED_RECTIFIER_START=PASS", flush=True)
         surviving = [pid for pid in set(started) if Path("/proc/" + pid).exists()]
         if surviving:
             raise RuntimeError("BLOCKED_LAUNCH_CHILDREN_SURVIVE:" + repr(surviving))
