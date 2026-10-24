@@ -507,6 +507,41 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         for forbidden in ("--device ", "--volume", "--privileged"):
             self.assertNotIn(forbidden, builder)
 
+    def test_v3_actual_cpp_and_candidate_launch_blobs_pinned(self):
+        source = (HERE / "m23bv_reliable_v3_runtime_probe.py").read_text()
+        self.assertIn('EXPECTED_BLOB = "a0ae75a62da39235b113e3d2c324efda5fcfc6e1"', source)
+        self.assertIn('EXPECTED_CPP_BLOB = "7e5d199e633f7cf0dac266a656ae70849df07f71"', source)
+        self.assertIn('EXPECTED_CHECKER_BLOB = "777db7cbeb0ce6c3669a837f1530f7b1499dd9dd"', source)
+        self.assertIn('BLOCKED_V3_COMPILED_SOURCE_PIN', source)
+        self.assertIn('BLOCKED_CANDIDATE_SOURCE_BLOB_MISMATCH', source)
+        self.assertIn('len(received) >= 90 and rect_graph(observer)', source)
+        self.assertIn('end = time.monotonic() + (19 if case == "healthy" else 25)', source)
+        self.assertIn('BLOCKED_SIGINT_V2_NONZERO_EXIT_130_MISSING', source)
+        self.assertIn('BLOCKED_RECTIFIER_STARTED_AFTER_FAILED_READINESS', source)
+        self.assertIn('M23BV_V3_CANDIDATE_RUNTIME_', source)
+        self.assertIn("M23BV_SIGINT_V2_NO_TRACEBACK=PASS", source)
+
+    def test_v3_early_subscriber_diagnostic_cannot_masquerade_as_candidate(self):
+        source = (HERE / "m23bv_reliable_v3_runtime_probe.py").read_text()
+        runner = (HERE / "m23bv_reliable_v3_runtime_preflight.sh").read_text()
+        self.assertIn('QOS_ORDER_MODES = ("as_pinned", "rectifier_first")', source)
+        self.assertIn('TimerAction(period=4.0, actions=[camera])', source)
+        self.assertIn('M23BV_V3_RELIABLE_BEFORE_CAMERA=PASS', source)
+        self.assertIn('BLOCKED_V3_EARLY_READER_UNRELIABLE', source)
+        self.assertIn('M23BV_V3_EARLY_RECTIFIER_DIAGNOSTIC=PASS_ONLY', source)
+        self.assertIn('M23BV_V3_AS_PINNED_ACCEPTANCE=NOT_ESTABLISHED_BY_DIAGNOSTIC', source)
+        self.assertIn('if qos_order_mode == "as_pinned":', source)
+        self.assertIn('M23BV_RELIABLE_V3_EXPECTED_IMAGE_ID', runner)
+        self.assertIn('m23bv_reliable_v3_runtime_probe.py', runner)
+        self.assertIn('source /opt/m23bv_reliable_rectifier_proto/ws/install/setup.bash', runner)
+        self.assertIn('M23BV_RELIABLE_RECTIFIER_PROTO_V3=1', runner)
+        self.assertIn('M23BV_V3_EARLY_RECTIFIER_DIAGNOSTIC=PASS_ONLY', runner)
+        for required in ("--network none", "--cap-drop all", "--pid private",
+                         "--ipc private", "--read-only", "--pull=never"):
+            self.assertIn(required, runner)
+        for forbidden in ("--device ", "--volume", "--privileged"):
+            self.assertNotIn(forbidden, runner)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
