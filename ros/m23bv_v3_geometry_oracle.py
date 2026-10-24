@@ -22,7 +22,7 @@ MIN_FULL_BORDER_PIXELS = 400
 def source_pixel(x, y, phase):
     if not (0 <= x < WIDTH and 0 <= y < HEIGHT and 0 <= phase < 13):
         raise ValueError("BLOCKED_V3_GEOMETRY_SOURCE_COORD")
-    return 32 + x + 2 * y + phase
+    return 16 + (2 * x + y if phase % 2 == 0 else x + 2 * y) + phase
 
 
 def source_image(phase):
