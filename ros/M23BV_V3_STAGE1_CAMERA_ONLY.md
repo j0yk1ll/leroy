@@ -79,6 +79,42 @@ attestation at the console; an unsupported guess must not be entered. The approv
 scope does not include unplug/disconnect tests, recording, MCU serial access,
 or robot motion.
 
+## First physical camera-only attempt: BLOCKED; transport allowlist correction
+
+The first explicitly authorized, supervised physical Stage 1 run on 2026-10-24
+was **BLOCKED**, not PASS. The operator provided the private log SHA-256
+`2d76973e86ab1bee0f2f5394d88ff3398c51830ef1d274c209e3fcdfe0581bcb`.
+The log shows `usb_cam` selecting container `/dev/video2` and listing actual
+MJPEG/YUYV formats, then observer graph rejection:
+
+```text
+M23BV_V3_STAGE1_RESULT=BLOCKED_UNEXPECTED_TOPICS:/camera/image_raw/compressed,/camera/image_raw/compressedDepth,/camera/image_raw/theora,/camera/image_raw/zstd
+M23BV_V3_STAGE1_PROCESS_EXIT=2
+```
+
+Observer-directed SIGINT immediately after that rejection interrupted the
+readiness gate (`INTERRUPTED_SIGINT`), and `usb_cam` logged an `rclcpp`
+invalid-context timer exception and died with exit -6. This is a **secondary
+abnormal shutdown**, plausibly from interruption during camera initialization;
+the log does not demonstrate an unrelated steady-state camera crash. The ROS
+launch parent returned 0, exposing that its exit code cannot by itself prove
+clean child shutdown. No Stage 1 QoS, image-frame or rectification PASS was
+observed. The operator inventory found no remaining Stage 1 container.
+
+This **additive candidate-only correction** adds *exactly those four observed*
+`/camera/image_raw` image_transport topics to the allowlist. Unknown topics
+and nodes still block; the image_raw, camera_info and image_rect publisher/
+subscriber DDS QoS and actual 90 matching frames must still pass. The observer
+now also rejects an abnormal `usb_cam_node_exe` or
+`m23bv_rectify_reliable_node` child-exit diagnostic, even if the ROS launch
+parent exits 0. No broad prefix exceptions, ROS synthetic replacements, new
+image tags, firmware or production-source edits are authorized.
+
+**NO automatic retry:** after source-only tests are repeated on the amended
+branch, a distinct operator-supervised camera-only attempt requires a renewed
+physical safety review and new explicit authorization for that attempt.
+No runtime verification of this amendment has been performed.
+
 ## No-device review and source checks
 
 Source-only validation is allowed before signoff (these do not run Podman
@@ -112,8 +148,12 @@ and independently inventories DDS endpoints:
   (K, D, R, P), at least 90 matching unique
   raw/CameraInfo/rectified stamps with plausible timing;
 - V3 original readiness gate log must show its 10 matched frames and PASS;
-- unknown nodes/topics (including MCU, motion, TF, Nav2, XRSLAM or recorder)
-  block; no bag is recorded and no MCU serial port opened.
+- only the four observed image_transport subtopics
+  `/camera/image_raw/{compressed,compressedDepth,theora,zstd}` are additionally
+  allowed; all other unknown nodes/topics (including MCU, motion, TF, Nav2,
+  XRSLAM or recorder) block. An abnormal camera or V3 rectifier child exit also
+  blocks, even when the ROS launch parent returns 0. No bag is recorded and no
+  MCU serial port opened.
 
 **Conservative assumption:** Stage 1 expects `rgb8`; a legitimate `bgr8`
 or other physical encoding must produce a NO-GO pending inspection and
