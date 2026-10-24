@@ -717,7 +717,7 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
             with self.subTest(case=name):
                 im, ci = deepcopy(rect), deepcopy(calibration)
                 mutate(im, ci, phase)
-                chosen_phase = phase + 4 if name == "wrong_phase" else phase
+                chosen_phase = phase + 5 if name == "wrong_phase" else phase
                 with self.assertRaisesRegex(ValueError,
                                             "BLOCKED_V3_GEOMETRY_"):
                     geo.audit_image(im, ci, chosen_phase)
