@@ -548,6 +548,109 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         for forbidden in ("--device ", "--volume", "--privileged"):
             self.assertNotIn(forbidden, runner)
 
+    def test_v3_closed_bag_auditor_rejects_corrupted_synthetic_cdr(self):
+        # Compile just the pure payload auditor AST; no rclpy, rosbag2,
+        # hardware, subprocess or DDS graph is initialized on the host.
+        source = HERE / "m23bv_reliable_v3_bag_probe.py"
+        module = ast.parse(source.read_text(), filename=str(source))
+        f = next(n for n in module.body
+                 if isinstance(n, ast.FunctionDef)
+                 and n.name == "audit_recorded_v3")
+        code = compile(ast.fix_missing_locations(
+            ast.Module(body=[f], type_ignores=[])), str(source), "exec")
+        globals_ = {"INFO": "/camera/camera_info",
+                    "IMAGE_RECT": "/camera/image_rect",
+                    "IMU": "/imu/data_raw"}
+        exec(code, globals_)
+        audit = globals_["audit_recorded_v3"]
+        from copy import deepcopy
+
+        def fixture():
+            stamps = [START + i * STEP for i in range(90)]
+            raw = {stamp: i % 256 for i, stamp in enumerate(stamps)}
+            infos = []
+            rects = []
+            for stamp in stamps:
+                ci = info(stamp)
+                ci.height, ci.width = 16, 16
+                ci.distortion_model = "plumb_bob"
+                ci.d = [0.03, -0.01, 0., 0., 0.]
+                ci.k = [100., 0., 8., 0., 100., 8., 0., 0., 1.]
+                ci.p = [100., 0., 8., 0., 0., 100., 8., 0., 0., 0., 1., 0.]
+                infos.append(ci)
+                px = raw[stamp]
+                rects.append(N(header=header(stamp), width=16, height=16,
+                               encoding="mono8", is_bigendian=0, step=16,
+                               data=bytes([px]) * 256))
+            return ({"/camera/image_rect": rects,
+                     "/camera/camera_info": infos,
+                     "/imu/data_raw": [N()] * 700}, raw)
+
+        records, source_pixels = fixture()
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(audit(records, source_pixels), 90)
+
+        mutations = (
+            ("bad_pixel", lambda rec, raw:
+             setattr(rec["/camera/image_rect"][12], "data", bytes([255]) * 256)),
+            ("bad_stamp", lambda rec, raw:
+             setattr(rec["/camera/image_rect"][12], "header", header(START - STEP))),
+            ("missing_info", lambda rec, raw:
+             rec["/camera/camera_info"].pop()),
+            ("wrong_frame", lambda rec, raw:
+             setattr(rec["/camera/image_rect"][12].header, "frame_id", "wrong")),
+            ("wrong_encoding", lambda rec, raw:
+             setattr(rec["/camera/image_rect"][12], "encoding", "rgb8")),
+            ("wrong_calibration", lambda rec, raw:
+             setattr(rec["/camera/camera_info"][12], "p", [0.] * 12)),
+            ("missing_image", lambda rec, raw:
+             rec["/camera/image_rect"].pop()),
+            ("duplicate_image", lambda rec, raw:
+             rec["/camera/image_rect"].append(rec["/camera/image_rect"][0])),
+            ("too_few_imu", lambda rec, raw:
+             rec["/imu/data_raw"].pop()),
+        )
+        for name, mutate in mutations:
+            with self.subTest(case=name):
+                rec, raw = deepcopy(records), dict(source_pixels)
+                mutate(rec, raw)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(RuntimeError, "BLOCKED_V3_"):
+                        audit(rec, raw)
+
+    def test_v3_closed_bag_wrapper_pins_image_and_independent_modules(self):
+        wrapper = (HERE / "m23bv_reliable_v3_bag_preflight.sh").read_text()
+        probe = (HERE / "m23bv_reliable_v3_bag_probe.py").read_text()
+        self.assertIn("M23BV_RELIABLE_V3_EXPECTED_IMAGE_ID", wrapper)
+        self.assertIn("IMAGE=localhost/leroy-sensors:m23bv-reliable-rectifier-v3", wrapper)
+        self.assertIn("base64 -w0 m23bv_m23i_independent_preflight.py", wrapper)
+        self.assertIn("cat m23bv_reliable_v3_bag_probe.py", wrapper)
+        self.assertIn("M23BV_V3_BAG_STAMP_INFO_LAYOUT_AND_CENTER_PIXEL=PASS", wrapper)
+        self.assertIn("M23BV_DERIVED_CDR_AND_RECEIPT_EXACT_MATCH=PASS", wrapper)
+        self.assertIn("M23BV_M23I_INDEPENDENT_DERIVED_AUDIT=PASS", wrapper)
+        self.assertIn("M23BV_V3_BAG_DATA_INTEGRITY=PASS", wrapper)
+        self.assertIn("M23BV_V3_BAG_CPP_SOURCE_PIN=PASS", wrapper)
+        self.assertIn("M23BV_V3_PHYSICAL_GEOMETRIC_RECTIFICATION=UNVERIFIED", wrapper)
+        for required in ("--network none", "--ipc private", "--pid private",
+                         "--cap-drop all", "--read-only", "--pull=never",
+                         "--tmpfs /tmp"):
+            self.assertIn(required, wrapper)
+        for forbidden in ("--device ", "--privileged", "--volume ", "apt-get",
+                          "m23bv_sensor_only_run.sh"):
+            self.assertNotIn(forbidden, wrapper)
+        self.assertIn("EXPECTED_CPP_BLOB = '7e5d199e633f7cf0dac266a656ae70849df07f71'", probe)
+        self.assertIn("m23bv_rectify_reliable_node", probe)
+        self.assertIn("validate_camera_graph(last_graph)", probe)
+        self.assertIn("BLOCKED_V3_RECTIFIED_CENTER_PIXEL", probe)
+        self.assertIn("BLOCKED_V3_CAMERA_INFO_GEOMETRY", probe)
+        self.assertIn("BLOCKED_V3_IMAGE_STAMP_ASSOCIATION", probe)
+        self.assertIn("len(rectified) < 90", probe)
+        self.assertIn("min_counts={'image': 90, 'info': 90, 'imu': 700}", probe)
+        self.assertIn("M23BV_V3_BAG_CLOSED_SQLITE_CDR=PASS", probe)
+        self.assertIn("M23BV_V3_BAG_DATA_INTEGRITY=PASS", probe)
+        self.assertIn("M23BV_DERIVED_CDR_AND_RECEIPT_EXACT_MATCH=PASS", probe)
+        self.assertIn("M23BV_M23I_INDEPENDENT_DERIVED_AUDIT=PASS", probe)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
