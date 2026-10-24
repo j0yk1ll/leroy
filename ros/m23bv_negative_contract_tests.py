@@ -727,10 +727,27 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         geo = (HERE / "m23bv_v3_geometry_oracle.py").read_text()
         probe = (HERE / "m23bv_v3_geometry_probe.py").read_text()
         wrapper = (HERE / "m23bv_v3_geometry_preflight.sh").read_text()
-        self.assertNotIn("import cv2", geo)
-        self.assertNotIn("import rclpy", geo)
-        self.assertNotIn("initUndistortRectifyMap", geo)
-        self.assertNotIn("cv2.remap", geo)
+        # Inspect executable AST, not docstrings/comments explaining
+        # forbidden APIs: those explanations are not imports or calls.
+        parsed = ast.parse(geo, filename="m23bv_v3_geometry_oracle.py")
+        imported = set()
+        invoked = set()
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                imported.add((node.module or "").split(".")[0])
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name):
+                    invoked.add(func.id)
+                elif isinstance(func, ast.Attribute):
+                    invoked.add(func.attr)
+        self.assertEqual(imported, {"math"})
+        self.assertTrue(invoked.isdisjoint({
+            "initUndistortRectifyMap", "remap", "undistort", "eval",
+            "exec", "__import__", "system", "popen",
+        }))
         self.assertIn("MAX_ERROR = 4.0", geo)
         self.assertIn("MIN_WARPED_PIXELS", geo)
         self.assertIn("MIN_FULL_BORDER_PIXELS", geo)
