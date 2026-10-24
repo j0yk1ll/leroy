@@ -94,30 +94,42 @@ observer. The wrapper uses the unchanged immutable V3 image ID, Podman
 `--network none`, read-only filesystem, private /tmp and **no device or
 bind mounts**. It requires no preexisting production container.
 
-Five source-implemented cases. `healthy` checks actual graph/RMW
+Six source-implemented cases. `healthy` checks actual graph/RMW
 DDS QoS, at least 100 matching 16x16 synthetic
 raw/CameraInfo/rectified stamps, at least 300 synthetic IMU messages
 and at least 3 seconds of common message-receipt overlap;
 `missing_imu` rejects an absent source; `imu_qos_reliable` rejects
-a RELIABLE synthetic IMU source where the contract requires
-BEST_EFFORT even though DDS may still deliver messages;
-`bad_imu_stamp` publishes zero-stamped IMU samples and requires the
-real subscribed payload validator to reject them; and
-`unexpected_topic` advertises a synthetic
-`/stage2a/unexpected_imu` topic and requires the **exact graph
-allowlist** to reject it. The two newly added negative cases require
-at least 30 matching camera stamps before they may be counted as
-successful negative evidence. All five cases require clean exits for
-all four child processes, parent exit zero, verified V3
-source/CPP/checker pins, clean SIGINT and no surviving child PIDs.
-Further negative tests for camera timestamp corruption, early
-rectifier exit and forced shutdown remain **PENDING**.
+a RELIABLE synthetic IMU source where BEST_EFFORT is required;
+`bad_imu_stamp` publishes zero-stamped IMU samples and requires
+the subscribed payload validator to reject them; and
+`unexpected_topic` advertises `/stage2a/unexpected_imu`
+and requires exact graph-allowlist rejection. The existing five cases
+require all four children to exit cleanly, parent exit zero, pinned
+sources, clean SIGINT and no surviving child processes.
 
-**Operator-host evidence (first revision):** `healthy`, `missing_imu`
-and `imu_qos_reliable` all PASS with zero process exit and clean
-shutdown; evidence is recorded in PR #152's conversation. The two
-additional negative cases are **NEW SOURCE CHANGES, UNTESTED** and do
-not modify the outcome or evidence of the prior three cases.
+New case **`bad_camera_stamp` (SOURCE ONLY, RUNTIME UNTESTED)**:
+the synthetic camera publishes Image and CameraInfo with zero stamps.
+The *original pinned V3 camera readiness checker* must reject them
+with `BLOCKED_TIMEOUT_OR_QOS` and exit code 2 after its bounded
+15-second gate; the compiled V3 rectifier must **never start**.
+Only three children are started: fake camera, readiness checker,
+fake IMU. The camera and IMU must exit cleanly and the expected
+nonzero readiness checker must be reaped, with the parent exiting
+zero. A generic abnormal child exit, traceback, rectifier startup
+or absent specific gate failure must block. The subscribed payload
+auditor must also observe both exact bad-stamp faults while receiving
+at least 20 valid synthetic IMU messages. No physical camera
+or serial device is mapped. Further early rectifier loss and forced
+shutdown negative scenarios remain **PENDING**.
+
+**Operator-host evidence:** all original FIVE cases (healthy,
+missing_imu, imu_qos_reliable, bad_imu_stamp, unexpected_topic)
+PASSED on the earlier exact review SHA
+`b0494f2565d58e54ba36b50286f0297193c7ba38` with clean
+shutdown; log SHA-256 fingerprints and results are in the PR #152
+discussion. Those results cannot automatically be transferred to
+the newly amended sixth-case revision; recheck the healthy baseline
+first, then the new no-device negative case.
 
 **Crucial limit:** This is a **synthetic coexistence test**, not an
 execution of the actual M20 combined observer, real MCU START/STOP/ACK,
@@ -197,6 +209,10 @@ M23BV_V3_STAGE2A_CASE=imu_qos_reliable \
 M23BV_V3_STAGE2A_CASE=bad_imu_stamp \
   bash ros/m23bv_v3_stage2_synthetic_preflight.sh
 M23BV_V3_STAGE2A_CASE=unexpected_topic \
+  bash ros/m23bv_v3_stage2_synthetic_preflight.sh
+# New sixth scenario: require original V3 readiness to fail closed
+# on deliberately invalid SYNTHETIC camera timestamps, no rectifier startup.
+M23BV_V3_STAGE2A_CASE=bad_camera_stamp \
   bash ros/m23bv_v3_stage2_synthetic_preflight.sh
 ```
 
