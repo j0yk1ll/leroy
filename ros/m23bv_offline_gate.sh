@@ -11,7 +11,8 @@ for script in m23bv_sensor_only_run.sh m23bv_offline_gate.sh m23bv_podman_build_
           m23bv_v2_qos_order_diagnostic.sh \
           m23bv_reliable_v3_build_offline.sh \
           m23bv_reliable_v3_runtime_preflight.sh \
-          m23bv_reliable_v3_bag_preflight.sh; do
+          m23bv_reliable_v3_bag_preflight.sh \
+          m23bv_v3_geometry_preflight.sh; do
   bash -n "$script"
 done
 for py in m23bv_camera_only.launch.py m23bv_qos_guard.py \
@@ -24,7 +25,8 @@ for py in m23bv_camera_only.launch.py m23bv_qos_guard.py \
           m23bv_camera_ready_gate_sigint_v2.py m23bv_sigint_v2_runtime_probe.py \
           m23bv_reliable_rectifier_v3_candidate.launch.py \
           m23bv_reliable_v3_runtime_probe.py \
-          m23bv_reliable_v3_bag_probe.py; do
+          m23bv_reliable_v3_bag_probe.py \
+          m23bv_v3_geometry_probe.py m23bv_v3_geometry_oracle.py; do
   python3 - "$py" <<'PY'
 import ast, sys
 from pathlib import Path
