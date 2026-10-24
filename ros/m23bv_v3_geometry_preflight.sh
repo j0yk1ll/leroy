@@ -48,11 +48,11 @@ set +e
   printf '%s\n' '"), "m23bv_m23i_independent_preflight.py", "exec"), audit_module.__dict__)'
   # Independently model exact five-coefficient plumb_bob geometry, in
   # stdlib-only code. Never import cv2 for the geometric oracle.
-  printf '%s\\n' 'geometry_module = types.ModuleType("m23bv_v3_geometry_oracle")'
-  printf '%s\\n' 'sys.modules[geometry_module.__name__] = geometry_module'
+  printf '%s\n' 'geometry_module = types.ModuleType("m23bv_v3_geometry_oracle")'
+  printf '%s\n' 'sys.modules[geometry_module.__name__] = geometry_module'
   printf '%s' 'exec(compile(base64.b64decode("'
   base64 -w0 m23bv_v3_geometry_oracle.py
-  printf '%s\\n' '"), "m23bv_v3_geometry_oracle.py", "exec"), geometry_module.__dict__)'
+  printf '%s\n' '"), "m23bv_v3_geometry_oracle.py", "exec"), geometry_module.__dict__)'
   cat m23bv_v3_geometry_probe.py
 } | podman run --rm -i --pull=never \
   --network none --ipc private --pid private \
