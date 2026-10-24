@@ -79,17 +79,38 @@ does **not** import rclpy, serial, cv2 or Podman, and never launches ROS
 or touches device files. A PASS means only that reviewed source
 contracts have not drifted.
 
-**Deliverable 2 — new isolated synthetic composition candidate (not
-implemented by this PR).** Prepare separately named code that starts
-the compiled V3 rectifier using a synthetic camera stream and **synthetic
-IMU publisher**, with no real serial port, no recorder and no motor API.
-Preserve the real M20 contract as a separate physical acceptance gate;
-a simulated IMU cannot generate a physical M20 START/STOP/ACK PASS.
-Use isolated Jazzy/ROS_DOMAIN_ID 170, no network, no `--device`, no
-`/dev/ttyACM0`, no recording. Run actual DDS QoS introspection and
-receipt/stamp validation. Add negative cases for missing IMU, QoS
-mismatch, unexpected graph endpoints, corrupted timestamps, early
-rectifier exit and forced shutdown.
+**Deliverable 2 — isolated synthetic composition candidate (SOURCE
+IMPLEMENTED; ROS RUNTIME NOT YET TESTED).** The distinct files
+`ros/m23bv_v3_stage2_synthetic_probe.py`,
+`ros/m23bv_v3_stage2_synthetic_preflight.sh` and
+`ros/m23bv_v3_stage2_synthetic_static_gate.py` provide a bounded,
+hardware-free experiment with the *compiled pinned V3 C++ rectifier*,
+original pinned camera readiness gate, synthetic camera, and synthetic
+50 Hz IMU. The probe reconstructs the pinned launch's rectifier,
+readiness gate and lifecycle event handlers from the exact candidate AST
+but substitutes an in-memory camera and adds the fake IMU process. It
+does not import/call the physical camera launch or the M20 serial
+observer. The wrapper uses the unchanged immutable V3 image ID, Podman
+`--network none`, read-only filesystem, private /tmp and **no device or
+bind mounts**. It requires no preexisting production container.
+
+Three source-implemented cases: `healthy` checks actual graph/RMW DDS
+QoS, at least 100 matching 16x16 synthetic raw/CameraInfo/rectified
+stamps, at least 300 synthetic IMU messages and at least 3 seconds of
+common message-receipt overlap; `missing_imu` must reject a source
+with no IMU publisher; `imu_qos_reliable` must reject a wrong
+synthetic IMU offered reliability even though BEST_EFFORT subscribers
+might be able to receive it. All cases require four clean child exits,
+zero launch exit, verified V3 source/CPP/checker pins, a clean SIGINT
+and no remaining child PIDs. Unknown graph nodes/topics also reject.
+Additional negative tests for corrupted timestamps, unexpected graph
+endpoints, early rectifier exit and forced shutdown remain **PENDING**.
+
+**Crucial limit:** This is a **synthetic coexistence test**, not an
+execution of the actual M20 combined observer, real MCU START/STOP/ACK,
+physical IMU acquisition, physical synchronization, or metric accuracy.
+Preserve the original M20 physical acceptance thresholds and require
+explicit scope expansion before real MCU work.
 
 **Deliverable 3 — no-recorder guard design and implementation (pending).**
 Audit raw/image_rect/CameraInfo RELIABLE/VOLATILE endpoints, and IMU
@@ -137,3 +158,34 @@ Expected from the new source inventory:
 `M23BV_V3_STAGE2_SOURCE_REVIEW=PASS` and
 `M23BV_V3_STAGE2_PHYSICAL_DEVICE_ACCESS=NONE`.
 There is **no Stage 2 physical acceptance marker** in this PR.
+
+## Stage 2A synthetic Jazzy execution — ONLY no-device Podman
+
+**Status:** source candidate committed, operator-host no-device runtime
+pending. Start only from the exact review branch with clean worktree, after
+source and unit checks. The test consumes no physical input and generates
+synthetic messages on isolated ROS_DOMAIN_ID 170. No rosbag.
+
+```bash
+python3 -B ros/m23bv_v3_stage2_source_gate.py
+python3 -B ros/m23bv_v3_stage2_synthetic_static_gate.py
+bash -n ros/m23bv_v3_stage2_synthetic_preflight.sh
+bash ros/m23bv_offline_gate.sh
+
+export M23BV_LOG_DIR="$HOME/.local/state/leroy-m23bv"
+# Require an existing owner-private log directory, mode 0700.
+M23BV_V3_STAGE2A_CASE=healthy \
+  bash ros/m23bv_v3_stage2_synthetic_preflight.sh
+M23BV_V3_STAGE2A_CASE=missing_imu \
+  bash ros/m23bv_v3_stage2_synthetic_preflight.sh
+M23BV_V3_STAGE2A_CASE=imu_qos_reliable \
+  bash ros/m23bv_v3_stage2_synthetic_preflight.sh
+```
+
+Run each case **once**, preserve its owner-private log path and SHA-256.
+Only successful case-specific markers, actual graph metrics and child
+shutdown markers establish a synthetic Stage 2A gate. If any blocks,
+stop and diagnose the log; do not automatically repeat hardware or
+start different workflows. Synthetic failure has no implications for
+the already accepted Stage 1 physical camera test.
+
