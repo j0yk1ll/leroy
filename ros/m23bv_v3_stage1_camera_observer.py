@@ -31,6 +31,10 @@ EXPECTED = {
 LAUNCH = "/opt/m23bv/m23bv_reliable_rectifier_v3_candidate.launch.py"
 ALLOWED_TOPICS = {
     "/camera/image_raw", "/camera/camera_info", "/camera/image_rect",
+    # Observed on the real usb_cam node: image_transport advertises these
+    # exact optional raw-image transports. No wildcard or other ROS topics.
+    "/camera/image_raw/compressed", "/camera/image_raw/compressedDepth",
+    "/camera/image_raw/theora", "/camera/image_raw/zstd",
     "/parameter_events", "/rosout",
 }
 ALLOWED_NODES = {
@@ -181,6 +185,7 @@ def run():
         text=True, bufsize=1,
     )
     marker = {"ready": False, "matched": False}
+    abnormal_children = []
     def relay():
         for line in proc.stdout:
             print(line, end="", flush=True)
@@ -189,6 +194,13 @@ def run():
             match = re.search(r"M23BV_CANDIDATE_MATCHED_CAMERA_FRAMES=(\d+)", line)
             if match:
                 marker["matched"] = int(match.group(1)) >= 10
+            # ros2 launch can itself return 0 even if a managed camera or
+            # rectifier process died abnormally during shutdown. Never call
+            # that a clean Stage 1 child shutdown.
+            if ("process has died" in line and
+                    ("[usb_cam_node_exe-" in line or
+                     "[m23bv_rectify_reliable_node-" in line)):
+                abnormal_children.append(line.rstrip())
     relay_thread = threading.Thread(target=relay, daemon=True)
     relay_thread.start()
     node = None
@@ -281,12 +293,15 @@ def run():
         relay_thread.join(timeout=2)
         launch_reaped = (launch_reaped and proc.returncode == 0
                          and not relay_thread.is_alive())
+        if abnormal_children:
+            print("M23BV_V3_STAGE1_CHILD_EXIT=BLOCKED_ABNORMAL", flush=True)
+        launch_reaped = launch_reaped and not abnormal_children
         if node is not None:
             node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
         print("M23BV_V3_STAGE1_LAUNCH_REAPED=" +
-              ("PASS" if launch_reaped else "BLOCKED_FORCED_CLEANUP"), flush=True)
+              ("PASS" if launch_reaped else "BLOCKED_LAUNCH_OR_CHILD_EXIT"), flush=True)
     if success and launch_reaped:
         print("M23BV_V3_STAGE1_RESULT=PASS", flush=True)
         print("M23BV_V3_STAGE1_CAPTURE_OR_MCU=NOT_AUTHORIZED", flush=True)
