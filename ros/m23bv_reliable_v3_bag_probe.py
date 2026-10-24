@@ -317,8 +317,13 @@ def main():
             min_counts={'image': 90, 'info': 90, 'imu': 700})
         if source_hashes_before != fingerprints(bag_dir):
             raise RuntimeError('BLOCKED_SOURCE_CHANGED_AFTER_DERIVATION')
-        if not fingerprints(derived_dir):
+        derived_fingerprints = fingerprints(derived_dir)
+        if not derived_fingerprints:
             raise RuntimeError('BLOCKED_DERIVED_BAG_NOT_FINALIZED')
+        print('M23BV_V3_BAG_SOURCE_FINGERPRINTS_JSON=' +
+              json.dumps(source_hashes_before, sort_keys=True), flush=True)
+        print('M23BV_V3_BAG_DERIVED_FINGERPRINTS_JSON=' +
+              json.dumps(derived_fingerprints, sort_keys=True), flush=True)
         output_reader, _ = new_reader(derived_dir, rosbag2_py)
         try:
             for expected in selected:
