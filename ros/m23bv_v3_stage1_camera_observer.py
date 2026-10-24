@@ -31,10 +31,13 @@ EXPECTED = {
 LAUNCH = "/opt/m23bv/m23bv_reliable_rectifier_v3_candidate.launch.py"
 ALLOWED_TOPICS = {
     "/camera/image_raw", "/camera/camera_info", "/camera/image_rect",
-    # Observed on the real usb_cam node: image_transport advertises these
-    # exact optional raw-image transports. No wildcard or other ROS topics.
+    # The two physical Stage 1 attempts exposed exactly these four
+    # image_transport subtopics for raw and rectified camera images.
+    # No wildcard/prefix acceptance or other topic families are allowed.
     "/camera/image_raw/compressed", "/camera/image_raw/compressedDepth",
     "/camera/image_raw/theora", "/camera/image_raw/zstd",
+    "/camera/image_rect/compressed", "/camera/image_rect/compressedDepth",
+    "/camera/image_rect/theora", "/camera/image_rect/zstd",
     "/parameter_events", "/rosout",
 }
 ALLOWED_NODES = {
