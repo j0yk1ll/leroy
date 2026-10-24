@@ -91,6 +91,54 @@ M23BV_LAUNCH_TREE_PREFLIGHT=PASS
 M23BV_PHYSICAL_ACCESS=NONE
 ~~~
 
+## 2026-10-24: first as-launched trial BLOCKED (preserved)
+
+User-observed `m23bv_launch_tree_6JqvcSnu.log`:
+- `M23BV_LAUNCH_TREE_PREFLIGHT_EXIT=2` and fail-closed verdict.
+- The exact rectifier AST was extracted from the accepted image; synthetic
+  camera STARTED and STOPPED cleanly.
+- `BLOCKED_LAUNCH_GRAPH:BLOCKED_LAUNCH_QOS:/camera/image_rawsubscriptionsrectify_node`.
+  This is not accepted launch-tree QoS, and process-tree shutdown evidence
+  has not yet passed its entire acceptance contract.
+- SHA-256: `630a43286fadcc3f960dc84f5ea22cef3b59f4a1f20a7c8b1f70345c7455cd72`.
+
+ROS Jazzy image_proc has a reported startup-order-dependent raw subscriber
+QoS issue: https://github.com/ros-perception/image_pipeline/issues/1121 .
+The earlier *passing* direct rectifier DDS smoke started the synthetic raw
+publisher before the rectifier. The failing full ROS launch starts both
+children together. A startup-order race is a **hypothesis**, not yet proof.
+
+Two no-device modes are now available without changing the pinned derived
+image or physical M23BV camera launch:
+
+- `as_is` (default) reproduces simultaneous launch-managed startup and
+  must remain blocked unless actual QoS/stream/children all pass.
+- `camera_first_3s` is an explicitly labeled **DIAGNOSTIC ONLY**. It delays
+  starting the exact same rectifier Node for three seconds, while the
+  synthetic camera starts immediately. It prints
+  `M23BV_PRODUCTION_LAUNCH_TIMING_REPRODUCED=FALSE`. A green outcome in
+  this variant cannot promote the unchanged as-launched production path.
+
+Run only the diagnostic variant (no hardware):
+
+~~~bash
+cd /home/kevin/Code/leroy-m23bv/ros
+M23BV_LAUNCH_STARTUP_MODE=camera_first_3s \
+M23BV_LOG_DIR="$HOME/.local/state/leroy-m23bv" \
+bash ./m23bv_synthetic_launch_tree_preflight.sh
+~~~
+
+The test additionally prints `M23BV_LAUNCH_GRAPH_JSON` on endpoint
+failure so the actual offer/request policies can be inspected, rather
+than guessed from an error string. It does not loosen the reliable gate.
+
+**NEXT DECISION:** If camera-first reliably passes where `as_is` fails,
+design a separate deterministic camera-ready-before-rectifier sequence in
+the additive camera launch. That is a *production source change requiring a
+new derived image and renewed full lifecycle tests*. Do not silently alter
+the existing pinned image or treat test-only delay as an accepted physical
+launch.
+
 ## Safety boundary
 
 This test does not substitute for physical video-node QoS discovery, MJPEG
