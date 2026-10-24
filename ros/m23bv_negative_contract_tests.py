@@ -294,6 +294,16 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertIn('BLOCKED_DEVICE_PRESENT', source)
         self.assertNotIn('ros2 launch /opt/m23bv/m23bv_camera_ready_candidate.launch.py', source)
 
+    def test_candidate_runtime_generated_launch_returns_launch_description(self):
+        # Regression for Jazzy launch error: a plain OpaqueFunction action
+        # list is valid inside the candidate, never as the synthetic top-level
+        # generate_launch_description() return value.
+        source = (HERE / "m23bv_ready_candidate_runtime_probe.py").read_text()
+        self.assertIn('f"    return LaunchDescription({returned_expr})\\n"', source)
+        self.assertNotIn('f"    return {returned_expr}\\n"', source)
+        self.assertIn('BLOCKED_INVALID_SYNTHETIC_LAUNCH_RETURN_TYPE', source)
+        self.assertIn('M23BV_CANDIDATE_SYNTHETIC_LAUNCH_DESCRIPTION=PASS', source)
+
     def test_ready_candidate_runtime_wrapper_pins_image_and_has_no_devices(self):
         source = (HERE / "m23bv_ready_candidate_runtime_preflight.sh").read_text()
         self.assertIn('EXPECTED_ID=2a557fc07aead1ba680cc4024d27a5d67227cf659754114487911f6264690c40', source)
