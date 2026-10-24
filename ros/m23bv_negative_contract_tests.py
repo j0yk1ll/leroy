@@ -462,7 +462,13 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
     def test_v3_candidate_preserves_camera_and_fail_closed_handlers(self):
         before = HERE / "m23bv_camera_ready_candidate.launch.py"
         after = HERE / "m23bv_reliable_rectifier_v3_candidate.launch.py"
-        self.assertEqual(camera_ast(before), camera_ast(after))
+        original_camera = camera_ast(before)
+        candidate_camera = camera_ast(after)
+        self.assertEqual(set(original_camera), set(candidate_camera))
+        for key in original_camera:
+            with self.subTest(camera_parameter=key):
+                self.assertEqual(ast.dump(original_camera[key]),
+                                 ast.dump(candidate_camera[key]))
         def handlers(path):
             f = next(n for n in ast.parse(path.read_text()).body
                      if isinstance(n, ast.FunctionDef) and n.name == "_camera_only")
