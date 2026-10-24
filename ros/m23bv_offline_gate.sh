@@ -7,7 +7,8 @@ for script in m23bv_sensor_only_run.sh m23bv_offline_gate.sh m23bv_podman_build_
           m23bv_synthetic_launch_tree_preflight.sh \
           m23bv_ready_candidate_build_offline.sh \
           m23bv_ready_candidate_runtime_preflight.sh \
-          m23bv_sigint_v2_build_offline.sh m23bv_sigint_v2_runtime_preflight.sh; do
+          m23bv_sigint_v2_build_offline.sh m23bv_sigint_v2_runtime_preflight.sh \
+          m23bv_v2_qos_order_diagnostic.sh; do
   bash -n "$script"
 done
 for py in m23bv_camera_only.launch.py m23bv_qos_guard.py \
