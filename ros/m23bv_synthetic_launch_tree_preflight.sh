@@ -7,7 +7,7 @@ IMAGE=localhost/leroy-sensors:m23bv-capture-prep
 EXPECTED_ID=57d886bf0b903e08ff1dc9f766d3daea28f44a20bcf9fd34733e7d3eab3029ec
 STARTUP_MODE="${M23BV_LAUNCH_STARTUP_MODE:-as_is}"
 case "$STARTUP_MODE" in
-  as_is|camera_first_3s) ;;
+  as_is|camera_first_3s|camera_ready) ;;
   *) echo "M23BV_LAUNCH_TREE=BLOCKED_UNEXPECTED_STARTUP_MODE" >&2; exit 2 ;;
 esac
 : "${M23BV_LOG_DIR:?Set existing owner-private log directory}"
@@ -59,8 +59,11 @@ if [[ "$rc" != 0 ]] || \
   exit 2
 fi
 echo 'M23BV_LAUNCH_TREE_PREFLIGHT=PASS'
-if [[ "$STARTUP_MODE" == camera_first_3s ]]; then
+if [[ "$STARTUP_MODE" == camera_first_3s || "$STARTUP_MODE" == camera_ready ]]; then
   echo 'M23BV_LAUNCH_TREE_STARTUP_ORDER_DIAGNOSTIC=PASS_ONLY'
+  if [[ "$STARTUP_MODE" == camera_ready ]]; then
+    echo 'M23BV_CAMERA_READY_GATED_DIAGNOSTIC=PASS_ONLY'
+  fi
   echo 'M23BV_AS_LAUNCHED_SOURCE_QOS=UNRESOLVED'
 fi
 echo 'M23BV_PHYSICAL_ACCESS=NONE'
