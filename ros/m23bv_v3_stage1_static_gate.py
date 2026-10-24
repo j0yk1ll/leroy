@@ -24,6 +24,11 @@ class Stage1SourceContract(unittest.TestCase):
         self.assertIn("--device \"$camera_dev:/dev/video2:rw\"", self.sh)
         self.assertEqual(self.sh.count("--device "), 1)
         self.assertIn('"$camera_dev" == /dev/video8', self.sh)
+        self.assertIn("usb-Wed_Camera_Wed_Camera_20240420112206-video-index0", self.sh)
+        self.assertIn("udevadm info --query=property --name=", self.sh)
+        self.assertIn('"$udev_serial" == "$CAMERA_SERIAL"', self.sh)
+        self.assertIn("CALIBRATION VERIFIED FOR CAMERA", self.sh)
+        self.assertIn("CALIBRATION_SERIAL_ATTESTATION", self.sh)
         self.assertIn('M23BV_V3_STAGE1_CAMERA_HOST_DEVICE=$camera_dev', self.sh)
         self.assertIn('M23BV_V3_STAGE1_CAMERA_CONTAINER_DEVICE=/dev/video2', self.sh)
 
