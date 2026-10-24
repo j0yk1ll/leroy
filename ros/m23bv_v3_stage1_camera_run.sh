@@ -8,6 +8,8 @@ fail() { printf 'M23BV_V3_STAGE1=BLOCKED_%s\n' "$1" >&2; exit 2; }
 IMAGE='localhost/leroy-sensors:m23bv-reliable-rectifier-v3'
 IMAGE_ID='f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c'
 BRANCH='feature/m23bv-v3-stage1-camera-only-optin'
+CAMERA_BY_ID='/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0'
+CAMERA_SERIAL='Wed_Camera_Wed_Camera_20240420112206'
 
 # Values are a recording mechanism, NEVER evidence that isolation is physically real.
 [[ "${M23BV_STAGE1_CAMERA_ONLY_APPROVED:-}" == YES &&
@@ -43,13 +45,23 @@ ros/m23bv_camera_ready_gate_sigint_v2.py 777db7cbeb0ce6c3669a837f1530f7b1499dd9d
 ros/m23bv_reliable_rectifier_proto/src/rectify.cpp 7e5d199e633f7cf0dac266a656ae70849df07f71
 PINS
 
-[[ "${M23BV_STAGE1_CAMERA_ID_PATH:-}" == /dev/v4l/by-id/* &&
-   -L "$M23BV_STAGE1_CAMERA_ID_PATH" ]] || fail STABLE_CAMERA_ID_MISSING
+[[ "${M23BV_STAGE1_CAMERA_ID_PATH:-}" == "$CAMERA_BY_ID" &&
+   -L "$CAMERA_BY_ID" ]] || fail CAMERA_ID_NOT_PINNED
 camera_dev="$(readlink -f -- "$M23BV_STAGE1_CAMERA_ID_PATH")" ||
   fail CAMERA_ID_NOT_RESOLVABLE
 # The operator-confirmed host device is /dev/video8.  The immutable V3 launch
 # intentionally continues to see /dev/video2 ONLY inside the container.
 [[ "$camera_dev" == /dev/video8 && -c "$camera_dev" ]] || fail CAMERA_ID_MISMATCH
+# Read udev metadata only. The stable symlink is necessary but no proof that
+# this exact physical unit was used during intrinsics calibration.
+udev_serial="$(udevadm info --query=property --name="$camera_dev" |
+  sed -n 's/^ID_SERIAL=//p')" || fail CAMERA_UDEV_INVENTORY
+[[ "$udev_serial" == "$CAMERA_SERIAL" ]] || fail CAMERA_SERIAL_MISMATCH
+printf 'Confirm that pinned front_camera.yaml was calibrated for USB serial %s.\n' "$CAMERA_SERIAL" >&2
+printf 'Type exactly: CALIBRATION VERIFIED FOR CAMERA\n' >&2
+IFS= read -r cal_confirmation </dev/tty || fail CALIBRATION_SERIAL_ATTESTATION
+[[ "$cal_confirmation" == 'CALIBRATION VERIFIED FOR CAMERA' ]] ||
+  fail CALIBRATION_SERIAL_ATTESTATION
 cal="${M23BV_STAGE1_CALIBRATION_FILE:-}"
 hash="${M23BV_STAGE1_CALIBRATION_SHA256:-}"
 [[ "$cal" == /* && -f "$cal" && ! -L "$cal" && -r "$cal" &&
@@ -77,6 +89,8 @@ echo "M23BV_V3_STAGE1_IMAGE_ID=$IMAGE_ID" >>"$log"
 echo "M23BV_V3_STAGE1_CALIBRATION_SHA256=$hash" >>"$log"
 echo "M23BV_V3_STAGE1_CAMERA_SYMLINK=$M23BV_STAGE1_CAMERA_ID_PATH" >>"$log"
 echo "M23BV_V3_STAGE1_CAMERA_HOST_DEVICE=$camera_dev" >>"$log"
+echo "M23BV_V3_STAGE1_CAMERA_SERIAL=$CAMERA_SERIAL" >>"$log"
+echo "M23BV_V3_STAGE1_CALIBRATION_CAMERA_ATTESTATION=OPERATOR_CONFIRMED" >>"$log"
 echo "M23BV_V3_STAGE1_CAMERA_CONTAINER_DEVICE=/dev/video2" >>"$log"
 echo 'M23BV_V3_STAGE1_SOURCE_PINS=PASS' >>"$log"
 cleanup() {
