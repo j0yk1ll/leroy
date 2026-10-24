@@ -129,7 +129,7 @@ def prepare_launch(folder):
         "def generate_launch_description():\n"
         f"    camera = ExecuteProcess(cmd=[sys.executable, '-u', {str(camera)!r}], "
         "name='m23bv_synthetic_camera', output='screen')\n"
-        f"    rectifier = {rectifier}\n"
+        f"    rectifier = {rectifier}\n" +
         ("    return LaunchDescription([camera, rectifier])\n"
          if startup == "as_is" else
          "    return LaunchDescription([camera, TimerAction(period=3.0, actions=[rectifier])])\n")
