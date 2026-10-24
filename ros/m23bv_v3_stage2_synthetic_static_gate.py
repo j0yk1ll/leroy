@@ -97,6 +97,24 @@ class Stage2ASyntheticSource(unittest.TestCase):
         self.assertIn("HEALTHY_NO_QOS_FRAME_OR_OVERLAP", self.probe)
         self.assertIn("CAMERA_AND_IMU=SYNTHETIC_ONLY", self.probe)
 
+    def test_two_additional_negative_cases_are_fail_closed(self):
+        self.assertIn('"bad_imu_stamp"', self.probe)
+        self.assertIn('"unexpected_topic"', self.probe)
+        self.assertIn("bad_imu_stamp|unexpected_topic", self.runner)
+        self.assertIn('if case == "bad_imu_stamp":', self.fake_imu)
+        self.assertIn("msg.header.stamp.sec = 0", self.fake_imu)
+        self.assertIn('"/stage2a/unexpected_imu"', self.fake_imu)
+        self.assertNotIn('"/stage2a/unexpected_imu"', self.probe.split(
+            "ALLOWED_TOPICS = {")[1].split("ALLOWED_NODES = {")[0])
+        self.assertIn('blocked_unknown_topic = True', self.probe)
+        self.assertIn('blocked_bad_imu_stamp = True', self.probe)
+        self.assertIn("str(exc) == \"BLOCKED_UNKNOWN_TOPICS:['/stage2a/unexpected_imu']\"",
+                      self.probe)
+        self.assertIn('NEGATIVE_BAD_IMU_STAMP_NOT_REJECTED', self.probe)
+        self.assertIn('NEGATIVE_UNEXPECTED_TOPIC_NOT_REJECTED', self.probe)
+        self.assertIn('M23BV_V3_STAGE2A_NEGATIVE_BAD_IMU_STAMP=PASS', self.probe)
+        self.assertIn('M23BV_V3_STAGE2A_NEGATIVE_UNEXPECTED_TOPIC=PASS', self.probe)
+
     def test_child_shutdown_must_be_clean(self):
         self.assertIn("rc == 0 and not forced", self.probe)
         self.assertIn('"process has died" not in output', self.probe)
