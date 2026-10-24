@@ -231,6 +231,56 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertNotIn('--privileged', runner)
         self.assertNotIn('--volume', runner)
 
+    def test_separate_readiness_candidate_camera_parity(self):
+        original = camera_ast(HERE / "m23bv_camera_only.launch.py")
+        candidate = camera_ast(HERE / "m23bv_camera_ready_candidate.launch.py")
+        self.assertEqual(set(original), set(candidate))
+        for key in original:
+            self.assertEqual(ast.dump(original[key]), ast.dump(candidate[key]), key)
+
+    def test_separate_readiness_candidate_rectifier_parity(self):
+        def rectifier(source):
+            tree = ast.parse((HERE / source).read_text())
+            f = next(n for n in tree.body
+                     if isinstance(n, ast.FunctionDef) and n.name == "_camera_only")
+            return next(ast.dump(n.value) for n in f.body
+                        if isinstance(n, ast.Assign)
+                        and any(isinstance(t, ast.Name) and t.id == "rectifier"
+                                for t in n.targets))
+        self.assertEqual(rectifier("m23bv_camera_only.launch.py"),
+                         rectifier("m23bv_camera_ready_candidate.launch.py"))
+
+    def test_candidate_launch_only_after_zero_readiness_and_shutdown_on_camera_loss(self):
+        source = (HERE / "m23bv_camera_ready_candidate.launch.py").read_text()
+        self.assertIn('M23BV_CAMERA_READY_CANDIDATE', source)
+        self.assertIn('if event.returncode == 0:', source)
+        self.assertIn('return [rectifier]', source)
+        self.assertIn('BLOCKED_M23BV_CAMERA_READY', source)
+        self.assertIn('BLOCKED_M23BV_CAMERA_EXIT', source)
+        self.assertIn('OnProcessExit(target_action=camera', source)
+        self.assertIn('OnProcessExit(target_action=ready', source)
+        self.assertNotIn('TimerAction', source)
+        self.assertNotIn('set_wheels', source)
+
+    def test_candidate_readiness_and_image_layer_not_auto_selected(self):
+        gate = (HERE / "m23bv_camera_ready_gate.py").read_text()
+        docker = (HERE / "Dockerfile.m23bv-camera-ready-candidate").read_text()
+        runner = (HERE / "m23bv_sensor_only_run.sh").read_text()
+        self.assertIn('len(matched) >= PAIR_THRESHOLD', gate)
+        self.assertIn('WAIT_SECONDS = 15.0', gate)
+        self.assertIn('ReliabilityPolicy.RELIABLE', gate)
+        self.assertIn('M23BV_CANDIDATE_CAMERA_READINESS=BLOCKED_TIMEOUT_OR_QOS', gate)
+        self.assertNotIn('import serial', gate)
+        self.assertNotIn('serial.Serial', gate)
+        self.assertNotIn('create_publisher(', gate)
+        self.assertIn('FROM ${M23BV_BASE}', docker)
+        self.assertIn('COPY m23bv_camera_ready_gate.py', docker)
+        self.assertIn('COPY m23bv_camera_ready_candidate.launch.py', docker)
+        self.assertNotIn('COPY m23bv_sensor_only_run.sh', docker)
+        self.assertNotIn('ENTRYPOINT', docker.splitlines()[-1])
+        self.assertIn('ros2 launch /opt/m23bv/m23bv_camera_only.launch.py &', runner)
+        self.assertNotIn('m23bv_camera_ready_candidate.launch.py', runner)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
