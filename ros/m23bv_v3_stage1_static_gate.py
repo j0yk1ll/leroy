@@ -97,6 +97,36 @@ class Stage1SourceContract(unittest.TestCase):
         self.assertIn("topic for topic, _types in node.get_topic_names_and_types()", self.py)
         self.assertIn("node.get_node_names_and_namespaces()", self.py)
 
+    def test_exact_image_transport_topics_and_graph_fail_closed(self):
+        # Source-only guard: accept only four real usb_cam transport names,
+        # not a prefix, wildcard, motion topic, recorder or unrelated graph.
+        topic_assignments = [
+            node.value for node in self.tree.body
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "ALLOWED_TOPICS"
+                    for target in node.targets)
+        ]
+        self.assertEqual(len(topic_assignments), 1)
+        self.assertEqual(ast.literal_eval(topic_assignments[0]), {
+            "/camera/image_raw", "/camera/camera_info", "/camera/image_rect",
+            "/camera/image_raw/compressed", "/camera/image_raw/compressedDepth",
+            "/camera/image_raw/theora", "/camera/image_raw/zstd",
+            "/parameter_events", "/rosout",
+        })
+        self.assertIn("if topics - ALLOWED_TOPICS:", self.py)
+        self.assertIn('fail("UNEXPECTED_TOPICS:"', self.py)
+        self.assertIn("if nodes - ALLOWED_NODES:", self.py)
+        self.assertIn('fail("UNEXPECTED_NODES:"', self.py)
+
+    def test_unexpected_camera_child_exit_blocks_cleanup_acceptance(self):
+        self.assertIn('"process has died" in line', self.py)
+        self.assertIn('"[usb_cam_node_exe-" in line', self.py)
+        self.assertIn('"[m23bv_rectify_reliable_node-" in line', self.py)
+        self.assertIn("abnormal_children.append(line.rstrip())", self.py)
+        self.assertIn("launch_reaped = launch_reaped and not abnormal_children", self.py)
+        self.assertIn("M23BV_V3_STAGE1_CHILD_EXIT=BLOCKED_ABNORMAL", self.py)
+        self.assertIn("BLOCKED_LAUNCH_OR_CHILD_EXIT", self.py)
+
     def test_observer_has_no_non_ros_device_imports(self):
         imported_roots = {
             alias.name.split(".")[0]
