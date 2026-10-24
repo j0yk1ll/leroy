@@ -275,8 +275,12 @@ def run():
         reason = str(exc) if isinstance(exc, RuntimeError) else "BLOCKED_INTERRUPT"
     finally:
         launch_reaped = reap(proc)
+        # A clean SIGINT-managed launch must exit zero and close its output.
+        # A nonzero launch exit or a surviving output reader cannot be PASS.
         print("M23BV_V3_STAGE1_LAUNCH_EXIT=" + str(proc.returncode), flush=True)
         relay_thread.join(timeout=2)
+        launch_reaped = (launch_reaped and proc.returncode == 0
+                         and not relay_thread.is_alive())
         if node is not None:
             node.destroy_node()
         if rclpy.ok():
