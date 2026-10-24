@@ -5,6 +5,11 @@ umask 077
 cd "$(dirname -- "${BASH_SOURCE[0]}")"
 IMAGE=localhost/leroy-sensors:m23bv-capture-prep
 EXPECTED_ID=57d886bf0b903e08ff1dc9f766d3daea28f44a20bcf9fd34733e7d3eab3029ec
+STARTUP_MODE="${M23BV_LAUNCH_STARTUP_MODE:-as_is}"
+case "$STARTUP_MODE" in
+  as_is|camera_first_3s) ;;
+  *) echo "M23BV_LAUNCH_TREE=BLOCKED_UNEXPECTED_STARTUP_MODE" >&2; exit 2 ;;
+esac
 : "${M23BV_LOG_DIR:?Set existing owner-private log directory}"
 if [[ "$M23BV_LOG_DIR" != /* || ! -d "$M23BV_LOG_DIR" ||
       -L "$M23BV_LOG_DIR" || ! -w "$M23BV_LOG_DIR" ]]; then
@@ -36,12 +41,14 @@ podman run --rm -i --pull=never \
   --cap-drop all --security-opt no-new-privileges \
   --read-only --tmpfs /tmp:rw,nosuid,nodev,size=1024m \
   -e ROS_DOMAIN_ID=179 -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+  -e M23BV_LAUNCH_STARTUP_MODE="$STARTUP_MODE" \
   --entrypoint /bin/bash "$IMAGE" -c \
   'set -Eeuo pipefail; set +u; source /opt/ros/jazzy/setup.bash; source /leroy_ws/install/setup.bash; set -u; export ROS_LOG_DIR=/tmp/m23bv-launch-ros-logs; mkdir -p "$ROS_LOG_DIR"; exec python3 -u -' \
   <m23bv_synthetic_launch_tree_probe.py >"$log" 2>&1
 rc=$?
 set -e
 printf 'M23BV_LAUNCH_TREE_PREFLIGHT_EXIT=%s\n' "$rc"
+printf 'M23BV_LAUNCH_TREE_PREFLIGHT_MODE=%s\n' "$STARTUP_MODE"
 printf 'M23BV_LAUNCH_TREE_PREFLIGHT_LOG=%s\n' "$log"
 sha256sum "$log"
 grep -E 'M23BV_|Traceback|RuntimeError|Error:|TypeError:' "$log" | tail -n 100 || true
@@ -52,5 +59,9 @@ if [[ "$rc" != 0 ]] || \
   exit 2
 fi
 echo 'M23BV_LAUNCH_TREE_PREFLIGHT=PASS'
+if [[ "$STARTUP_MODE" == camera_first_3s ]]; then
+  echo 'M23BV_LAUNCH_TREE_STARTUP_ORDER_DIAGNOSTIC=PASS_ONLY'
+  echo 'M23BV_AS_LAUNCHED_SOURCE_QOS=UNRESOLVED'
+fi
 echo 'M23BV_PHYSICAL_ACCESS=NONE'
 echo 'M23BV_PRODUCTION_CAPTURE_OR_CALIBRATION=NOT_AUTHORIZED'
