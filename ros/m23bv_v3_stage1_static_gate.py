@@ -23,6 +23,9 @@ class Stage1SourceContract(unittest.TestCase):
             self.assertNotIn("/cmd_vel\"", text.split("ALLOWED_TOPICS = {")[-1].split("}")[0])
         self.assertIn("--device \"$camera_dev:/dev/video2:rw\"", self.sh)
         self.assertEqual(self.sh.count("--device "), 1)
+        self.assertIn('"$camera_dev" == /dev/video8', self.sh)
+        self.assertIn('M23BV_V3_STAGE1_CAMERA_HOST_DEVICE=$camera_dev', self.sh)
+        self.assertIn('M23BV_V3_STAGE1_CAMERA_CONTAINER_DEVICE=/dev/video2', self.sh)
 
     def test_all_protected_blob_pins_are_full_length(self):
         block = self.sh.split("done <<'PINS'", 1)[1].split("\nPINS\n", 1)[0]
@@ -64,6 +67,8 @@ class Stage1SourceContract(unittest.TestCase):
         self.assertIn("MAX_OBSERVE_SECONDS = 48", self.py)
         self.assertIn("os.killpg(proc.pid, signal.SIGINT)", self.py)
         self.assertIn("M23BV_V3_STAGE1_LAUNCH_REAPED=", self.py)
+        self.assertIn("proc.returncode == 0", self.py)
+        self.assertIn("not relay_thread.is_alive()", self.py)
         self.assertIn("M23BV_V3_STAGE1_RESULT=PASS", self.py)
         self.assertIn("sha256sum \"$log\"", self.sh)
 
