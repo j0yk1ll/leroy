@@ -444,6 +444,69 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
                          '--pid private', '--ipc private', '--pull=never'):
             self.assertIn(required, runner)
 
+    def test_v3_derived_jazzy_rectifier_has_fixed_reliable_input(self):
+        source = (HERE / "m23bv_reliable_rectifier_proto/src/rectify.cpp").read_text()
+        self.assertIn("source Git blob e7cbd9b1e1a0c42fff53241a0094d80988979623", source)
+        self.assertIn("Redistribution and use in source and binary forms", source)
+        self.assertEqual(source.count(
+            "auto qos_profile = rmw_qos_profile_sensor_data;"), 1)
+        self.assertEqual(source.count(
+            "qos_profile.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;"), 1)
+        self.assertEqual(source.count(
+            "qos_profile.durability = RMW_QOS_POLICY_DURABILITY_VOLATILE;"), 1)
+        self.assertNotIn("getTopicQosProfile(this, image_topic_)", source)
+        self.assertIn("image_transport::create_camera_subscription(", source)
+        self.assertIn("model_.rectifyImage(image, rect, interpolation_)", source)
+        self.assertIn("RCLCPP_COMPONENTS_REGISTER_NODE(image_proc::RectifyNode)", source)
+
+    def test_v3_candidate_preserves_camera_and_fail_closed_handlers(self):
+        before = HERE / "m23bv_camera_ready_candidate.launch.py"
+        after = HERE / "m23bv_reliable_rectifier_v3_candidate.launch.py"
+        self.assertEqual(camera_ast(before), camera_ast(after))
+        def handlers(path):
+            f = next(n for n in ast.parse(path.read_text()).body
+                     if isinstance(n, ast.FunctionDef) and n.name == "_camera_only")
+            return {n.name: ast.dump(n) for n in f.body
+                    if isinstance(n, ast.FunctionDef)}
+        self.assertEqual(handlers(before), handlers(after))
+        source = after.read_text()
+        self.assertIn('M23BV_RELIABLE_RECTIFIER_PROTO_V3', source)
+        self.assertIn('package="m23bv_reliable_rectifier"', source)
+        self.assertIn('executable="m23bv_rectify_reliable_node"', source)
+        self.assertIn('name="rectify_node"', source)
+        self.assertNotIn('package="image_proc", executable="rectify_node"', source)
+        self.assertIn('if event.returncode == 0:', source)
+        self.assertNotIn("TimerAction", source)
+        self.assertNotIn("set_wheels", source)
+        runner = (HERE / "m23bv_sensor_only_run.sh").read_text()
+        self.assertNotIn("m23bv_reliable_rectifier_v3_candidate", runner)
+
+    def test_v3_offline_package_and_builder_are_separate(self):
+        source = HERE / "m23bv_reliable_rectifier_proto"
+        cmake = (source / "CMakeLists.txt").read_text()
+        package = (source / "package.xml").read_text()
+        docker = (HERE / "Dockerfile.m23bv-reliable-rectifier-v3").read_text()
+        builder = (HERE / "m23bv_reliable_v3_build_offline.sh").read_text()
+        self.assertIn("project(m23bv_reliable_rectifier)", cmake)
+        self.assertIn("rclcpp_components_register_node(", cmake)
+        self.assertIn("EXECUTABLE m23bv_rectify_reliable_node", cmake)
+        self.assertIn("<license>BSD-3-Clause</license>", package)
+        self.assertIn("FROM ${M23BV_V3_BASE}", docker)
+        self.assertIn("COPY m23bv_reliable_rectifier_proto/", docker)
+        self.assertIn("COPY m23bv_reliable_rectifier_v3_candidate.launch.py", docker)
+        self.assertIn("colcon build --packages-select m23bv_reliable_rectifier", docker)
+        self.assertNotIn("apt-get", docker)
+        self.assertNotIn("ENTRYPOINT [", docker)
+        self.assertIn("EXPECTED_ID=5cdf67f984995003180741c6d14883caf97acfa2b9611e37b34f6015c0dcbc9e", builder)
+        self.assertIn("OUTPUT=localhost/leroy-sensors:m23bv-reliable-rectifier-v3", builder)
+        self.assertIn('podman image exists "$OUTPUT"', builder)
+        for required in ("--network none", "--pull=never", "--no-cache",
+                         "--cap-drop all", "--pid private", "--ipc private",
+                         "--read-only"):
+            self.assertIn(required, builder)
+        for forbidden in ("--device ", "--volume", "--privileged"):
+            self.assertNotIn(forbidden, builder)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
