@@ -37,6 +37,52 @@ def git_blob(payload):
 
 
 
+def audit_recorded_v3(recorded, published_by_stamp):
+    """Independently validate CDR-decoded V3 image, CameraInfo, IMU and pixels.
+
+    Pure read-only contract: callable by mocked host regressions without ROS,
+    graph/device access, rosbag recorder, or modifying bag contents.
+    """
+    info_by_stamp = {}
+    for info in recorded[INFO]:
+        stamp = info.header.stamp.sec * 1_000_000_000 + info.header.stamp.nanosec
+        if stamp in info_by_stamp:
+            raise RuntimeError('BLOCKED_V3_DUPLICATE_CAMERA_INFO')
+        if (info.header.frame_id != 'camera_optical_frame'
+                or (info.width, info.height) != (16, 16)
+                or info.distortion_model != 'plumb_bob'
+                or list(info.d) != [0.03, -0.01, 0.0, 0.0, 0.0]
+                or len(info.k) != 9 or abs(info.k[0] - 100.) > 1e-8
+                or len(info.p) != 12 or abs(info.p[0] - 100.) > 1e-8):
+            raise RuntimeError('BLOCKED_V3_CAMERA_INFO_GEOMETRY')
+        info_by_stamp[stamp] = info
+    seen = set()
+    center_pixels_checked = 0
+    for rect in recorded[IMAGE_RECT]:
+        stamp = rect.header.stamp.sec * 1_000_000_000 + rect.header.stamp.nanosec
+        if stamp in seen or stamp not in published_by_stamp or stamp not in info_by_stamp:
+            raise RuntimeError('BLOCKED_V3_IMAGE_STAMP_ASSOCIATION')
+        seen.add(stamp)
+        if (rect.header.frame_id != 'camera_optical_frame'
+                or rect.encoding != 'mono8' or rect.is_bigendian != 0
+                or (rect.width, rect.height) != (16, 16)
+                or rect.step != 16 or len(rect.data) != 256):
+            raise RuntimeError('BLOCKED_V3_RECT_IMAGE_METADATA_OR_LAYOUT')
+        # Source is a uniform 16x16 mono8 image, with known per-stamp
+        # 8-bit pixel. Even with nonzero distortion, the image center
+        # must preserve the constant input under bilinear interpolation.
+        if rect.data[8 * rect.step + 8] != published_by_stamp[stamp]:
+            raise RuntimeError('BLOCKED_V3_RECTIFIED_CENTER_PIXEL')
+        center_pixels_checked += 1
+    if len(seen) < 90 or len(recorded[INFO]) < 90 or len(recorded[IMU]) < 700:
+        raise RuntimeError('BLOCKED_V3_CDR_RECORD_COUNTS')
+    print('M23BV_V3_BAG_INDEPENDENT_CDR_IMAGE_FRAMES=' + str(len(seen)), flush=True)
+    print('M23BV_V3_BAG_INDEPENDENT_CDR_CENTER_PIXELS=' + str(center_pixels_checked), flush=True)
+    print('M23BV_V3_BAG_STAMP_INFO_LAYOUT_AND_CENTER_PIXEL=PASS', flush=True)
+    return len(seen)
+
+
+
 def stop_process(proc, label, timeout=20):
     if proc is None:
         return None
@@ -189,7 +235,7 @@ def main():
             print('M23BV_DDS_PUBLISHED_IMAGE_RAW=' + str(images_sent), flush=True)
             print('M23BV_DDS_PUBLISHED_IMU=' + str(imu_sent), flush=True)
             print('M23BV_DDS_SUBSCRIBED_RECT=' + str(len(rectified)), flush=True)
-            if len(rectified) < 80:
+            if len(rectified) < 90:
                 raise RuntimeError('BLOCKED_RECTIFIED_IMAGE_DELIVERY')
         finally:
             # The synthetic rectifier exits before the bag recorder finalizes.
@@ -228,49 +274,16 @@ def main():
             if callable(getattr(reader, 'close', None)):
                 reader.close()
             del reader
-        info_by_stamp = {}
-        for info in recorded[INFO]:
-            stamp = info.header.stamp.sec * 1_000_000_000 + info.header.stamp.nanosec
-            if stamp in info_by_stamp:
-                raise RuntimeError('BLOCKED_V3_DUPLICATE_CAMERA_INFO')
-            if (info.header.frame_id != 'camera_optical_frame'
-                    or (info.width, info.height) != (16, 16)
-                    or info.distortion_model != 'plumb_bob'
-                    or list(info.d) != [0.03, -0.01, 0.0, 0.0, 0.0]
-                    or len(info.k) != 9 or abs(info.k[0] - 100.) > 1e-8
-                    or len(info.p) != 12 or abs(info.p[0] - 100.) > 1e-8):
-                raise RuntimeError('BLOCKED_V3_CAMERA_INFO_GEOMETRY')
-            info_by_stamp[stamp] = info
-        seen = set()
-        center_pixels_checked = 0
-        for rect in recorded[IMAGE_RECT]:
-            stamp = rect.header.stamp.sec * 1_000_000_000 + rect.header.stamp.nanosec
-            if stamp in seen or stamp not in published_by_stamp or stamp not in info_by_stamp:
-                raise RuntimeError('BLOCKED_V3_IMAGE_STAMP_ASSOCIATION')
-            seen.add(stamp)
-            if (rect.header.frame_id != 'camera_optical_frame'
-                    or rect.encoding != 'mono8' or rect.is_bigendian != 0
-                    or (rect.width, rect.height) != (16, 16)
-                    or rect.step != 16 or len(rect.data) != 256):
-                raise RuntimeError('BLOCKED_V3_RECT_IMAGE_METADATA_OR_LAYOUT')
-            # Source is a uniform 16x16 mono8 image, with known per-stamp
-            # 8-bit pixel. Even with nonzero distortion, the image center
-            # must preserve the constant input under bilinear interpolation.
-            if rect.data[8 * rect.step + 8] != published_by_stamp[stamp]:
-                raise RuntimeError('BLOCKED_V3_RECTIFIED_CENTER_PIXEL')
-            center_pixels_checked += 1
-        if len(seen) < 80 or len(recorded[INFO]) < 80 or len(recorded[IMU]) < 700:
-            raise RuntimeError('BLOCKED_V3_CDR_RECORD_COUNTS')
-        print('M23BV_V3_BAG_INDEPENDENT_CDR_IMAGE_FRAMES=' + str(len(seen)), flush=True)
-        print('M23BV_V3_BAG_INDEPENDENT_CDR_CENTER_PIXELS=' + str(center_pixels_checked), flush=True)
-        print('M23BV_V3_BAG_STAMP_INFO_LAYOUT_AND_CENTER_PIXEL=PASS', flush=True)
+        v3_checked = audit_recorded_v3(recorded, published_by_stamp)
+        if v3_checked < 90:
+            raise RuntimeError('BLOCKED_V3_CDR_TOO_FEW_RECTIFIED_FRAMES')
         original_fingerprints = fingerprints(bag_dir)
         reader, topics = new_reader(bag_dir, __import__('rosbag2_py'))
         events = scan(reader, ros_decode())
         if callable(getattr(reader, 'close', None)):
             reader.close()
         del reader
-        keep, report = select(events, min_counts={'image': 80, 'info': 80, 'imu': 700})
+        keep, report = select(events, min_counts={'image': 90, 'info': 90, 'imu': 700})
         if original_fingerprints != fingerprints(bag_dir):
             raise RuntimeError('BLOCKED_BAG_MUTATED_BY_READONLY_AUDIT')
         print('M23BV_DDS_SYNTHETIC_WINDOW=' + json.dumps(report, sort_keys=True), flush=True)
@@ -301,7 +314,7 @@ def main():
         derived_dir = scratch / 'derived'
         derivation = derive(
             bag_dir, derived_dir, baglib=rosbag2_py, decode=ros_decode(),
-            min_counts={'image': 80, 'info': 80, 'imu': 700})
+            min_counts={'image': 90, 'info': 90, 'imu': 700})
         if source_hashes_before != fingerprints(bag_dir):
             raise RuntimeError('BLOCKED_SOURCE_CHANGED_AFTER_DERIVATION')
         if not fingerprints(derived_dir):
