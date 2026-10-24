@@ -7,7 +7,7 @@ cd "$(dirname -- "${BASH_SOURCE[0]}")"
 
 CASE="${M23BV_V3_STAGE2A_CASE:-healthy}"
 case "$CASE" in
-  healthy|missing_imu|imu_qos_reliable|bad_imu_stamp|unexpected_topic) ;;
+  healthy|missing_imu|imu_qos_reliable|bad_imu_stamp|unexpected_topic|bad_camera_stamp) ;;
   *) echo 'M23BV_V3_STAGE2A_PREFLIGHT=BLOCKED_CASE' >&2; exit 2 ;;
 esac
 IMAGE='localhost/leroy-sensors:m23bv-reliable-rectifier-v3'
