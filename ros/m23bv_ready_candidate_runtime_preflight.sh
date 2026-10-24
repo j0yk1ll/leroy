@@ -57,6 +57,12 @@ grep -E 'M23BV_|Traceback|RuntimeError|Error:|TypeError:' "$log" | tail -n 100 |
 if [[ "$rc" != 0 ]] || \
    ! grep -qx "M23BV_READY_CANDIDATE_RUNTIME_${CASE^^}=PASS" "$log" || \
    ! grep -qx 'M23BV_READY_TEST_CHILDREN_REAPED=PASS' "$log"; then
+  echo 'M23BV_READY_RUNTIME_RAW_LAUNCH_OUTPUT_BEGIN' >&2
+  # Outer M23BV grep hides ordinary Python/launch errors; expose the
+  # bounded captured launch block verbatim, without launching again.
+  sed -n '/^M23BV_READY_TEST_LAUNCH_LOG_BEGIN$/,/^M23BV_READY_TEST_LAUNCH_LOG_END$/p' "$log" \
+    | tail -n 140 >&2 || true
+  echo 'M23BV_READY_RUNTIME_RAW_LAUNCH_OUTPUT_END' >&2
   echo 'M23BV_READY_RUNTIME_PREFLIGHT=BLOCKED' >&2
   exit 2
 fi
