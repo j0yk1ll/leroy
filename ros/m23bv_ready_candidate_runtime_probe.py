@@ -148,10 +148,25 @@ def create_test_launch(folder):
         f"    rectifier = {rectifier}\n"
         f"    ready = {checker}\n"
         + callbacks + "\n"
-        f"    return {returned_expr}\n"
+        # The original _camera_only() callback correctly returns a list to
+        # OpaqueFunction. This synthetic launch generates a TOP-LEVEL
+        # generate_launch_description(): it must return LaunchDescription.
+        f"    return LaunchDescription({returned_expr})\n"
     )
     script_path = folder / "m23bv_ready_candidate_synthetic.launch.py"
-    ast.parse(launch_script, filename=str(script_path))
+    parsed_launch = ast.parse(launch_script, filename=str(script_path))
+    generated = next(n for n in parsed_launch.body
+                     if isinstance(n, ast.FunctionDef)
+                     and n.name == "generate_launch_description")
+    terminal = generated.body[-1]
+    if (not isinstance(terminal, ast.Return) or
+            not isinstance(terminal.value, ast.Call) or
+            not isinstance(terminal.value.func, ast.Name) or
+            terminal.value.func.id != "LaunchDescription" or
+            len(terminal.value.args) != 1 or
+            not isinstance(terminal.value.args[0], ast.List)):
+        raise RuntimeError("BLOCKED_INVALID_SYNTHETIC_LAUNCH_RETURN_TYPE")
+    print("M23BV_CANDIDATE_SYNTHETIC_LAUNCH_DESCRIPTION=PASS", flush=True)
     script_path.write_text(launch_script)
     print("M23BV_CANDIDATE_EVENT_HANDLERS_FROM_PINNED_SOURCE=PASS", flush=True)
     print("M23BV_CANDIDATE_RECTIFIER_FROM_PINNED_SOURCE=PASS", flush=True)
