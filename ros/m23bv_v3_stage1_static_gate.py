@@ -98,8 +98,9 @@ class Stage1SourceContract(unittest.TestCase):
         self.assertIn("node.get_node_names_and_namespaces()", self.py)
 
     def test_exact_image_transport_topics_and_graph_fail_closed(self):
-        # Source-only guard: accept only four real usb_cam transport names,
-        # not a prefix, wildcard, motion topic, recorder or unrelated graph.
+        # Source-only guard: accept only the four actually observed
+        # transports for BOTH raw and rectified camera images, not a wildcard,
+        # prefix, motion topic, recorder or unrelated graph.
         topic_assignments = [
             node.value for node in self.tree.body
             if isinstance(node, ast.Assign)
@@ -111,12 +112,28 @@ class Stage1SourceContract(unittest.TestCase):
             "/camera/image_raw", "/camera/camera_info", "/camera/image_rect",
             "/camera/image_raw/compressed", "/camera/image_raw/compressedDepth",
             "/camera/image_raw/theora", "/camera/image_raw/zstd",
+            "/camera/image_rect/compressed", "/camera/image_rect/compressedDepth",
+            "/camera/image_rect/theora", "/camera/image_rect/zstd",
             "/parameter_events", "/rosout",
         })
         self.assertIn("if topics - ALLOWED_TOPICS:", self.py)
         self.assertIn('fail("UNEXPECTED_TOPICS:"', self.py)
         self.assertIn("if nodes - ALLOWED_NODES:", self.py)
         self.assertIn('fail("UNEXPECTED_NODES:"', self.py)
+
+    def test_topic_graph_blocks_unknown_names_without_prefix_exceptions(self):
+        check_graph = [
+            node for node in self.tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "check_graph"
+        ]
+        self.assertEqual(len(check_graph), 1)
+        source = ast.get_source_segment(self.py, check_graph[0])
+        self.assertIn("topics - ALLOWED_TOPICS", source)
+        self.assertIn("nodes - ALLOWED_NODES", source)
+        self.assertNotIn(".startswith(", source)
+        self.assertNotIn(".endswith(", source)
+        self.assertNotIn("fnmatch", source)
+        self.assertNotIn("re.match(", source)
 
     def test_unexpected_camera_child_exit_blocks_cleanup_acceptance(self):
         self.assertIn('"process has died" in line', self.py)
