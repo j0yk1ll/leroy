@@ -29,7 +29,8 @@ CPP_SHA = "7e5d199e633f7cf0dac266a656ae70849df07f71"
 CHECKER = Path("/opt/m23bv/m23bv_camera_ready_gate.py")
 CHECKER_SHA = "777db7cbeb0ce6c3669a837f1530f7b1499dd9dd"
 CASE = os.environ.get("M23BV_V3_STAGE2A_CASE")
-CASES = ("healthy", "missing_imu", "imu_qos_reliable", "bad_imu_stamp", "unexpected_topic")
+CASES = ("healthy", "missing_imu", "imu_qos_reliable", "bad_imu_stamp", "unexpected_topic",
+         "bad_camera_stamp")
 ALLOWED_TOPICS = {
     "/camera/image_raw", "/camera/camera_info", "/camera/image_rect",
     "/camera/image_raw/compressed", "/camera/image_raw/compressedDepth",
@@ -44,7 +45,8 @@ ALLOWED_NODES = {
     ("/", "m23bv_stage2a_fake_imu"), ("/", "m23bv_stage2a_probe"),
 }
 
-FAKE_CAMERA = r'''import time
+FAKE_CAMERA = r'''import os
+import time
 import signal
 import rclpy
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
@@ -68,6 +70,8 @@ try:
     while running and rclpy.ok():
         stamp = time.time_ns()
         sec, nsec = divmod(stamp, 1000000000)
+        if os.environ.get("M23BV_V3_STAGE2A_CASE") == "bad_camera_stamp":
+            sec, nsec = 0, 0
         msg = Image()
         msg.header.stamp.sec, msg.header.stamp.nanosec = sec, nsec
         msg.header.frame_id = "camera_optical_frame"
@@ -374,13 +378,23 @@ def main():
                 proc = subprocess.Popen(["ros2", "launch", str(launch)],
                                         stdout=stream, stderr=subprocess.STDOUT,
                                         start_new_session=True)
-                deadline = time.monotonic() + (28 if CASE == "healthy" else 13)
+                deadline = time.monotonic() + (
+                    28 if CASE == "healthy" else
+                    22 if CASE == "bad_camera_stamp" else 13)
                 while time.monotonic() < deadline:
-                    require(proc.poll() is None, "LAUNCH_EARLY_EXIT")
+                    if proc.poll() is not None:
+                        require(CASE == "bad_camera_stamp",
+                                "LAUNCH_EARLY_EXIT")
+                        break
                     rclpy.spin_once(observer, timeout_sec=0.005)
                     if CASE == "bad_imu_stamp":
                         require(all(f == "BLOCKED_SYNTHETIC_IMU_LAYOUT" for f in faults),
                                 "UNEXPECTED_INVALID_MESSAGE:" + repr(faults))
+                    elif CASE == "bad_camera_stamp":
+                        require(all(f in ("BLOCKED_SYNTHETIC_IMAGE_LAYOUT",
+                                          "BLOCKED_SYNTHETIC_CAMERA_INFO")
+                                    for f in faults),
+                                "UNEXPECTED_CAMERA_FAULT:" + repr(faults[:10]))
                     else:
                         require(not faults, "INVALID_MESSAGE:" + repr(faults))
                     try:
@@ -423,7 +437,17 @@ def main():
                                   }, sort_keys=True), flush=True)
                             ok = True
                             break
-                if CASE == "imu_qos_reliable":
+                if CASE == "bad_camera_stamp":
+                    require(proc.poll() is not None and
+                            "BLOCKED_SYNTHETIC_IMAGE_LAYOUT" in faults and
+                            "BLOCKED_SYNTHETIC_CAMERA_INFO" in faults and
+                            not raw and not info and not rect and len(imus) >= 20,
+                            "NEGATIVE_BAD_CAMERA_STAMP_NOT_REJECTED")
+                    # Marker is tentative until the launch log verifies that
+                    # only the readiness checker failed, never the rectifier.
+                    print("M23BV_V3_STAGE2A_NEGATIVE_BAD_CAMERA_STAMP_DETECTED=PASS",
+                          flush=True)
+                elif CASE == "imu_qos_reliable":
                     require(blocked_qos, "NEGATIVE_IMU_QOS_NOT_REJECTED")
                     print("M23BV_V3_STAGE2A_NEGATIVE_IMU_QOS=PASS", flush=True)
                 elif CASE == "bad_imu_stamp":
@@ -456,20 +480,39 @@ def main():
 
         print("M23BV_V3_STAGE2A_LAUNCH_EXIT=" + str(rc), flush=True)
         require(rc == 0 and not forced, "LAUNCH_FORCED_OR_NONZERO")
-        require("Traceback (most recent call last):" not in output and
-                "process has died" not in output, "ABNORMAL_CHILD_EXIT")
+        require("Traceback (most recent call last):" not in output,
+                "ABNORMAL_CHILD_TRACEBACK")
         child_started = set(re.findall(r"process started with pid \[(\d+)\]", output))
         child_clean = set(re.findall(r"process has finished cleanly \[pid (\d+)\]", output))
-        require(len(child_started) == 4 and child_clean == child_started,
-                "CHILD_PROCESS_REAP_OR_START_COUNT:" +
-                repr((sorted(child_started), sorted(child_clean))))
+        if CASE == "bad_camera_stamp":
+            # The pinned readiness gate is *expected* to exit 2 after
+            # rejecting invalid camera timestamps; no V3 rectifier starts.
+            checker_failed = re.findall(
+                r"\[m23bv_camera_ready-\d+\]: process has died "
+                r"\[pid (\d+), exit code 2,", output)
+            require(len(child_started) == 3 and len(child_clean) == 2 and
+                    len(checker_failed) == 1 and
+                    child_started == child_clean | set(checker_failed) and
+                    "M23BV_CANDIDATE_CAMERA_READINESS=BLOCKED_TIMEOUT_OR_QOS" in output and
+                    "M23BV_CANDIDATE_CAMERA_READINESS=PASS" not in output and
+                    not re.search(
+                        r"\[m23bv_rectify_reliable_node-\d+\]: process started",
+                        output) and output.count("process has died") == 1,
+                    "BAD_CAMERA_STAMP_LAUNCH_NOT_FAIL_CLOSED")
+            print("M23BV_V3_STAGE2A_NEGATIVE_BAD_CAMERA_STAMP=PASS", flush=True)
+        else:
+            require("process has died" not in output, "ABNORMAL_CHILD_EXIT")
+            require(len(child_started) == 4 and child_clean == child_started,
+                    "CHILD_PROCESS_REAP_OR_START_COUNT:" +
+                    repr((sorted(child_started), sorted(child_clean))))
         require(not any(Path("/proc/" + pid).exists() for pid in child_started),
                 "CHILD_PROCESS_REMAINS")
         require("M23BV_V3_STAGE2A_FAKE_CAMERA_STOP=PASS" in output and
                 "M23BV_V3_STAGE2A_FAKE_IMU_STOP=PASS" in output,
                 "SYNTHETIC_CHILD_STOP_MARKER")
-        require("M23BV_CANDIDATE_CAMERA_READINESS=PASS" in output,
-                "REAL_V3_READINESS_NOT_PASS")
+        if CASE != "bad_camera_stamp":
+            require("M23BV_CANDIDATE_CAMERA_READINESS=PASS" in output,
+                    "REAL_V3_READINESS_NOT_PASS")
         print("M23BV_V3_STAGE2A_CHILDREN_REAPED=PASS", flush=True)
         print("M23BV_V3_STAGE2A_CAMERA_AND_IMU=SYNTHETIC_ONLY", flush=True)
         print("M23BV_V3_STAGE2A_MCU_SERIAL_OR_ROSBAG=NOT_USED", flush=True)
