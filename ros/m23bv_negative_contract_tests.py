@@ -397,6 +397,20 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertNotIn('--device ', wrapper)
         self.assertNotIn('--volume ', wrapper)
 
+    def test_sigint_v2_timeout_preserves_gate_and_prints_diagnostics(self):
+        source = (HERE / "m23bv_sigint_v2_runtime_probe.py").read_text()
+        # Do not silently increase acceptance time or reduce the required
+        # image count to turn the observed healthy timeout green.
+        self.assertIn('end = time.monotonic() + (19 if case == "healthy" else 25)', source)
+        self.assertIn("len(received) >= 90 and rect_graph(observer)", source)
+        self.assertIn('raise RuntimeError("BLOCKED_EXPECTED_LAUNCH_RESULT_TIMEOUT")', source)
+        self.assertIn("M23BV_SIGINT_V2_HEALTHY_RECT_FRAMES=", source)
+        self.assertIn("M23BV_SIGINT_V2_HEALTHY_GRAPH_OK=", source)
+        self.assertIn("M23BV_SIGINT_V2_HEALTHY_GRAPH_JSON=", source)
+        self.assertIn("M23BV_SIGINT_V2_HEALTHY_LAUNCH_PARENT_ACTIVE=", source)
+        self.assertIn("json.dumps(graph, sort_keys=True)", source)
+        self.assertIn("M23BV_SIGINT_V2_NO_TRACEBACK=PASS", source)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
