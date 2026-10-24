@@ -317,6 +317,86 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertIn('healthy|best_effort|missing_info|camera_exit', source)
         self.assertIn('M23BV_PRODUCTION_OR_PHYSICAL_CAPTURE=NOT_AUTHORIZED', source)
 
+    def test_sigint_v2_checker_preserves_readiness_logic(self):
+        # Only the versioned startup shim/docstring may change; the ROS
+        # graph, camera calibration checks and safety predicates stay exact.
+        base = ast.parse((HERE / "m23bv_camera_ready_gate.py").read_text())
+        v2 = ast.parse((HERE / "m23bv_camera_ready_gate_sigint_v2.py").read_text())
+        def core(tree):
+            return [ast.dump(node) for node in tree.body
+                    if not isinstance(node, ast.If)
+                    and not (isinstance(node, ast.Expr)
+                             and isinstance(node.value, ast.Constant)
+                             and isinstance(node.value.value, str))]
+        self.assertEqual(core(base), core(v2))
+
+    def test_sigint_v2_checker_exits_nonzero_without_traceback(self):
+        # Execute ONLY the small __main__ AST in mocked globals. Do not
+        # import rclpy or open any real topic, image or serial device.
+        source = HERE / "m23bv_camera_ready_gate_sigint_v2.py"
+        parsed = ast.parse(source.read_text())
+        main = next(node for node in parsed.body
+                    if isinstance(node, ast.If) and
+                    isinstance(node.test, ast.Compare) and
+                    isinstance(node.test.left, ast.Name) and
+                    node.test.left.id == "__name__")
+        main_code = compile(ast.fix_missing_locations(
+            ast.Module(body=[main], type_ignores=[])), str(source), "exec")
+        import sys
+        for expected, test_run in (
+            (130, lambda: (_ for _ in ()).throw(KeyboardInterrupt())),
+            (0, lambda: 0),
+            (2, lambda: 2),
+        ):
+            with self.subTest(expected=expected):
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    with self.assertRaises(SystemExit) as raised:
+                        exec(main_code, {"__name__": "__main__",
+                                         "run": test_run, "sys": sys})
+                self.assertEqual(raised.exception.code, expected)
+                if expected == 130:
+                    self.assertIn(
+                        "M23BV_CANDIDATE_CAMERA_READINESS=INTERRUPTED_SIGINT",
+                        out.getvalue())
+                else:
+                    self.assertNotIn("INTERRUPTED_SIGINT", out.getvalue())
+                self.assertNotIn("Traceback", out.getvalue() + err.getvalue())
+
+    def test_sigint_v2_offline_image_layer_cannot_replace_prior_tags(self):
+        docker = (HERE / "Dockerfile.m23bv-camera-ready-sigint-v2").read_text()
+        builder = (HERE / "m23bv_sigint_v2_build_offline.sh").read_text()
+        self.assertIn("FROM ${M23BV_SIGINT_V2_BASE}", docker)
+        copy_rows = [line for line in docker.splitlines()
+                     if line.lstrip().startswith("COPY ")]
+        self.assertEqual(copy_rows, [
+            "COPY m23bv_camera_ready_gate_sigint_v2.py /opt/m23bv/m23bv_camera_ready_gate.py"])
+        self.assertNotIn("ENTRYPOINT [", docker)
+        self.assertIn("EXPECTED_ID=2a557fc07aead1ba680cc4024d27a5d67227cf659754114487911f6264690c40", builder)
+        self.assertIn("OUTPUT=localhost/leroy-sensors:m23bv-camera-ready-sigint-v2", builder)
+        self.assertIn('podman image exists "$OUTPUT"', builder)
+        for policy in ("--network none", "--pull=never", "--ipc private",
+                       "--pid private", "--cap-drop all", "--read-only"):
+            self.assertIn(policy, builder)
+        self.assertNotIn("--device ", builder)
+        self.assertNotIn("--volume ", builder)
+        self.assertNotIn("--privileged", builder)
+
+    def test_sigint_v2_runtime_requires_real_nonzero_interrupt_evidence(self):
+        wrapper = (HERE / "m23bv_sigint_v2_runtime_preflight.sh").read_text()
+        probe = (HERE / "m23bv_sigint_v2_runtime_probe.py").read_text()
+        self.assertIn('M23BV_SIGINT_V2_EXPECTED_IMAGE_ID', wrapper)
+        self.assertIn('EXPECTED_CHECKER_BLOB = "777db7cbeb0ce6c3669a837f1530f7b1499dd9dd"', probe)
+        self.assertIn('BLOCKED_SIGINT_V2_CHECKER_SOURCE_MISMATCH', probe)
+        self.assertIn('BLOCKED_SIGINT_V2_INTERRUPT_MARKER_MISSING', probe)
+        self.assertIn('BLOCKED_SIGINT_V2_NONZERO_EXIT_130_MISSING', probe)
+        self.assertIn('BLOCKED_SIGINT_V2_READINESS_TRACEBACK', probe)
+        self.assertIn('BLOCKED_RECTIFIER_STARTED_AFTER_FAILED_READINESS', probe)
+        self.assertIn('M23BV_SIGINT_V2_NO_TRACEBACK=PASS', wrapper)
+        self.assertIn('M23BV_SIGINT_V2_INTERRUPTED_NONZERO=PASS', wrapper)
+        self.assertNotIn('--device ', wrapper)
+        self.assertNotIn('--volume ', wrapper)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
