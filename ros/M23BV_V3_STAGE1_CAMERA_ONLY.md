@@ -56,10 +56,26 @@ motors, recording, Nav2 or XRSLAM, and identified the host camera as
 isolation or hardware runtime evidence. The invocation still requires an
 owner-private dated approval record and a second interactive confirmation.
 
-**Execution remains BLOCKED** until the actual by-id symlink points to
-`/dev/video8`, the physical camera identity is matched to its original
-640×480 `plumb_bob` calibration, the host calibration file and SHA-256 are
-pinned, and image/permission/runtime inventory is verified. The approved
+The operator's later udev output reports camera `ID_V4L_CAPABILITIES=:capture:`,
+model `Wed_Camera`, serial `Wed_Camera_Wed_Camera_20240420112206`,
+and stable path `/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0`
+resolving to host `/dev/video8`. These are **operator-supplied read-only
+observations**, not assistant access to the USB endpoint. The runner now
+pins that exact path and checks the udev serial again prior to device mapping.
+
+The operator reported calibration file
+`ros/config/camera/front_camera.yaml` with SHA-256
+`f1c99cb8d4e4f3c77373dcabbe683dee9ffbc050614396fcd2964d61e965a138`.
+Its content matches GitHub blob `a2536ccdc02979087bc18f61789686bd52e23371`,
+and the YAML has 640×480 `plumb_bob` with valid K/D/R/P. The YAML
+**does not encode the physical USB serial or prove optical provenance**.
+
+**Execution remains BLOCKED** until the operator explicitly verifies that
+this calibration was obtained for the enumerated `Wed_Camera` USB unit,
+pins the host calibration file and SHA, checks the immutable container,
+completes the private dated safety record and reviews abort arrangements.
+The runner requires an additional exact-phrase calibration provenance
+attestation at the console; an unsupported guess must not be entered. The approved
 scope does not include unplug/disconnect tests, recording, MCU serial access,
 or robot motion.
 
