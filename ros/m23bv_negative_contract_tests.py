@@ -419,6 +419,18 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertIn('M23BV_V2_QOS_ORDER_HANDLER_EXACT=FALSE', probe)
         self.assertIn('M23BV_V2_QOS_ORDER_TIMER_TEST_ONLY=TRUE', probe)
         self.assertIn('M23BV_V2_QOS_ORDER_DIAGNOSTIC=PASS_ONLY', probe)
+        self.assertIn('M23BV_V2_QOS_ORDER_HEALTHY=PASS_ONLY', probe)
+        # The only generic candidate-runtime PASS may be inside the
+        # exact as_pinned branch. Timer mode may emit PASS_ONLY, never PASS.
+        self.assertIn(
+            'if qos_order_mode == "as_pinned":\n'
+            '            print("M23BV_READY_CANDIDATE_RUNTIME_" + case.upper() + "=PASS", flush=True)',
+            probe)
+        self.assertIn(
+            'if qos_order_mode == "as_pinned":\n'
+            '                print("M23BV_READY_TEST_HEALTHY=PASS", flush=True)',
+            probe)
+
         self.assertIn('M23BV_AS_PINNED_V2_HEALTHY=UNRESOLVED', probe)
         self.assertIn('len(received) >= 90 and rect_graph(observer)', probe)
         self.assertIn('end = time.monotonic() + (19 if case == "healthy" else 25)', probe)
