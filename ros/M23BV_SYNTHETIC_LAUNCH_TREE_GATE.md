@@ -139,6 +139,66 @@ new derived image and renewed full lifecycle tests*. Do not silently alter
 the existing pinned image or treat test-only delay as an accepted physical
 launch.
 
+## 2026-10-24: camera-first diagnostic accepted; graph/data-ready prototype next
+
+Operator-observed isolated `camera_first_3s` diagnostic **PASS**:
+- Exact pinned rectifier launch AST, DDS offered/requested RELIABLE, 90 rectified frames.
+- `ros2 launch` parent exit 0; two child PIDs seen and reaped, synthetic
+  camera START and STOP both PASS.
+- Explicit `M23BV_PRODUCTION_LAUNCH_TIMING_REPRODUCED=FALSE`, and
+  `M23BV_AS_LAUNCHED_SOURCE_QOS=UNRESOLVED`.
+- Log: `m23bv_launch_tree_WOkjmftF.log`, SHA-256
+  `9f444d08bce3eecee0a9ff22d9d1ef5e345bf16af6f0c946d8e84d86f683e993`.
+
+**Important:** a time-based delay worked once but does not guarantee
+readiness under different startup times, load or real MJPEG behavior.
+Do not add an arbitrary 3s production sleep and declare reliability fixed.
+
+New **third synthetic-only mode** `camera_ready` (not yet executed):
+- Starts the same synthetic camera publisher under disposable `ros2 launch`.
+- Starts an *additional* ROS readiness process that observes only the DDS
+  graph and synthetic Image/CameraInfo timestamps. It requires both named
+  `/camera/usb_cam` publishers to offer RELIABLE + VOLATILE and receives
+  at least **10 exact timestamp-matched pairs** before returning zero.
+- A 15-second monotonic deadline returns nonzero when readiness is absent.
+- `OnProcessExit` returns the exact pinned rectifier `Node` action only
+  when the readiness process exits **0**; every other exit emits launch
+  `Shutdown(reason='BLOCKED_CAMERA_READINESS')`.
+- After the rectifier starts, the existing strict graph test and 90-frame
+  delivery test still apply, followed by launch parent SIGINT, complete
+  launch PID inventory and child reaping. This run expects **3 children**
+  (camera, readiness guard, rectifier).
+- The wrapper adds `M23BV_CAMERA_READY_GATED_DIAGNOSTIC=PASS_ONLY`
+  if all tests pass; `M23BV_AS_LAUNCHED_SOURCE_QOS=UNRESOLVED`
+  remains unchanged. No physical launcher, Podman image, motor power,
+  camera device, MCU or existing real bag is modified.
+
+Run only this additional hardware-free diagnostic in the clean worktree:
+
+~~~bash
+cd /home/kevin/Code/leroy-m23bv/ros
+bash ./m23bv_offline_gate.sh
+if M23BV_LAUNCH_STARTUP_MODE=camera_ready \
+   M23BV_LOG_DIR="$HOME/.local/state/leroy-m23bv" \
+   bash ./m23bv_synthetic_launch_tree_preflight.sh; then
+  echo "M23BV_GRAPH_READY_TEST_EXIT=0"
+else
+  echo "M23BV_GRAPH_READY_TEST_EXIT=$?"
+fi
+~~~
+
+The expanded host-only suite now expects **26 original + 19 negative =
+45 tests**. The new 45-test gate and `camera_ready` runtime probe are
+**NOT YET VERIFIED**. Preserve preceding 42-test and camera-first PASS
+evidence separately; a future failure must not silently rewrite history.
+
+If this graph/data-readiness variant passes, the *next design task* is
+to build a distinct additive camera launch candidate with an explicitly
+reviewed readiness subprocess and return-code-checked launch handler.
+That candidate needs a new image ID, new no-device runtime and lifecycle
+evidence, and an independent physical-safety authorization process.
+The currently accepted image is unchanged.
+
 ## Safety boundary
 
 This test does not substitute for physical video-node QoS discovery, MJPEG
