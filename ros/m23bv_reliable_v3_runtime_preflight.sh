@@ -6,10 +6,10 @@ umask 077
 cd "$(dirname -- "${BASH_SOURCE[0]}")"
 
 IMAGE=localhost/leroy-sensors:m23bv-reliable-rectifier-v3
-: "${M23BV_RELIABLE_V3_EXPECTED_IMAGE_ID:?Pin v2 image ID from offline build output}"
+: "${M23BV_RELIABLE_V3_EXPECTED_IMAGE_ID:?Pin new V3 image ID from the V3 offline build output}"
 EXPECTED_ID="${M23BV_RELIABLE_V3_EXPECTED_IMAGE_ID}"
 if [[ ! "$EXPECTED_ID" =~ ^[[:xdigit:]]{64}$ ]]; then
-  echo 'M23BV_SIGINT_V2_RUNTIME=BLOCKED_EXPECTED_ID_FORMAT' >&2
+  echo 'M23BV_V3_RUNTIME=BLOCKED_EXPECTED_ID_FORMAT' >&2
   exit 2
 fi
 CASE="${M23BV_READY_TEST_CASE:-healthy}"
@@ -24,23 +24,23 @@ if [[ "$ORDER" == rectifier_first && "$CASE" != healthy ]]; then
 fi
 case "$CASE" in
   healthy|best_effort|missing_info|camera_exit) ;;
-  *) echo 'M23BV_READY_RUNTIME=BLOCKED_INVALID_CASE' >&2; exit 2 ;;
+  *) echo 'M23BV_V3_RUNTIME=BLOCKED_INVALID_CASE' >&2; exit 2 ;;
 esac
 : "${M23BV_LOG_DIR:?Set existing owner-private log directory}"
 if [[ "$M23BV_LOG_DIR" != /* || ! -d "$M23BV_LOG_DIR" ||
       -L "$M23BV_LOG_DIR" || ! -w "$M23BV_LOG_DIR" ]]; then
-  echo 'M23BV_READY_RUNTIME=BLOCKED_LOG_DIR' >&2
+  echo 'M23BV_V3_RUNTIME=BLOCKED_LOG_DIR' >&2
   exit 2
 fi
 actual="$(podman image inspect "$IMAGE" --format '{{.Id}}')"
 actual="${actual#sha256:}"
 if [[ "$actual" != "$EXPECTED_ID" ]]; then
-  echo 'M23BV_READY_RUNTIME=BLOCKED_UNPINNED_CANDIDATE' >&2
+  echo 'M23BV_V3_RUNTIME=BLOCKED_UNPINNED_CANDIDATE' >&2
   exit 2
 fi
 status="$(podman inspect leroy-ros --format '{{.State.Status}}' 2>/dev/null || true)"
 if [[ "$status" == running ]]; then
-  echo 'M23BV_READY_RUNTIME=BLOCKED_PRODUCTION_RUNNING' >&2
+  echo 'M23BV_V3_RUNTIME=BLOCKED_PRODUCTION_RUNNING' >&2
   exit 2
 fi
 python3 - <<'PY'
@@ -66,6 +66,7 @@ rc=$?
 set -e
 printf 'M23BV_RELIABLE_V3_RUNTIME_EXIT=%s\n' "$rc"
 printf 'M23BV_RELIABLE_V3_RUNTIME_CASE=%s\n' "$CASE"
+printf 'M23BV_RELIABLE_V3_RUNTIME_ORDER=%s\n' "$ORDER"
 printf 'M23BV_RELIABLE_V3_RUNTIME_LOG=%s\n' "$log"
 sha256sum "$log"
 grep -E 'M23BV_|Traceback|RuntimeError|Error:|TypeError:' "$log" | tail -n 100 || true
