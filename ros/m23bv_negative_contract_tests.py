@@ -411,6 +411,27 @@ class M23BVSourceAndLifecycleTests(unittest.TestCase):
         self.assertIn("json.dumps(graph, sort_keys=True)", source)
         self.assertIn("M23BV_SIGINT_V2_NO_TRACEBACK=PASS", source)
 
+    def test_v2_order_diagnostic_never_claims_as_pinned_acceptance(self):
+        probe = (HERE / "m23bv_sigint_v2_runtime_probe.py").read_text()
+        runner = (HERE / "m23bv_v2_qos_order_diagnostic.sh").read_text()
+        self.assertIn('QOS_ORDER_MODES = ("as_pinned", "ready_then_3s")', probe)
+        self.assertIn('return [TimerAction(period=3.0, actions=[rectifier])]', probe)
+        self.assertIn('M23BV_V2_QOS_ORDER_HANDLER_EXACT=FALSE', probe)
+        self.assertIn('M23BV_V2_QOS_ORDER_TIMER_TEST_ONLY=TRUE', probe)
+        self.assertIn('M23BV_V2_QOS_ORDER_DIAGNOSTIC=PASS_ONLY', probe)
+        self.assertIn('M23BV_AS_PINNED_V2_HEALTHY=UNRESOLVED', probe)
+        self.assertIn('len(received) >= 90 and rect_graph(observer)', probe)
+        self.assertIn('end = time.monotonic() + (19 if case == "healthy" else 25)', probe)
+        self.assertIn('-e M23BV_V2_QOS_ORDER_MODE=ready_then_3s', runner)
+        self.assertIn('M23BV_V2_QOS_ORDER_DIAGNOSTIC=PASS_ONLY', runner)
+        self.assertIn('M23BV_TEST_ONLY_TIMER_NOT_A_FIX=TRUE', runner)
+        self.assertIn("BLOCKED_ONLY_HEALTHY_SUPPORTED", runner)
+        self.assertNotIn('--device ', runner)
+        self.assertNotIn('--volume ', runner)
+        for required in ('--network none', '--read-only', '--cap-drop all',
+                         '--pid private', '--ipc private', '--pull=never'):
+            self.assertIn(required, runner)
+
     def test_sensor_shutdown_timeout_blocks(self):
         import signal
         rc, events, output = self._mock_capture_with_failed_stop("sensor")
