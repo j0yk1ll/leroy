@@ -53,9 +53,13 @@ timeout --foreground --signal=INT --kill-after=12s 110s \
     --env PYTHONDONTWRITEBYTECODE=1 \
     --env M23BV_STAGE3_NAV2_CONFIGURE_NO_DEVICE=1 \
     --entrypoint /bin/bash "$image" -c '
-set -Eeuo pipefail
+# ROS 2 Jazzy generated setup.sh can read optional AMENT_TRACE_SETUP_FILES
+# before setting it. Source trusted, pinned image overlays with nounset
+# disabled, then restore nounset for every subsequent runtime operation.
+set -Eeo pipefail
 . /opt/ros/jazzy/setup.sh
 . /leroy_ws/install/setup.sh
+set -u
 test ! -e /dev/video2 && test ! -e /dev/ttyACM0
 ros2 launch /opt/stage3_nav2_configure.launch.py >/tmp/stage3-nav2-launch.log 2>&1 &
 launch_pid=$!
