@@ -36,9 +36,14 @@ If any condition fails, **DO NOT RUN**.
 
 ## Host identity prerequisites — read-only inventory first
 
-**Unknown until operator reports:** stable STM32 MCU
-`/dev/serial/by-id/...` symlink and its `udevadm ID_SERIAL` value.
-Do not guess a device path or assume host `/dev/ttyACM0` is MCU.
+**Now operator-inventoried (must be rechecked at each attempt):**
+the identified motor-capable MCU is
+`/dev/serial/by-id/usb-Robot_Controller_STM32F401_Robot_CDC_F401-ROBOT-if00`
+resolving to host `/dev/ttyACM0` with udev
+`ID_SERIAL=Robot_Controller_STM32F401_Robot_CDC_F401-ROBOT`,
+`ID_VENDOR_ID=1209`, `ID_MODEL_ID=f401`.
+The host wrapper MUST re-resolve and match the stable by-id link
+and serial immediately before the physical attempt.
 
 On the owner-controlled host:
 ```bash
@@ -69,10 +74,15 @@ V3 image ID must remain
 New `ros/m23bv_v3_stage2b_static_gate.py` checks protected source pins,
 ordering and command allowlist (source-only). New
 `ros/m23bv_v3_stage2b_preflight.sh` runs it plus Python AST/Bash syntax,
-then imports the original M20/M18 stack in **the pinned immutable V3
-image with no devices, mounts or network**; verifies exact M20,
-M18 and readiness checker source pins and command bytes. This is only
-to prevent a doomed live MCU session from missing Python dependencies.
+then imports M20/M18 in **the pinned immutable V3 image** with
+no **device mappings** or network. It deliberately includes **two exact
+read-only source-file bind mounts**, matching the physical runner:
+`ros/m20_combined_observer.py -> /opt/m20/m20_combined_observer.py`
+and `ros/m18_imu_stream_source.py -> /opt/m18/m18_imu_stream_source.py`.
+It verifies the effective mounted source pins, resolved Python import
+locations, readiness checker, M18 command whitelist, and missing
+physical device nodes. This is only to prevent a doomed live MCU
+session from missing Python dependencies.
 It is **not another broad synthetic test suite**.
 
 No physical Stage 2B attempt should begin unless this small preflight
@@ -92,8 +102,10 @@ a **fresh dated approval record mode 0600** and private SHA-256 log.
 
 The isolated container maps **exactly two** devices:
 camera `host /dev/video8 -> /dev/video2` and operator-verified MCU
-`host /dev/ttyACM* -> /dev/ttyACM0`. It mounts only camera
-calibration and two read-only proposed source scripts, uses `--network none`,
+`host /dev/ttyACM* -> /dev/ttyACM0`. It mounts the calibration and
+**four read-only reviewed scripts** (Stage 1 camera observer, Stage 2B
+orchestrator, updated M20 observer, updated M18 IMU source);
+uses `--network none`,
 private PID/IPC, `--read-only`, dropped capabilities and no-new-privileges.
 There is **no rosbag process, recorder override or motor bridge**.
 Pre-serial graph validation rejects any unexpected preexisting topic or
@@ -117,6 +129,38 @@ The host will only be offered the physical invocation after the first
 MCU USB inventory and necessary source/image preflight have been
 reviewed. No need for new hardware-free synthetic robustness
 tests first.
+
+## Inherited M20/M18 source drift — resolved in review, runtime pending
+
+Read-only container inventory found **exactly two** mismatched files:
+- Installed `/opt/m20/m20_combined_observer.py` Git blob
+  `0aada34d8cf1d5608db29b8e832335876e6f50b3`
+  (original accepted M20 commit `5976d209c5e7992b92fea0d2992834d97063ca82`);
+  current review Git blob
+  `5cf2f88cb2f79be80821888401b57a6393ee5e3b`.
+  Newer M20 source moves serial-open CDC settle/input-reset into a
+  `try/finally` that attempts STOP even when settling/reset fails.
+- Installed `/opt/m18/m18_imu_stream_source.py` blob
+  `5f15cbe64a26bf2d666251f224af0de49921a35e`
+  (same original M20 commit); current blob
+  `3c5fb37ca291533e2702a9159f3e8db11b076d22`.
+  Newer M18 adds terminal fault latching and an optional metadata
+  callback; unchanged M20 callers do not provide that callback.
+
+The other five inspected image sources (M20 contract, M18 contract,
+camera-readiness gate, V3 launch and compiled rectifier source) matched
+the reviewed pins. **Do not retag, alter or rebuild the immutable V3
+camera image; do not waive expected source pins**. Instead two
+`readonly` Podman bind mounts substitute only the newer reviewed
+M20/M18 Python modules at their original installed paths, with
+Git-blob checks on the host and again in the container.
+
+The repository diff has been reviewed; however the **corrected
+mount-and-import preflight has NOT yet run on the operator's host**.
+No physical camera/MCU test is cleared until this minimal check passes.
+The original read-only diagnostic and all six source-level safety tests
+passed; the prior import preflight appropriately BLOCKED the older
+unmounted image contents. No new broad synthetic suite is necessary.
 
 ## Evidence acceptance
 
