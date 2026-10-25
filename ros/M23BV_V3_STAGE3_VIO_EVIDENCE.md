@@ -107,3 +107,44 @@ sensor-only transport tests merely to gather more proof. Any physical
 calibration/excitation session requires a **new and separately reviewed
 operator safety/consent boundary**; a GitHub source commit is not that
 authorization.
+
+## Next safe integration test: Nav2 real plugin/lifecycle configuration
+
+The physical VIO test ended cleanly, but actual Nav2 nodes have so far
+remained `unconfigured`. While localization/extrinsic calibration is
+being planned, we can expose **real Nav2 plugin/configuration failures**
+without another hardware session.
+
+A new **independent hardware-free** Stage 3 runner starts the pinned
+Nav2 image with its existing **explicitly fictional** `simulation.yaml`
+parameters, runs actual controller/planner/BT navigator lifecycle
+`Configure` transitions one at a time, verifies each becomes
+`inactive`, then performs `Cleanup` for all nodes and checks that
+they return to `unconfigured`.
+
+```bash
+# Stage 3 branch, from ros/; no USB devices required
+git pull --ff-only
+bash ./m23bv_v3_stage3_nav2_configure_no_device.sh
+```
+
+**Not yet run on the operator's host.** It uses the exact pinned
+`localhost/leroy-nav2:jazzy` image ID, rootless Podman,
+`--network none`, private IPC/PID, readonly filesystem and no mapped
+camera or MCU. Actual Nav2 packages start, but the test NEVER requests
+lifecycle `Activate`, Nav2 action goals, synthetic odometry/TF, hardware
+velocities or recording. It explicitly rejects any publisher of
+`/odom` or `/tf` or actuator-compatible `/cmd_vel` endpoints.
+(Inert odom/TF **subscriptions** from unactivated Nav2 nodes are expected
+and permitted.) Velocity publisher remappings point solely to the
+unconsumed diagnostics namespace.
+
+Expected PASS **if all three real server plugins/configurations are
+satisfied**: `STAGE3_NAV2_CONFIGURE=PASS_NO_DEVICE_LIFECYCLE`.
+On failure, the bounded plugin/lifecycle error log tells us exactly
+which installed Nav2 server/configuration to fix. Do not add fake
+odometry or activate a node to mask the failure.
+
+This does not unblock live Nav2 control: the real robot still lacks
+validated metric localization, calibration, obstacle freshness,
+footprint and independently verified motion protection.
