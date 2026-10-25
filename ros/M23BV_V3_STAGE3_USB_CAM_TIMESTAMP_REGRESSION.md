@@ -27,6 +27,28 @@
 
 ## Status
 
+## Operator-reported pinned underlay artifact hashes
+
+The independent no-device inventory completed successfully:
+
+```text
+STAGE3_USB_CAM_EPOCH_SOURCE_REGRESSION=PASS_UPSTREAM_0_8_1
+STAGE3_USB_CAM_EPOCH_INSTALLED_HEADER=UNRECOGNIZED
+STAGE3_USB_CAM_EPOCH_HEADER_SHA256=b4b967e469a67a92367da3c2ed7c55621e507624bea630fa81810424d93ebff5
+STAGE3_USB_CAM_EPOCH_INSTALLED_HEADER=LEGACY_DIVIDE_1000_PRESENT
+STAGE3_USB_CAM_EPOCH_HEADER_SHA256=aa758d0dbe8703bb12545dc3c6d114e00d17e436aaa3e8dc37c8a278560b1ae4
+STAGE3_USB_CAM_EPOCH_LIBRARY_SHA256=cdc776abd3c21f1c2b6c8928241bad59eca83b9c7a100d2624bbc637d332b705
+STAGE3_USB_CAM_EPOCH_LIBRARY_SHA256=5feab7508ca523e31f71c58a30686ff8151fbf80ea420b95619c57e7787eb8fe
+STAGE3_USB_CAM_EPOCH_INSPECT=PASS_SOURCE_AND_INSTALLED_ARTIFACT_INVENTORY
+STAGE3_USB_CAM_EPOCH_COMPILED_IMPLEMENTATION=NOT_INDEPENDENTLY_VERIFIED
+```
+
+These are **Debian package artifact hashes, not proof of which
+ROS overlay executable/component was active** in the accepted
+physical Stage 3 V3 runs. Source-selection verification is still
+pending via `ros/m23bv_v3_stage3_usb_cam_effective_overlay.sh`.
+
+
 The accepted no-device provenance inventory identified:
 
 - Pinned immutable sensor image:
