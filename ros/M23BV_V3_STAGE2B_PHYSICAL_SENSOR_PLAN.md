@@ -61,13 +61,18 @@ single independently identified STM32 device by stable link and matching
 `ID_SERIAL`. If no unique by-id link exists, BLOCK and design a
 different pinned mapping; do not substitute an unverified `/dev/ttyACM0`.
 
-Camera remains the pinned
-`/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0`,
-with `udevadm ID_SERIAL=Wed_Camera_Wed_Camera_20240420112206`.
-The **host** `/dev/videoN` index is volatile and resolved from the pinned
-by-id symlink *at each attempt*; the **container** stays `/dev/video2`.
-Stage 1 happened to use host `/dev/video8` but that was not a
-permanent USB identity.
+The camera's nominal `udevadm ID_SERIAL` remains
+`Wed_Camera_Wed_Camera_20240420112206`, and the immutable container
+still expects `/dev/video2`. **The real physical stream's stable V4L
+selector is not currently established.** During a Stage 2B attempt,
+`/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0`
+resolved to host `/dev/video6`, with matching serial and
+`ID_V4L_CAPABILITIES=:capture:`; the operator then manually viewed
+`/dev/video8` using `ffplay` and reported that `/dev/video8`, not
+`/dev/video6`, is the correct camera. Identical USB serial/capture
+metadata alone are therefore **not** a sufficient stream identity proof.
+Host `/dev/videoN` indices remain ephemeral. Do not hard-code
+`/dev/video8` or automatically use the `video-index0` link.
 Calibration `ros/config/camera/front_camera.yaml` SHA-256
 `f1c99cb8d4e4f3c77373dcabbe683dee9ffbc050614396fcd2964d61e965a138`.
 V3 image ID must remain
@@ -105,11 +110,21 @@ exact phrase `AUTHORIZE V3 CAMERA AND M20 IMU NO RECORDING`; writes
 a **fresh dated approval record mode 0600** and private SHA-256 log.
 
 The isolated container maps **exactly two** devices:
-camera `pinned by-id -> current host /dev/videoN -> /dev/video2`
-and operator-verified MCU `pinned by-id -> current host /dev/ttyACM*
--> /dev/ttyACM0`. Both USB IDs, resolved character devices and
-device major:minor numbers are revalidated **after** operator physical
-safety signoff and immediately before Podman is started. It mounts the calibration and
+camera `explicit operator-specified stable /dev/v4l/by-id or
+/dev/v4l/by-path link -> visually confirmed host /dev/videoN ->
+container /dev/video2` and operator-verified MCU
+`pinned by-id -> current host /dev/ttyACM* -> /dev/ttyACM0`.
+The physical runner requires **both**
+`M23BV_STAGE2B_CAMERA_STABLE_LINK` and
+`M23BV_STAGE2B_CAMERA_VISUALLY_VERIFIED_NODE` to be explicitly supplied.
+Their resolved paths must agree, the selected node must have
+`ID_SERIAL=Wed_Camera_Wed_Camera_20240420112206`, report
+`ID_V4L_CAPABILITIES=:capture:`, and pass a new interactive
+`CAMERA STREAM VERIFIED /dev/videoN` attestation.
+The selected stable link, both USB IDs, current resolved character
+devices and major:minor numbers are revalidated **after** the physical
+safety signoff and immediately before Podman. A mismatch blocks
+*before* MCU serial access. It mounts the calibration and
 **four read-only reviewed scripts** (Stage 1 camera observer, Stage 2B
 orchestrator, updated M20 observer, updated M18 IMU source);
 uses `--network none`,
@@ -198,6 +213,39 @@ read-only. Only after those checks and fresh physical safety attestation
 may the revised operator-controlled runner be used for a single
 bounded physical attempt. No additional broad synthetic suite.
 Do not rerun the old commit.
+
+## Second physical attempt halted: matching USB identity, WRONG feed
+
+Operator-host read-only inventory during revised Stage 2B setup showed
+```text
+M23BV_V3_STAGE2B_CAMERA_RESOLVED=/dev/video6
+ID_V4L_CAPABILITIES=:capture:
+ID_SERIAL=Wed_Camera_Wed_Camera_20240420112206
+```
+The operator explicitly stated: **`/dev/video6` is not the correct
+camera, `/dev/video8` is correct by manual `ffplay` inspection.**
+Only the operator's safety-prompt text was submitted after that;
+there was **no evidence of affirmative physical safety authorization
+or a started Podman/M20 process**. The current selected stream remains
+unverified and Stage 2B remains **BLOCKED**.
+
+The next step is **read-only V4L interface inventory**:
+resolve all symlinks under `/dev/v4l/by-id` and `/dev/v4l/by-path`
+that target video6 or video8; capture `udevadm ID_SERIAL`,
+`ID_PATH`, `ID_V4L_CAPABILITIES`, and sysfs video-node names
+for both. This opens neither video stream nor motor-capable MCU.
+If no uniquely stable symlink pointing to the visually confirmed
+`/dev/video8` also has the calibrated camera's serial, the Stage 2B
+runner MUST remain blocked: do not simply pass a raw `/dev/video8`
+without stable identity or loosen the calibration pin.
+
+**Source repair committed, physical runtime UNTESTED:** remove
+implicit `video-index0` camera selection; require explicit stable
+link and its `ffplay`-confirmed host node to match, plus USB serial,
+capture capability, fresh interactive stream attestation, and
+post-signoff identity recheck. Re-run only the focused source/syntax
+checks after updating the review branch. No broad synthetic tests,
+image rebuild, physical recording, motion or auto-retry.
 
 ## Evidence acceptance
 
