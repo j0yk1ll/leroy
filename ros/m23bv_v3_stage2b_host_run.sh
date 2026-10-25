@@ -13,7 +13,12 @@ fail() { echo "M23BV_V3_STAGE2B=BLOCKED_$1" >&2; exit 2; }
 IMAGE='localhost/leroy-sensors:m23bv-reliable-rectifier-v3'
 IMAGE_ID='f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c'
 BRANCH='feature/m23bv-v3-stage2b-physical-sensors-optin'
-CAMERA_BY_ID='/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0'
+# Must be an explicitly selected, visually verified capture interface.
+# The prior by-id ...video-index0 pointed to WRONG /dev/video6 even
+# though its ID_SERIAL matched; operator ffplay identified /dev/video8.
+# Never silently choose the first index or any /dev/videoN by itself.
+CAMERA_BY_ID="${M23BV_STAGE2B_CAMERA_STABLE_LINK:-}"
+CAMERA_VERIFIED_NODE="${M23BV_STAGE2B_CAMERA_VISUALLY_VERIFIED_NODE:-}"
 CAMERA_SERIAL='Wed_Camera_Wed_Camera_20240420112206'
 CAL_SHA='f1c99cb8d4e4f3c77373dcabbe683dee9ffbc050614396fcd2964d61e965a138'
 
@@ -47,17 +52,25 @@ logdir="${M23BV_LOG_DIR:-}"
 [[ "$(stat -c %a "$logdir")" == 700 ]] || fail LOGDIR_MODE
 [[ -r /dev/tty && -w /dev/tty ]] || fail INTERACTIVE_OPERATOR_REQUIRED
 
-# Pin physical identity, NOT the volatile host video device number.
-# The exact by-id video-index0 path and camera ID_SERIAL remain immutable.
-# Linux may renumber /dev/videoN; only container /dev/video2 is fixed.
+# Bind the exact real camera stream established visually by the operator
+# to a stable V4L by-id or by-path symlink. No implicit default.
+[[ "$CAMERA_BY_ID" == /dev/v4l/by-id/* ||
+   "$CAMERA_BY_ID" == /dev/v4l/by-path/* ]] ||
+  fail CAMERA_VERIFIED_STABLE_LINK_REQUIRED
+[[ "$CAMERA_VERIFIED_NODE" =~ ^/dev/video[0-9]+$ ]] ||
+  fail CAMERA_VISUAL_CONFIRMATION_REQUIRED
 [[ -L "$CAMERA_BY_ID" ]] || fail CAMERA_STABLE_ID_MISSING
 cam="$(readlink -f -- "$CAMERA_BY_ID")" || fail CAMERA_RESOLUTION
 [[ "$cam" =~ ^/dev/video[0-9]+$ && -c "$cam" ]] ||
   fail CAMERA_DEVICE_NOT_VIDEO_CAPTURE_NODE
+[[ "$cam" == "$CAMERA_VERIFIED_NODE" ]] ||
+  fail CAMERA_LINK_NOT_VISUALLY_VERIFIED_STREAM
 cam_properties="$(udevadm info --query=property --name="$cam")" ||
   fail CAMERA_UDEV_INFO
 cam_serial="$(sed -n 's/^ID_SERIAL=//p' <<<"$cam_properties")"
 [[ "$cam_serial" == "$CAMERA_SERIAL" ]] || fail CAMERA_SERIAL_CHANGED
+cam_v4l_caps="$(sed -n 's/^ID_V4L_CAPABILITIES=//p' <<<"$cam_properties")"
+[[ "$cam_v4l_caps" == *:capture:* ]] || fail CAMERA_NOT_CAPTURE_CAPABLE
 # Pin character-device major:minor to detect hotplug replacement after
 # operator approval. Never accept a generic /dev/video* without by-id+serial.
 cam_rdev="$(stat -Lc '%t:%T' -- "$cam")" || fail CAMERA_RDEV_MISSING
@@ -95,6 +108,13 @@ printf '%s\n' \
 IFS= read -r attestation </dev/tty || fail NO_PHYSICAL_ATTESTATION
 [[ "$attestation" == 'MOTOR RAILS OFF MCU SENSOR ONLY' ]] ||
   fail SAFETY_ATTESTATION_DECLINED
+printf '%s\n' "Operator-verified physical front-camera stream MUST be $cam." \
+  "The exact link $CAMERA_BY_ID currently resolves to that node." \
+  "Independently confirm THIS is the same visually checked camera." >&2
+printf 'Type exactly: CAMERA STREAM VERIFIED %s\n' "$cam" >&2
+IFS= read -r stream_attestation </dev/tty || fail NO_CAMERA_STREAM_ATTESTATION
+[[ "$stream_attestation" == "CAMERA STREAM VERIFIED $cam" ]] ||
+  fail CAMERA_STREAM_ATTESTATION_DECLINED
 printf '%s\n' 'Type exactly: CALIBRATION VERIFIED FOR CAMERA' >&2
 IFS= read -r cal_attestation </dev/tty || fail NO_CALIBRATION_ATTESTATION
 [[ "$cal_attestation" == 'CALIBRATION VERIFIED FOR CAMERA' ]] ||
@@ -109,12 +129,15 @@ IFS= read -r authorization </dev/tty || fail NO_HUMAN_OPTIN
 # before creating the approval record and before any Podman device mapping.
 # Hotplug or unrelated process takeover must block the whole attempt.
 [[ -L "$CAMERA_BY_ID" && "$(readlink -f -- "$CAMERA_BY_ID")" == "$cam" &&
+   "$cam" == "$CAMERA_VERIFIED_NODE" &&
    -c "$cam" && "$(stat -Lc '%t:%T' -- "$cam")" == "$cam_rdev" ]] ||
   fail CAMERA_CHANGED_AFTER_SIGNOFF
 cam_recheck="$(udevadm info --query=property --name="$cam")" ||
   fail CAMERA_RECHECK_UDEV
 [[ "$(sed -n 's/^ID_SERIAL=//p' <<<"$cam_recheck")" == "$CAMERA_SERIAL" ]] ||
   fail CAMERA_SERIAL_CHANGED_AFTER_SIGNOFF
+[[ "$(sed -n 's/^ID_V4L_CAPABILITIES=//p' <<<"$cam_recheck")" == *:capture:* ]] ||
+  fail CAMERA_CAPABILITY_CHANGED_AFTER_SIGNOFF
 [[ -L "$mcu_by_id" && "$(readlink -f -- "$mcu_by_id")" == "$mcu" &&
    -c "$mcu" && "$(stat -Lc '%t:%T' -- "$mcu")" == "$mcu_rdev" ]] ||
   fail MCU_CHANGED_AFTER_SIGNOFF
@@ -136,6 +159,8 @@ E-stop verified: OPERATOR ATTESTED
 Immediate power disconnect supervised: OPERATOR ATTESTED
 Camera calibration provenance: OPERATOR ATTESTED
 Camera stable ID: $CAMERA_BY_ID
+Camera visually verified host node: $CAMERA_VERIFIED_NODE
+Camera observed stream: OPERATOR ATTESTED
 Camera device: $cam
 Camera USB serial: $cam_serial
 MCU stable ID: $mcu_by_id
@@ -155,6 +180,7 @@ name="m23bv-v3-stage2b-$$"
   echo "M23BV_V3_STAGE2B_APPROVAL_SHA256=$(sha256sum "$approval" | awk '{print $1}')"
   echo "M23BV_V3_STAGE2B_GIT_HEAD=$(git rev-parse HEAD)"
   echo "M23BV_V3_STAGE2B_CAMERA_STABLE_ID=$CAMERA_BY_ID"
+  echo "M23BV_V3_STAGE2B_CAMERA_VISUALLY_VERIFIED_NODE=$CAMERA_VERIFIED_NODE"
   echo "M23BV_V3_STAGE2B_CAMERA_DEVICE=$cam"
   echo "M23BV_V3_STAGE2B_CAMERA_RDEV=$cam_rdev"
   echo "M23BV_V3_STAGE2B_MCU_DEVICE=$mcu"
