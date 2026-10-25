@@ -53,7 +53,7 @@ cal="$root/ros/config/camera/front_camera.yaml"
 [[ "$M23BV_LOG_DIR" == /* && -d "$M23BV_LOG_DIR" && ! -L "$M23BV_LOG_DIR" && -w "$M23BV_LOG_DIR" ]] || fail LOG_DIR
 [[ "$(stat -c '%a' "$M23BV_LOG_DIR")" == 700 ]] || fail PRIVATE_LOG_DIR
 mcu_link=/dev/serial/by-id/usb-Robot_Controller_STM32F401_Robot_CDC_F401-ROBOT-if00
-[[ -L "$mcu_link" && -n "$M23BV_STAGE3_MCU_ID_SERIAL" ]] || fail MCU_ID_REQUIRED
+[[ -L "$mcu_link" && -n "${M23BV_STAGE3_MCU_ID_SERIAL:-}" ]] || fail MCU_ID_REQUIRED
 mcu="$(readlink -f "$mcu_link")" || fail MCU_LINK
 [[ "$mcu" =~ ^/dev/ttyACM[0-9]+$ && -c "$mcu" ]] || fail MCU_CHAR_DEVICE
 mcu_props="$(udevadm info --query=property --name="$mcu")" || fail MCU_UDEV
@@ -94,9 +94,9 @@ again="$(udevadm info --query=property --name="$cam")" || fail POST_ATTESTATION_
    "$(sed -n 's/^ID_MODEL_ID=//p' <<<"$again")" == 9221 &&
    "$(sed -n 's/^ID_V4L_CAPABILITIES=//p' <<<"$again")" == *:capture:* ]] ||
   fail POST_ATTESTATION_CAMERA
-approval="$(mktemp --tmpdir="$M23BV_LOG_DIR" stage3_monocular_approval_XXXXXXXX.txt)"
-printf 'UTC=%s HEAD=%s CAMERA=%s CAMERA_RDEV=%s MOTOR_RAILS=OPERATOR_ATTESTED_DISCONNECTED ESTOP=OPERATOR_ATTESTED IMMEDIATE_DISCONNECT=OPERATOR_ATTESTED AUTHORIZE=YES MCU=ISOLATED_IMU_CONTAINER_STOP_REQUIRED\n' "$(date -u -Is)" "$(git rev-parse HEAD)" "$cam" "$rdev" >"$approval"
-log="$(mktemp --tmpdir="$M23BV_LOG_DIR" stage3_monocular_XXXXXXXX.log)"
+approval="$(mktemp --tmpdir="$M23BV_LOG_DIR" stage3_vio_approval_XXXXXXXX.txt)"
+printf 'UTC=%s HEAD=%s CAMERA=%s CAMERA_RDEV=%s MCU_BY_ID=%s MCU_ID_SERIAL=%s MCU_RDEV=%s MOTOR_RAILS=OPERATOR_ATTESTED_DISCONNECTED ESTOP=OPERATOR_ATTESTED IMMEDIATE_DISCONNECT=OPERATOR_ATTESTED AUTHORIZE=YES MCU=ISOLATED_IMU_CONTAINER_STOP_REQUIRED\n' "$(date -u -Is)" "$(git rev-parse HEAD)" "$cam" "$rdev" "$mcu_link" "$M23BV_STAGE3_MCU_ID_SERIAL" "$mcu_rdev" >"$approval"
+log="$(mktemp --tmpdir="$M23BV_LOG_DIR" stage3_vio_XXXXXXXX.log)"
 echo "STAGE3_APPROVAL_SHA256=$(sha256sum "$approval" | cut -d' ' -f1)" >>"$log"
 suffix="$$-$(date +%s)"
 parent="stage3-vio-cam-$suffix"
