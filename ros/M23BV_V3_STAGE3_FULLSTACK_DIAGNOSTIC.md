@@ -506,6 +506,64 @@ motor-capable firmware. If STOP is unacknowledged, assume MCU state
 UNKNOWN and intervene physically; do not blindly retry. The Stage 2B
 and Stage 3 earlier camera runs are not authority for this test.
 
+## Operator-reported physical VIO result: PASS; log-only next action
+
+The operator reports:
+
+```text
+STAGE3_VIO_PARENT_NETWORK=NONE
+STAGE3_VIO_APPS=CAMERA_DEPTHART_XRSLAM_NAV2_STATIC_TF
+STAGE3_VIO_IMU_START_ACK=PASS
+M23BV_STAGE3_VIO_AUDIT=PASS_REAL_CAMERA_IMU_GRAPH_NO_ODOM
+STAGE3_VIO_IMU_STOP_ACK=PASS
+STAGE3_VIO_IMU_VERDICT=PASS_DIAGNOSTIC_STREAM
+Submitted 1 camera frames to XRSLAM (monocular_imu)
+Submitted 300 camera frames to XRSLAM (monocular_imu)
+Submitted 600 camera frames to XRSLAM (monocular_imu)
+Submitted 900 camera frames to XRSLAM (monocular_imu)
+M23BV_STAGE3_REAL_CAMERA_SHUTDOWN=PASS
+STAGE3_VIO=PASS_REAL_CAMERA_IMU_NATIVE_FRAMES_NO_ODOM
+```
+
+Private on-host log: `stage3_vio_QiKefpTz.log`;
+SHA256 `5f3a1129ec679a2c3715514109dd833fdda5cb7cd70699f445ff337456f88e0f`.
+The full log has **not** been independently inspected. These observations
+prove the graph's real camera and MCU IMU ingress, native XRSLAM
+camera-frame submissions in VIO mode, M18 source streaming and
+acknowledged MCU STOP. The current adapter does not individually
+log that its native XRSLAM gyroscope and accelerometer forwarding
+paths consumed every IMU sample. No tracking accuracy, absolute
+camera–IMU phase or metric odometry has been validated. Nav2 remains
+unconfigured with no motor commands.
+
+### Next: read-only private log health review, no new physical run
+
+On the updated Stage 3 branch from `ros/`, with the **existing**
+operator-private log still on disk:
+
+```bash
+git pull --ff-only
+python3 -B -m py_compile ./m23bv_v3_stage3_vio_log_report.py
+python3 -B ./m23bv_v3_stage3_vio_log_report.py \
+  --log /home/kevin/.local/state/leroy-m23bv/stage3_vio_QiKefpTz.log \
+  --expect-sha256 5f3a1129ec679a2c3715514109dd833fdda5cb7cd70699f445ff337456f88e0f
+```
+
+The log reviewer opens **only the previously recorded private text
+log** and validates its SHA-256 and owner-private permissions. It
+prints bounded scalar counters/health/status and does not print
+raw camera, IMU, serial or other log content. It does not launch
+Podman, ROS, devices, a recorder or actuators. No motion or
+physical authorization is involved.
+
+The next true bottleneck for navigation is validated temporal
+camera–IMU alignment, physical extrinsics/TF ownership, actual
+metric localization with established pose convention, and verified
+depth-obstacle geometry/freshness. Do not enable Nav2 autonomous
+control to compensate for these. Address the **specific observed
+input/timing/tracking failure** after reviewing log scalars;
+avoid repeating already accepted physical transport tests.
+
 ## Follow-up integration run (separate review and authorization)
 
 After inspecting the inventory output:
