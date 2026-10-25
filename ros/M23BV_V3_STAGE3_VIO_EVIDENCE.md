@@ -206,3 +206,69 @@ or `BLOCKED_LAUNCH_EXIT` appears, inspect the bounded
 successful by ignoring exit codes or forcing the container to terminate.
 This new runner version is untested on the operator's host.
 
+
+## Final Nav2 no-device lifecycle and shutdown: PASS
+
+The operator's latest pinned-image rootless `--network none` run
+confirms that the revised bounded supervisor resolved the earlier
+overall test failure. The prior `BLOCKED_LIFECYCLE_OR_SHUTDOWN`
+output above is retained as **historical** evidence, not the
+current result.
+
+```text
+STAGE3_NAV2_CONFIGURE_controller_server=INACTIVE
+STAGE3_NAV2_CONFIGURE_planner_server=INACTIVE
+STAGE3_NAV2_CONFIGURE_bt_navigator=INACTIVE
+STAGE3_NAV2_CLEANUP_bt_navigator=UNCONFIGURED
+STAGE3_NAV2_CLEANUP_planner_server=UNCONFIGURED
+STAGE3_NAV2_CLEANUP_controller_server=UNCONFIGURED
+STAGE3_NAV2_CONFIGURE=PASS_REAL_SERVERS_CONFIGURE_CLEANUP_NO_ACTIVATION
+STAGE3_NAV2_AUDIT_RC=0
+STAGE3_NAV2_SHUTDOWN_LAUNCH_RC=0
+STAGE3_NAV2_SHUTDOWN=PASS_GRACEFUL_PROCESS_EXIT
+STAGE3_NAV2_SUPERVISOR=PASS_AUDIT_AND_CLEAN_SHUTDOWN
+STAGE3_NAV2_CONFIGURE=PASS_NO_DEVICE_LIFECYCLE
+STAGE3_NAV2_REAL_ODOM_TF=NOT_SUPPLIED
+STAGE3_NAV2_GOALS_ACTIONS_AND_MOTORS=NOT_AUTHORIZED
+```
+
+This **accepts Nav2 Jazzy controller, planner and BT navigator plugin
+configuration, inactive lifecycle state, reverse cleanup and graceful
+process shutdown** under the pinned, disconnected simulation-parameter
+fixture. It does *not* activate or exercise controller/planner actions,
+validate real localization, safety, obstacle marking, commands,
+footprint geometry, or real-robot Nav2 deployment. No physical device
+was accessed.
+
+### Remaining highest-priority real-system blocker: tracking and calibration
+
+The Stage 3 real camera/IMU run entered native XRSLAM
+`monocular_imu` successfully, but the observed tracking state was
+**`initializing`**. Physical geometry in the accepted
+`ros/src/leroy_description/urdf/leroy.urdf.xacro` is explicitly
+**PROVISIONAL**:
+
+- IMU `base_link -> imu_link`: xyz `(0.095, -0.095, 0.0)` m,
+  rpy `(0,0,0)`; IMU height/alignment not measured.
+- Front camera `base_link -> front_camera_link`: xyz `(0,0,0)` m,
+  rpy pitch `+0.5235987755982988` rad; position is an unmeasured
+  zero placeholder, not a real camera origin.
+- The `front_camera_link -> front_camera_optical_frame` optical
+  frame convention and legacy alias `camera_optical_frame` are
+  explicit in the URDF, but their *physical mounting orientation*
+  has not been verified.
+- Diagnostic XRSLAM launch still uses `camera_imu_offset_sec=0.0`,
+  expressly **not an independently measured exposure-vs-IMU phase**.
+
+**Next decision is a new, separately authorized calibration plan,**
+not another camera/MCU transport repeat and not real Nav2 activation.
+First confirm surveyed sensor mount geometry (including which rigid
+body defines `base_link`) and camera exposure timestamp semantics.
+Then choose a safely constrained excitation/visual-inertial
+calibration method, only with a fresh operator safety assessment and
+approval. Prior stationary tests did **not** authorize moving either
+the chassis or the camera/IMU rig. Until evidence closes these gaps
+keep `pose_convention_validated=false`, `enable_map_tf=false`,
+real Nav2 unconfigured, motor power disconnected and no recording
+without its own explicit authorization.
+
