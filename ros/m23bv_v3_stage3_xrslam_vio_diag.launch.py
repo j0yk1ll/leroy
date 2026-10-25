@@ -1,7 +1,9 @@
 """Stage 3 real camera -> XRSLAM VIO IMU+camera submission with PROVISIONAL calibration.
 
 Diagnostic ONLY. The URDF camera/IMU extrinsics remain PROVISIONAL.
-No MCU mapping, no IMU subscription, no metric pose, no map TF or motors.
+The MCU is mapped only to a separate IMU publisher container. This XRSLAM
+sidecar subscribes to /imu/data_raw but cannot access hardware directly.
+No metric pose, no map TF, no motor API.
 """
 import os
 
@@ -59,7 +61,8 @@ def generate_launch_description():
             "camera_optical_frame": "camera_optical_frame",
             "imu_frame": "imu_link",
             "odom_frame": "odom",
-            "camera_imu_offset_sec": 0.0,  # PROVISIONAL! diagnostic only.\n            "pose_convention_validated": False,
+            "camera_imu_offset_sec": 0.0,  # PROVISIONAL! diagnostic only.
+            "pose_convention_validated": False,
             "enable_map_tf": False,
         }],
     )
