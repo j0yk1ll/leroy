@@ -62,8 +62,12 @@ single independently identified STM32 device by stable link and matching
 different pinned mapping; do not substitute an unverified `/dev/ttyACM0`.
 
 Camera remains the pinned
-`/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0`
-resolved to host `/dev/video8`; container `/dev/video2`.
+`/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0`,
+with `udevadm ID_SERIAL=Wed_Camera_Wed_Camera_20240420112206`.
+The **host** `/dev/videoN` index is volatile and resolved from the pinned
+by-id symlink *at each attempt*; the **container** stays `/dev/video2`.
+Stage 1 happened to use host `/dev/video8` but that was not a
+permanent USB identity.
 Calibration `ros/config/camera/front_camera.yaml` SHA-256
 `f1c99cb8d4e4f3c77373dcabbe683dee9ffbc050614396fcd2964d61e965a138`.
 V3 image ID must remain
@@ -101,8 +105,11 @@ exact phrase `AUTHORIZE V3 CAMERA AND M20 IMU NO RECORDING`; writes
 a **fresh dated approval record mode 0600** and private SHA-256 log.
 
 The isolated container maps **exactly two** devices:
-camera `host /dev/video8 -> /dev/video2` and operator-verified MCU
-`host /dev/ttyACM* -> /dev/ttyACM0`. It mounts the calibration and
+camera `pinned by-id -> current host /dev/videoN -> /dev/video2`
+and operator-verified MCU `pinned by-id -> current host /dev/ttyACM*
+-> /dev/ttyACM0`. Both USB IDs, resolved character devices and
+device major:minor numbers are revalidated **after** operator physical
+safety signoff and immediately before Podman is started. It mounts the calibration and
 **four read-only reviewed scripts** (Stage 1 camera observer, Stage 2B
 orchestrator, updated M20 observer, updated M18 IMU source);
 uses `--network none`,
@@ -161,6 +168,36 @@ No physical camera/MCU test is cleared until this minimal check passes.
 The original read-only diagnostic and all six source-level safety tests
 passed; the prior import preflight appropriately BLOCKED the older
 unmounted image contents. No new broad synthetic suite is necessary.
+
+## First physical attempt: BLOCKED at host video-number check
+
+The first opt-in physical Stage 2B invocation stopped at
+`M23BV_V3_STAGE2B=BLOCKED_CAMERA_DEVICE_CHANGED`, **before** opening
+the camera or MCU, and before operator attestation. The old wrapper
+required the symlink to resolve specifically to `/dev/video8`, a
+historical Stage 1 host enumeration. That is overly strict:
+`/dev/videoN` is allocated dynamically by the kernel. The diagnostic
+alone does not reveal the current node, so do NOT infer that a specific
+new number or image-capture function was observed.
+
+The reviewed correction removes ONLY the fixed host video-index
+assumption. It still requires a character device at `/dev/video[0-9]+`,
+the exact preexisting `video-index0` USB by-id symlink, the same
+udev `ID_SERIAL`, and the same pinned calibration SHA. It records
+the resolved device and major:minor in the private log, and
+rechecks the camera and MCU symlinks, serial identities and device
+numbers after the human authorization and before Podman. The
+container-side video mapping remains `/dev/video2`, with no change
+to V3 launch, binaries, M20, M18 or motor safety controls.
+
+**Correction status:** SOURCE COMMITTED, new focused source gate and
+operator retry NOT YET EXECUTED. First run the narrow
+`ros/m23bv_v3_stage2b_static_gate.py` plus `bash -n` once on a
+clean pinned review commit; inspect the resolved by-id camera link
+read-only. Only after those checks and fresh physical safety attestation
+may the revised operator-controlled runner be used for a single
+bounded physical attempt. No additional broad synthetic suite.
+Do not rerun the old commit.
 
 ## Evidence acceptance
 
