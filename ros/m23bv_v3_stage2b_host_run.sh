@@ -140,7 +140,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 set +e
-timeout --foreground --signal=INT --kill-after=45s 235s \
+timeout --foreground --signal=INT --kill-after=45s 260s \
   podman run --rm --name "$name" --pull=never \
   --network none --ipc private --pid private \
   --cap-drop all --security-opt no-new-privileges --read-only \
