@@ -18,16 +18,18 @@ typedef struct {
     int16_t mag_z;
 } imu_sample_t;
 
-/* Robot-frame sample using integer milli-units internally.
+/* Robot-aligned sample using integer milli-units internally.
  *
- * Axis convention established on the assembled robot:
- *   +forward = -ICM X
- *   +left    = -ICM Y
- *   +up      = +ICM Z
- *   +yaw     = counter-clockwise = +ICM gyro Z
+ * The PHYSICAL IMU package-to-robot axis mapping is configured in
+ * include/imu_mount_config.h and applied in imu_read_robot(). For the
+ * existing Leroy installation its defaults remain:
+ *   +forward = -ICM X, +left = -ICM Y, +up = +ICM Z,
+ *   +yaw CCW = +ICM gyro Z.
  *
  * accel_*_mm_s2 are millimetres/second^2 (1/1000 m/s^2).
  * gyro_*_mrad_s are milliradians/second (1/1000 rad/s).
+ * The ROS imu_link orientation for these pre-rotated channels is
+ * robot-aligned; do not reapply this package-axis map in ROS TF.
  */
 typedef struct {
     int32_t accel_forward_mm_s2;
