@@ -73,6 +73,55 @@ images, drive sensors, record messages, connect DDS domains, or exercise
 XRSLAM/Nav2. Inventory PASS means only that source and image information
 was obtained in no-device conditions; it is not full-stack acceptance.
 
+## Next narrow test: DDS between all three existing images
+
+The operator inventory returned:
+
+- V3 sensor image matches the exact accepted pinned ID and contains the
+  real USB camera, reliable rectifier, DepthART package and checkpoint.
+- Existing XRSLAM image ID:
+  `20f9cf399ef331dda4aca093182787f8d622aa297b2d8fbcf730541a6f1cd43a`.
+  The native XRSLAM linkage is resolved.
+- Existing Nav2 image ID:
+  `89b3733f7aa281b6083d9078a11fe10e2f4f096f2aca5511a108d4873a3cc7c4`.
+  Controller, planner and BT navigator packages exist.
+- All three probes verified no physical devices exposed.
+
+Try existing images in a single **isolated, network=none namespace**
+before attempting an expensive combined-image rebuild. The minimal DDS
+smoke uses a non-actuating nonce publisher in the V3 image, and nonce
+subscribers first in the XRSLAM and then Nav2 images. Only the exact
+`m23bv_v3_stage3_dds_probe.py` file is mounted read-only into each
+container; no host directory, camera/serial device, socket, or motor
+interface is mounted. This is a communication test, not an XRSLAM or
+Nav2 launch.
+
+On the Stage 3 branch:
+
+```bash
+cd ros
+bash -n ./m23bv_v3_stage3_no_device_dds.sh
+python3 -m py_compile ./m23bv_v3_stage3_dds_probe.py
+bash ./m23bv_v3_stage3_no_device_dds.sh
+```
+
+The script pins all three observed image IDs, uses rootless Podman,
+FastDDS, ROS_DOMAIN_ID=170, LOCALHOST discovery, `--network none` for
+the parent and namespace joining for both subscribers, a read-only
+filesystem and dropped privileges. It attempts bounded cleanup of
+its uniquely named publisher container even after failure.
+
+Expected successful markers (NOT YET OBSERVED):
+`M23BV_V3_STAGE3_DDS_XRSLAM=RECEIVED_MATCHED_NONCE`,
+`M23BV_V3_STAGE3_DDS_NAV2=RECEIVED_MATCHED_NONCE`, and
+`M23BV_V3_STAGE3_DDS=PASS_THREE_IMAGE_ISOLATED_TRANSPORT`.
+
+A failed DDS smoke should be investigated as a focused namespace,
+transport or RMW issue. **Do not add `--network host`, map hardware,
+relax Stage 2B guards, or join the existing robot container to work
+around it.** No new physical sensor experiment is authorized by
+passing this probe.
+
 ## Follow-up integration run (separate review and authorization)
 
 After inspecting the inventory output:
