@@ -1,4 +1,5 @@
 #include "imu.h"
+#include "imu_axis_transform.h"
 
 #include "board.h"
 #include "timebase.h"
@@ -567,20 +568,29 @@ bool imu_read_robot(imu_robot_sample_t *sample)
         return false;
     }
 
-    /* The assembled robot's IMU is effectively rotated 180 degrees about Z
-     * relative to the desired robot frame. This mapping also preserves a
-     * right-handed coordinate frame. */
-    sample->accel_forward_mm_s2 = accel_raw_to_mm_s2(-(int32_t)raw.accel_x);
-    sample->accel_left_mm_s2 = accel_raw_to_mm_s2(-(int32_t)raw.accel_y);
-    sample->accel_up_mm_s2 = accel_raw_to_mm_s2((int32_t)raw.accel_z);
+    /* The sensor mounting profile is hardware-specific and lives in
+     * imu_mount_config.h. Both accel and (bias-corrected) gyro vectors
+     * are rotated consistently, preserving the existing robot-frame
+     * telemetry contract for the current (-X, -Y, +Z) mounting. */
+    const int32_t accel_sensor[3] = {
+        (int32_t)raw.accel_x, (int32_t)raw.accel_y, (int32_t)raw.accel_z
+    };
+    int32_t accel_robot[3];
+    imu_mount_transform_vector(accel_sensor, accel_robot);
+    sample->accel_forward_mm_s2 = accel_raw_to_mm_s2(accel_robot[0]);
+    sample->accel_left_mm_s2 = accel_raw_to_mm_s2(accel_robot[1]);
+    sample->accel_up_mm_s2 = accel_raw_to_mm_s2(accel_robot[2]);
 
-    const int32_t corrected_x = (int32_t)raw.gyro_x - g_gyro_bias_x;
-    const int32_t corrected_y = (int32_t)raw.gyro_y - g_gyro_bias_y;
-    const int32_t corrected_z = (int32_t)raw.gyro_z - g_gyro_bias_z;
-
-    sample->gyro_roll_mrad_s = gyro_raw_to_mrad_s(-corrected_x);
-    sample->gyro_pitch_mrad_s = gyro_raw_to_mrad_s(-corrected_y);
-    sample->gyro_yaw_mrad_s = gyro_raw_to_mrad_s(corrected_z);
+    const int32_t gyro_sensor[3] = {
+        (int32_t)raw.gyro_x - g_gyro_bias_x,
+        (int32_t)raw.gyro_y - g_gyro_bias_y,
+        (int32_t)raw.gyro_z - g_gyro_bias_z
+    };
+    int32_t gyro_robot[3];
+    imu_mount_transform_vector(gyro_sensor, gyro_robot);
+    sample->gyro_roll_mrad_s = gyro_raw_to_mrad_s(gyro_robot[0]);
+    sample->gyro_pitch_mrad_s = gyro_raw_to_mrad_s(gyro_robot[1]);
+    sample->gyro_yaw_mrad_s = gyro_raw_to_mrad_s(gyro_robot[2]);
 
     /* Keep compass data raw for host-side hard/soft-iron calibration and
      * orientation fusion.  The AK09916 axes have not been calibrated into
