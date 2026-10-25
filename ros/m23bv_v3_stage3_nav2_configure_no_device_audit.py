@@ -13,10 +13,11 @@ from lifecycle_msgs.msg import State, Transition
 from lifecycle_msgs.srv import ChangeState, GetState
 
 NODES = ("/controller_server", "/planner_server", "/bt_navigator")
-BAD_TOPICS = (
+MOTOR_TOPICS = (
     "/cmd_vel", "/cmd_vel_nav", "/cmd_vel_smoothed",
-    "/diff_drive_controller/cmd_vel", "/odom", "/tf",
+    "/diff_drive_controller/cmd_vel",
 )
+METRIC_OUTPUT_TOPICS = ("/odom", "/tf")
 
 
 def guard_environment():
@@ -37,10 +38,19 @@ def guard_graph(node):
     if any("bridge" in name or "velocity_smoother" in name
            or "controller_manager" in name for name in names):
         raise RuntimeError("BLOCKED_BRIDGE_OR_ACTUATION_NODE")
-    topics = {topic for topic, _ in node.get_topic_names_and_types()}
-    forbidden = sorted(topics.intersection(BAD_TOPICS))
-    if forbidden:
-        raise RuntimeError("BLOCKED_ODOM_TF_OR_MOTOR_TOPIC:" + repr(forbidden))
+    # Nav2 is allowed to SUBSCRIBE to /odom and /tf while configuring;
+    # otherwise a real controller could not load. But there must be NO
+    # fake metric publisher/TF authority in this inert graph.
+    for topic in METRIC_OUTPUT_TOPICS:
+        if node.get_publishers_info_by_topic(topic):
+            raise RuntimeError("BLOCKED_FAKE_METRIC_PUBLISHER:" + topic)
+    # Actuator-compatible command topics are prohibited even if only a
+    # subscriber is present. A diagnostic proposed_cmd_vel publisher is
+    # remapped to its unconsumed isolated name.
+    for topic in MOTOR_TOPICS:
+        if (node.get_publishers_info_by_topic(topic)
+                or node.get_subscriptions_info_by_topic(topic)):
+            raise RuntimeError("BLOCKED_MOTOR_COMPATIBLE_TOPIC:" + topic)
     return all(name.lstrip("/") in names for name in NODES)
 
 
