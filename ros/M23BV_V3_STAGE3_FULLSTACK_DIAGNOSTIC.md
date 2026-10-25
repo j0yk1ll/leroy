@@ -638,3 +638,35 @@ inspection is NOT camera–IMU calibration and does not authorize
 moving the chassis, physically exciting the camera/IMU rig,
 recording, accessing MCU serial or activating Nav2. A new physical
 calibration plan and consent must precede any of those actions.
+
+## Effective usb_cam driver check after underlay-header finding
+
+**Do not rebuild or retag the accepted sensor image.** An operator
+source/header inventory reproduced the upstream usb_cam 0.8.1
+`tv_usec/1000.0` error in a Debian-installed header, but the
+existing Leroy `ros/Dockerfile` already builds and installs the
+patched `usb_cam` source into `/leroy_ws/install/usb_cam`.
+`ros/CAMERA_TIMESTAMP_FIX.md` documents earlier camera timing
+improvements with that overlay. The pinned Stage 3 V3 sensor image
+inherits the M16 sensor-only build recipe.
+
+The next **strictly hardware-free** step from `ros/` is:
+
+```bash
+git pull --ff-only
+bash -n ./m23bv_v3_stage3_usb_cam_effective_overlay.sh
+bash ./m23bv_v3_stage3_usb_cam_effective_overlay.sh
+```
+
+It sources ROS/leroy/V3 launch environments inside the exact pinned
+sensor image in the same order as the accepted parent runner and
+verifies which executable and shared library the ROS package lookup
+selects. The older installed Debian package checksum was **not**
+a suitable proxy for the effective runtime executable. The script
+is a new candidate: **not yet executed by the operator**.
+
+The original 0.8.1 source bug alone does not prove this accepted
+V3 integration suffers a camera epoch shift. Absolute exposure phase,
+camera–IMU time offset and physical mounting geometry remain
+unmeasured, independent of which installed overlay wins. No sensors
+or serial are opened by this check.
