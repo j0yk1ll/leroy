@@ -404,6 +404,108 @@ authorization** and strictly measured/labelled timing. Do not
 claim validated metric odometry, obstacle authority, Nav2 drive
 readiness or a released actuator path.
 
+## Observed XRSLAM monocular native-frame PASS and next VIO candidate
+
+The operator reported a successful new real-camera native XRSLAM test:
+
+```text
+M23BV_STAGE3_MONOCULAR_AUDIT=PASS_GRAPH_AND_INFERENCE
+Submitted 1 camera frames to XRSLAM (monocular)
+Submitted 300 camera frames to XRSLAM (monocular)
+Submitted 600 camera frames to XRSLAM (monocular)
+M23BV_STAGE3_REAL_CAMERA_READY=PASS
+M23BV_STAGE3_REAL_CAMERA_SHUTDOWN=PASS
+STAGE3_MONOCULAR=PASS_REAL_FRAMES_NATIVE_XRSLAM_NO_ODOM
+```
+
+This is evidence of **at least 600 real frames entering native
+XRSLAM**, as logged by the adapter—not a claim of tracking accuracy,
+metric scale, pose-direction validation or Nav2 driving capability.
+The private log is `stage3_monocular_txkmGUYu.log`,
+SHA256 `98a0b8181bc335cdeb3563119773b07bf60fd0f812233dd45daee7eac15532b1`.
+Only the operator-supplied terminal excerpt was reviewed.
+
+### Next distinct experiment: real STM32 IMU + camera, VIO diagnostic
+
+A new additive **four-container** source candidate is now committed.
+No new physical run has occurred or been authorized by these files.
+
+- `m23bv_v3_stage3_xrslam_vio_diag.yaml`: sensor
+  `mode=monocular_imu`, upstream diagnostic initializer with IMU
+  refinement. It is **NOT a calibrated Leroy configuration**.
+- `m23bv_v3_stage3_xrslam_vio_diag.launch.py`: actual XRSLAM +
+  provisional static robot URDF TF, real camera/IMU subscriptions,
+  `camera_imu_offset_sec=0.0` **explicitly provisional**, metric
+  `pose_convention_validated=false` and `enable_map_tf=false`.
+  Previous Stage 2B -41.95 ppm clock-rate estimate DOES NOT measure
+  camera/IMU absolute phase; do not promote the 0.0 placeholder.
+- `m23bv_v3_stage3_vio_imu_sender.py`: separately supervised M18
+  packet parser/clock mapper, single MCU CDC open and only allowlisted
+  START 50Hz/STOP 0Hz serial writes. Graph guards reject bridge/motor
+  command topics, unknown odom/TF publishers, or missing XRSLAM subscriber
+  **before serial opening and periodically during streaming**.
+  All code paths after an open attempt STOP; **STOP ACK is mandatory**.
+- `m23bv_v3_stage3_vio_audit.py`: confirms real stamped camera
+  frame pairs + DepthART output + real IMU messages from one M18
+  publisher and an XRSLAM IMU subscriber, while checking unconfigured
+  Nav2 and zero metric odometry.
+- `m23bv_v3_stage3_vio_host.sh`: new, independent operator-gated
+  candidate, preserving the previously proven camera/depth supervisor.
+  Parent maps only camera; XRSLAM and Nav2 map no devices; a FOURTH
+  short-lived Podman container maps only the exact MCU, uses rootless
+  crun `--group-add keep-groups`, the corrected M18 source, and
+  physically isolated ROS-domain/IPC namespaces. Missing MCU STOP ACK
+  is an explicit unknown MCU state and cannot PASS.
+
+The VIO test's PASS target is native XRSLAM camera frame submission
+in `monocular_imu` mode **plus** 70-second real MCU diagnostics and
+both acknowledged serial commands, without metric odometry. Tracking
+may remain `initializing` on a stationary robot. The test does NOT
+authorize moving the sensor rig, Nav2 actions, motor energization,
+recording, unverified obstacle clearance, calibrated pose, or drive.
+
+### Mandatory NEXT operator step: strictly no-device VIO preflight
+
+From `ros/` on the updated Stage 3 branch:
+
+```bash
+git pull --ff-only
+bash ./m23bv_v3_stage3_vio_preflight.sh
+```
+
+The new preflight performs shell/AST source checks and rootless,
+network-none, readonly package/YAML/M18 import checks in the two
+pinned images, with **zero camera or MCU mappings or serial opens**.
+Expected result (NOT YET OBSERVED):
+
+```text
+STAGE3_VIO_AST_PASS=m23bv_v3_stage3_vio_imu_sender.py
+STAGE3_VIO_AST_PASS=m23bv_v3_stage3_vio_audit.py
+STAGE3_VIO_AST_PASS=m23bv_v3_stage3_xrslam_vio_diag.launch.py
+STAGE3_VIO_SOURCE_BOUNDARIES=PASS
+STAGE3_VIO_M18_IMPORT_NO_DEVICE=PASS
+STAGE3_VIO_XRSLAM_YAML_NO_DEVICE=PASS
+STAGE3_VIO_PREFLIGHT=PASS_NO_DEVICE_SOURCE_AND_IMPORTS
+STAGE3_VIO_MCU_CDC=NOT_OPENED
+```
+
+**Do not run the new physical VIO host script until preflight passes
+and its exact MCU identity is independently checked.** The existing
+private `M23BV_LOG_DIR` and freshly visually verified camera
+`M23BV_STAGE3_CAMERA_VISUALLY_VERIFIED_NODE` remain prerequisites.
+The new MCU ID must come from
+`udevadm info --query=property --name=<actual /dev/ttyACM*>`,
+then be supplied as `M23BV_STAGE3_MCU_ID_SERIAL`; it is NOT guessed
+from the by-id name.
+
+Each physical VIO attempt requires a fresh uppercase `YES` after
+human confirmation that BOTH motor power rails are **physically
+disconnected**, chassis secured, E-stop tested and operator present
+for immediate disconnect. Opening STM32 CDC/DTR may itself energize
+motor-capable firmware. If STOP is unacknowledged, assume MCU state
+UNKNOWN and intervene physically; do not blindly retry. The Stage 2B
+and Stage 3 earlier camera runs are not authority for this test.
+
 ## Follow-up integration run (separate review and authorization)
 
 After inspecting the inventory output:
