@@ -122,6 +122,70 @@ relax Stage 2B guards, or join the existing robot container to work
 around it.** No new physical sensor experiment is authorized by
 passing this probe.
 
+## Verified DDS handoff and next actual-application smoke
+
+The operator reported `M23BV_V3_STAGE3_DDS=PASS_THREE_IMAGE_ISOLATED_TRANSPORT`.
+Both XRSLAM and Nav2 images received the correctly identified
+nonce from the pinned V3 sensor image. All three image pins matched.
+This proves isolated ROS 2 communication, **not** camera/IMU processing
+or application startup.
+
+A new, bounded, **no-device** smoke now launches actual DepthART,
+XRSLAM and Nav2 processes across those three existing images. It never
+opens camera or serial devices, never starts the bridge, never enables
+metric odometry, and never sends Nav2 goals. It uses:
+
+- Real DepthART ROS node in the V3 sensor image, with no image publisher.
+- Real XRSLAM ROS 2 adapter in the XRSLAM image, using a deliberately
+  startup-only `monocular` YAML. The device template is intentionally
+  incomplete: no CameraInfo/TF is provided so the adapter must remain in
+  `waiting_calibration`, `localization_valid=false`, with **zero**
+  published odometry messages.
+- Real Nav2 `controller_server`, `planner_server`, `bt_navigator`,
+  lifecycle manager in the Nav2 image. All lifecycle nodes MUST stay
+  `unconfigured`. Controller velocity names are remapped to the
+  unconsumed diagnostic topic and the graph audit rejects
+  `/cmd_vel`, `/cmd_vel_nav` or an MCU bridge.
+- A ROS graph audit which checks exact expected nodes, status, absence
+  of emitted metric odometry and unconfigured lifecycle services.
+  All containers use parent `--network none` plus isolated IPC joins
+  and no hardware-device mappings; all inputs are read-only file mounts.
+
+On the Stage 3 checkout, from `ros/`:
+
+```bash
+git pull --ff-only
+bash -n ./m23bv_v3_stage3_no_device_apps.sh
+python3 - <<'PY'
+import ast
+from pathlib import Path
+for file in ('m23bv_v3_stage3_nav2_smoke.launch.py',
+             'm23bv_v3_stage3_app_smoke_audit.py'):
+    ast.parse(Path(file).read_text())
+print('STAGE3_APP_SOURCE_SYNTAX=PASS')
+PY
+bash ./m23bv_v3_stage3_no_device_apps.sh
+```
+
+On success the audit expects XRSLAM `waiting_calibration`, false
+localization, three `unconfigured` Nav2 lifecycle nodes, a discovered
+DepthART node, and
+`M23BV_V3_STAGE3_APPS=PASS_REAL_APP_STARTUP_NO_DEVICE`.
+This is **not yet observed**. If an application crashes, the runner
+prints bounded per-container logs for diagnosis and cleans up its own
+containers. Do not substitute synthetic IMU/camera measurements, guessed
+extrinsics, a fake pose, or Nav2 lifecycle activation to force success.
+
+After a successful application startup test, the remaining engineering
+work is a separately reviewed V3 physical-sensor integration supervisor
+that permits XRSLAM/Nav2 diagnostic consumers WITHOUT weakening accepted
+Stage 2B source graph guards. Any physical run will require new
+operator-performed motor-power isolation, E-stop verification, a fresh
+single-use explicit YES, stable USB ID verification, and strict MCU
+START/STOP acknowledgement. A diagnostic startup PASS confers no motor
+authority, autonomous navigation, calibrated localization or recording
+permission.
+
 ## Follow-up integration run (separate review and authorization)
 
 After inspecting the inventory output:
