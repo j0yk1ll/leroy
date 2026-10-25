@@ -273,8 +273,8 @@ def run():
             # A zero ros2 launch exit is insufficient: require exactly
             # the three known camera/readiness/rectifier children to have
             # exited cleanly, with no surviving child process IDs.
-            started = set(re.findall(r"process started with pid \\[(\\d+)\\]", output))
-            finished = set(re.findall(r"process has finished cleanly \\[pid (\\d+)\\]", output))
+            started = set(re.findall(r"process started with pid \[(\d+)\]", output))
+            finished = set(re.findall(r"process has finished cleanly \[pid (\d+)\]", output))
             if (len(started) != 3 or finished != started or
                     any(Path("/proc/" + pid).exists() for pid in started)):
                 camera_clean = False
