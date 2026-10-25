@@ -270,6 +270,17 @@ def run():
             output = "\n".join(camera_relay.lines)
             if "process has died" in output or "Traceback (most recent call last):" in output:
                 camera_clean = False
+            # A zero ros2 launch exit is insufficient: require exactly
+            # the three known camera/readiness/rectifier children to have
+            # exited cleanly, with no surviving child process IDs.
+            started = set(re.findall(r"process started with pid \\[(\\d+)\\]", output))
+            finished = set(re.findall(r"process has finished cleanly \\[pid (\\d+)\\]", output))
+            if (len(started) != 3 or finished != started or
+                    any(Path("/proc/" + pid).exists() for pid in started)):
+                camera_clean = False
+                print("M23BV_V3_STAGE2B_CAMERA_CHILD_REAP=BLOCKED", flush=True)
+            else:
+                print("M23BV_V3_STAGE2B_CAMERA_CHILD_REAP=PASS", flush=True)
         if node is not None:
             node.destroy_node()
         if rclpy.ok():
