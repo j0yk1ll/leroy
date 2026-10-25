@@ -100,11 +100,11 @@ IMU_MOUNT_FIRMWARE_FLASH=NOT_PERFORMED
 IMU_MOUNT_MCU_SERIAL_AND_MOTOR_ACCESS=NONE
 ```
 
-This accepts **only** the host C fixture checks and source-call
-verification. A complete cross-compiled STM32 image has not been
-built or flashed, and behavior of the hardware/ROS running image is
-unchanged. This source-only test should not be repeated without
-a reason (changed transform/profile/toolchain source).
+This accepts the host C fixture checks and source-call verification.
+A subsequent **full cross-build has also PASSED**, recorded below. The
+physical MCU was NOT flashed; behavior of the deployed hardware and ROS
+runtime is unchanged. The host tests need not be repeated unless the
+transform, mounting profile or toolchain changes.
 
 Original expected terminal markers:
 
@@ -120,6 +120,34 @@ libopencm3. **Do not run bare `make` or `make -C firmware`**:
 the existing Makefile's default target invokes `flash` after building.
 A successful local build is not an authorization to flash or run
 the motor-capable MCU.
+
+### Operator-verified complete STM32F401 compile: PASS
+
+The operator ran the explicit **build-only** target
+`make -C ../firmware build` from `ros/`, on the separate PR #155
+branch. Their terminal output shows successful compilation of all nine
+firmware C translation units (including `src/imu.c`), link of the
+STM32F401 Cortex-M4 firmware with `libopencm3_stm32f4.a`, and
+generation of `robot_firmware.elf`, `robot_firmware.bin`,
+`robot_firmware.hex` and the linker map. No reported compiler/linker
+errors and no flash-command invocation.
+
+```text
+arm-none-eabi-size build/robot_firmware.elf
+   text    data     bss     dec     hex filename
+  21460     132    1728   23320    5b18 build/robot_firmware.elf
+```
+
+The `text+data` image footprint is 21,592 bytes; static
+`data+bss` RAM is 1,860 bytes. The ELF section-sum value
+`dec=23320` is not by itself the flash image size.
+
+**Accepted scope:** build/link and host-side transform tests.
+**Not accepted:** physically flashed MCU image, real IMU output from
+the refactored firmware, camera/IMU calibration, robot odometry,
+motor authority or safe physical operation. Preserve the same
+published robot-aligned frame convention and avoid any double
+rotation in ROS TF.
 
 ### Deploy boundary
 
