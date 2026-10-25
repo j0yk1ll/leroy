@@ -1,5 +1,43 @@
 # Stage 3: XRSLAM Camera–IMU Calibration Provenance
 
+## Existing Leroy frame definitions and calibration history — reuse, do not re-ask
+
+The operator has **already specified geometry and sensor axes before**
+this Stage 3 review. The previous request to define all four quantities
+again was redundant. This file now inventories exactly what can be
+recovered from tracked sources without inventing measurements.
+
+| Quantity | Already established source | Scope and current authority |
+| --- | --- | --- |
+| Robot coordinate directions | `ros/src/leroy_description/urdf/leroy.urdf.xacro`: +X forward, +Y left, +Z up | Axis convention **DEFINED**; the physical chassis landmark chosen as the `base_link` origin is **not explicitly identified in the current checked-in URDF/README** |
+| IMU axes on assembled robot | `firmware/include/imu.h` and `firmware/src/imu.c`: forward=−ICM X, left=−ICM Y, up=+ICM Z, CCW yaw=+ICM gyro Z; gyro roll/pitch signs inverted, yaw unchanged | **ALREADY DEFINED AND IMPLEMENTED** in `imu_read_robot()`; `/imu/data_raw` contains robot-frame acceleration/gyro values from the MCU. **Do not apply another 180° sensor-axis correction in the ROS TF** |
+| IMU center translation in current TF | `ros/src/leroy_description/urdf/leroy.urdf.xacro`: +95 mm X, −95 mm Y, 0 mm Z | Existing parameter; its own source explicitly marks this geometry **PROVISIONAL**, including unknown physical height. Not independently certified as the IMU die/sensing center |
+| Front camera orientation and frame axes | Same Xacro: +30° camera pitch; optical frame +X right, +Y down, +Z forward; `camera_optical_frame` alias | Existing defined TF *model*, but physical 30° mount angle still explicitly **PROVISIONAL** |
+| Camera optical center translation | Same Xacro: (0, 0, 0) m | Existing value is an explicitly documented **zero placeholder**, not an assertion that the optical center is at the base origin |
+| Workspace camera | Same Xacro: +60° pitch, zero translation | **PROVISIONAL**, not the front camera used by Stage 3 VIO |
+| Wheels/nominal chassis geometry | `ros/src/leroy_bridge/config/leroy_bridge.yaml`: radius=20 mm, half-wheelbase=180 mm, half-track=275 mm | Existing kinematic configuration; **does not independently identify the physical `base_link` reference point** or validate camera/IMU mounting |
+| Past camera–IMU calibration work | `utils/imu/README.md` and `utils/imu/*`: ChArUco image/gyro timing analyses and historical supervised captures | **ALREADY ATTEMPTED**, not a validated current camera/IMU phase; historical timing methods compare headers from a different runtime context |
+| Previously tested camera epoch conversion | `ros/CAMERA_TIMESTAMP_FIX.md`, pinned effective `/leroy_ws/install/usb_cam` overlay | Active arithmetic fix already implemented and operator verified; true physical exposure event remains unmeasured |
+
+The historical ChArUco documentation reports unstable, estimator-dependent
+timing estimates from three earlier captures (approximately
+−42/−58/−66 ms by adjacent-frame yaw versus −52/−90/−114 ms by integrated
+gyro). It explicitly warns **none are validated sensor offsets**.
+No prior offset may be copied into XRSLAM just because an analysis
+script produced it: sign convention, source timestamp semantics, runtime
+mapping and repeatability are distinct verification gates.
+
+**Unresolved documentation reconciliation, not a request to redefine
+the robot:** The checked-in canonical Xacro describes IMU center,
+camera center and mount pitch as *provisional*. The user reports they
+already supplied their actual geometry elsewhere. Retrieve those
+original measurement records and their `base_link` origin/reference
+before making a new Xacro edit. Do not replace the source's explicit
+uncertainty with guessed measurements, and do not request another
+physical session while existing evidence has not been reconciled.
+No motion, recording, camera or MCU serial access is authorized.
+
+
 ## Effective patched camera overlay — operator PASS
 
 The hardware-free overlay test subsequently passed:
