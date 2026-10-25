@@ -186,6 +186,101 @@ START/STOP acknowledgement. A diagnostic startup PASS confers no motor
 authority, autonomous navigation, calibrated localization or recording
 permission.
 
+## Observed application startup acceptance and next real camera trial
+
+The operator confirmed
+`M23BV_V3_STAGE3_APPS=PASS_REAL_APP_STARTUP_NO_DEVICE`
+with the three exact pinned image IDs, real DepthART and XRSLAM
+processes, unconfigured controller/planner/navigator, zero real
+sensor input and no motor access. This is a genuine application
+startup PASS, **not** VIO or Nav2 navigation acceptance.
+
+**Next experiment is real camera only at the physical boundary:**
+the V3 camera and rectifier run unchanged inside the accepted sensor
+image, concurrent with real DepthART; XRSLAM and Nav2 run in
+different containers joined exclusively to the isolated
+`--network none` / IPC namespace. No MCU serial is mapped,
+opened, reset, or commanded. The exact real front-camera port, camera
+serial/udev IDs, accepted V3 image, calibration SHA-256, source SHA
+and private log directory are verified by the new operator host runner.
+
+The new passive DDS auditor requires real 640x480 RGB8
+raw/CameraInfo/rectified messages with 90+ paired stamps,
+at least one 640x480 32FC1 DepthART output **bearing a matching
+rectified frame stamp**, actual XRSLAM and DepthART subscriptions
+to the camera topics, and real Nav2 lifecycle nodes left
+unconfigured. It also rejects any unexpected XRSLAM localization
+validity, odometry messages, hardware-compatible command topics
+and hardware bridge.
+
+**XRSLAM is deliberately configured only for `monocular`
+`waiting_calibration`, with no static TF broadcaster and an
+explicitly incomplete device stub.** This checks actual ROS
+image-topic handoff and DepthART inference while keeping XRSLAM
+metric pose/TF gated; it does **not** exercise XRSLAM frame
+submission or initialize a real visual-inertial estimator.
+A separate follow-up needs real sensor calibration and a reviewed
+XRSLAM template before the VIO initialization test.
+
+### Required source-only preflight (no camera or MCU access)
+
+On the up-to-date Stage 3 branch from `ros/`:
+
+```bash
+git pull --ff-only
+bash -n m23bv_v3_stage3_physical_camera_host.sh
+python3 -B - <<'PY'
+import ast
+from pathlib import Path
+for name in (
+    'm23bv_v3_stage3_physical_camera_supervisor.py',
+    'm23bv_v3_stage3_live_camera_audit.py',
+    'm23bv_v3_stage3_nav2_smoke.launch.py',
+):
+    ast.parse(Path(name).read_text(), filename=name)
+    print('STAGE3_REAL_CAMERA_AST_PASS=' + name)
+PY
+```
+
+**This candidate has not yet passed operator-run preflight or
+physical runtime.** Inspect the source and safety boundary prior to
+a trial. The prior Stage 2B approval does not authorize Stage 3.
+
+### Operator-owned real-camera test: fresh authorization required
+
+Only when both motor-power rails are PHYSICALLY disconnected,
+chassis secured, E-stop tested, verified front camera visually
+identified on USB port 3.4.2, calibration provenance confirmed,
+and an operator is present to disconnect power:
+
+```bash
+# Review the exact visual stream FIRST, independently.
+# Enter the actual recently verified /dev/videoN (do not blindly
+# copy a historical /dev/video8 or select by-id: both Wed Camera
+# units share their USB serial).
+export M23BV_STAGE3_CAMERA_VISUALLY_VERIFIED_NODE=/dev/videoN
+# Set an EXISTING owner-private mode-0700 log directory.
+export M23BV_LOG_DIR=/absolute/private/log-directory
+bash ./m23bv_v3_stage3_physical_camera_host.sh
+```
+
+The script itself requires an interactive uppercase `YES`
+once per attempt and rechecks the stable camera identity after
+consent. It launches only the pinned camera video node inside
+Podman, with `--network none`, no MCU device, read-only
+rootfs, dropped capabilities, and read-only source/calibration
+mounts. It stops all sidecars and checks camera and DepthART
+shutdown, retaining only private application logs and a
+one-time approval record. **No recording of sensor frames**
+and no motion commands are allowed.
+
+If source preflight fails, do not invoke the physical runner.
+If the real trial fails, supply the error and private log
+extract for a targeted fix. A successful camera-only trial does
+not authorize opening the motor-capable STM32F401, fabricating a
+temporal offset, declaring physical obstacle safety, publishing
+metric odometry, or running Nav2 actions.
+
 ## Follow-up integration run (separate review and authorization)
 
 After inspecting the inventory output:
