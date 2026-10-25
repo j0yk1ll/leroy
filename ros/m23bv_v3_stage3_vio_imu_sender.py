@@ -9,6 +9,7 @@ import json
 import os
 import signal
 import time
+from rclpy.qos import DurabilityPolicy
 
 import rclpy
 import serial
@@ -77,7 +78,8 @@ def graph_guard(node, require_ready):
            for ep in odom):
         raise RuntimeError("BLOCKED_UNEXPECTED_ODOM_PUBLISHER")
     dynamic_tf = node.get_publishers_info_by_topic("/tf")
-    if any((ep.node_name, ep.node_namespace) != ("leroy_xrslam", "/")
+    if any((ep.node_name, ep.node_namespace) not in
+           (("leroy_xrslam", "/"), ("robot_state_publisher", "/"))
            for ep in dynamic_tf):
         raise RuntimeError("BLOCKED_UNEXPECTED_TF_AUTHORITY")
     imu_sub = node.get_subscriptions_info_by_topic("/imu/data_raw")
