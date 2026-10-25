@@ -82,6 +82,10 @@ def run():
     camera = depthart = None
     good = False
     clean = False
+    old_term = signal.getsignal(signal.SIGTERM)
+    def interruption(_signum, _frame):
+        raise KeyboardInterrupt()
+    signal.signal(signal.SIGTERM, interruption)
     try:
         camera = Child("STAGE3_CAMERA", ["ros2", "launch", CAMERA_LAUNCH])
         deadline = time.monotonic() + READY_TIMEOUT_S
@@ -121,6 +125,7 @@ def run():
         print("M23BV_STAGE3_REAL_CAMERA_SHUTDOWN=" +
               ("PASS" if clean else "BLOCKED_CHILD_EXIT"), flush=True)
         print("M23BV_STAGE3_MCU_ACCESS=NONE", flush=True)
+        signal.signal(signal.SIGTERM, old_term)
     return 0 if good and clean else 2
 
 
