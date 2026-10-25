@@ -97,6 +97,7 @@ again="$(udevadm info --query=property --name="$cam")" || fail POST_ATTESTATION_
 approval="$(mktemp --tmpdir="$M23BV_LOG_DIR" stage3_vio_approval_XXXXXXXX.txt)"
 printf 'UTC=%s HEAD=%s CAMERA=%s CAMERA_RDEV=%s MCU_BY_ID=%s MCU_ID_SERIAL=%s MCU_RDEV=%s MOTOR_RAILS=OPERATOR_ATTESTED_DISCONNECTED ESTOP=OPERATOR_ATTESTED IMMEDIATE_DISCONNECT=OPERATOR_ATTESTED AUTHORIZE=YES MCU=ISOLATED_IMU_CONTAINER_STOP_REQUIRED\n' "$(date -u -Is)" "$(git rev-parse HEAD)" "$cam" "$rdev" "$mcu_link" "$M23BV_STAGE3_MCU_ID_SERIAL" "$mcu_rdev" >"$approval"
 log="$(mktemp --tmpdir="$M23BV_LOG_DIR" stage3_vio_XXXXXXXX.log)"
+imu_may_have_opened=0
 echo "STAGE3_APPROVAL_SHA256=$(sha256sum "$approval" | cut -d' ' -f1)" >>"$log"
 suffix="$$-$(date +%s)"
 parent="stage3-vio-cam-$suffix"
@@ -114,7 +115,7 @@ cleanup() {
     fi
   done
 }
-trap 'cleanup; echo "STAGE3_VIO_FAILURE_LOG=$log" >&2; sha256sum "$log" >&2' EXIT
+trap 'cleanup; if [[ "$imu_may_have_opened" == 1 ]] && ! grep -qx STAGE3_VIO_IMU_STOP_ACK=PASS "$log"; then echo STAGE3_VIO_MCU_STATE=UNKNOWN_OPERATOR_INTERVENTION_REQUIRED >&2; fi; echo "STAGE3_VIO_FAILURE_LOG=$log" >&2; sha256sum "$log" >&2' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 boot='set -e; . /opt/ros/jazzy/setup.sh; . /leroy_ws/install/setup.sh; . /opt/m23bv_reliable_rectifier_proto/ws/install/setup.sh; exec "$@"'
@@ -176,6 +177,7 @@ timeout --foreground --signal=TERM --kill-after=8s 120s \
   >>"$log" 2>&1 &
 audit_pid=$!
 set -e
+imu_may_have_opened=1
 set +e
 timeout --foreground --signal=INT --kill-after=18s 93s \
   podman run --rm --name "$imu" --pull=never \
