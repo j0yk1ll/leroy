@@ -96,10 +96,7 @@ class Stage2BContract(unittest.TestCase):
             "M23BV_STAGE2B_MCU_ID_SERIAL",
             "MCU_SERIAL_ID_MISMATCH",
             "CAMERA_SERIAL_CHANGED",
-            "emergency",
         ):
-            if token == "emergency":
-                continue
             self.assertIn(token, self.host)
         # Single opt-in remains after passive identity checks and before
         # fresh camera/MCU rechecks, approval log and exact two mappings.
