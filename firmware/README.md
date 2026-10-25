@@ -575,3 +575,29 @@ continue
 ```
 
 This lets you inspect registers, set breakpoints, single-step C code, and debug faults without Arduino tooling.
+
+## Configurable IMU mounting profile (source-only candidate)
+
+The original assembled-robot sensor axis transform is preserved:
+forward=−ICM X, left=−ICM Y, up=+ICM Z. Its **hardware-specific
+signed-axis selection** now lives in
+`firmware/include/imu_mount_config.h` rather than being repeated
+inside `src/imu.c`; the same transform is applied to accelerometer
+and bias-corrected gyroscope channels. The output remains robot
+aligned under `imu_link`, without a second ROS TF rotation.
+
+See `firmware/IMU_MOUNT_CONFIG.md` for detailed migration boundaries,
+compile-time right-handedness checks, the isolated source test and the
+critical distinction between a local firmware build and a physical
+flash. Run only this **no-device** test from the repository root:
+
+```bash
+python3 -B firmware/test/test_imu_mount_config.py
+```
+
+This is a **source-only review candidate**; no firmware was flashed
+and no existing Stage 3 physical sensor or motor authorization is
+extended by it. The MCU has no YAML parser or filesystem; editing
+the build-time mounting header requires a newly reviewed firmware
+rebuild and a separately approved flash to take effect.
+
