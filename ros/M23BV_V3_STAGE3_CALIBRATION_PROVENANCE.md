@@ -1,5 +1,21 @@
 # Stage 3: XRSLAM Camera–IMU Calibration Provenance
 
+## Source-only CAD reconciliation is next
+
+The old worksheet below was written **before** the operator reminded
+us that these quantities had already been defined. It is an inventory
+of provenance gaps in the current Stage 3 ROS Xacro, **not an
+instruction to physically measure everything again**.
+
+`hardware/parts.FCStd` is present alongside the canonical Xacro.
+Use `ros/m23bv_v3_stage3_existing_geometry_cad_audit.py`
+to read the existing FreeCAD object's metadata and proposed
+mount-related placements without FreeCAD, ROS or any hardware.
+See `M23BV_V3_STAGE3_EXISTING_GEOMETRY_RECONCILIATION.md`
+for the evidence, operator command and limitations: CAD part
+placements must not be promoted automatically to calibrated
+`base_link -> camera/imu` extrinsics.
+
 ## Existing Leroy frame definitions and calibration history — reuse, do not re-ask
 
 The operator has **already specified geometry and sensor axes before**
@@ -191,7 +207,7 @@ is part of the current scope.
 | Front camera optical center | x/y/z in metres relative to `base_link`; uncertainties | **Unknown**, current xyz zero is placeholder |
 | Front camera axis orientation | Measured orientation of forward/right/down optical axes relative to base, with uncertainty | **Unknown**; 30° pitch is assumed |
 | IMU sensing-package origin | x/y/z relative to `base_link`; uncertainties | **Unknown**; current 95 mm offsets are provisional |
-| IMU axes | Mapping of STM32 physical sensor axes to `imu_link` and body; polarity checks | **Unknown** |
+| IMU axes | STM32 ICM-20948 package-to-robot polarity and frame convention | **ALREADY DEFINED AND IMPLEMENTED:** −ICM X forward, −ICM Y left, +ICM Z up; robot-aligned `/imu/data_raw` needs no second ROS TF rotation. Physical IMU die center remains unverified |
 | Frame hardware model | Exact camera sensor, video driver + firmware timestamp conventions | USB model known; exposure event timing **not verified** |
 | Frame `header.stamp` event | Exposure start, midpoint, end of readout, V4L2 completion or delivery — identify and measure | **Unknown** |
 | Absolute camera–IMU time offset | Measured phase, sign convention, uncertainty and drift | **Unknown**; 0.0 s is diagnostic placeholder |
