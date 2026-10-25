@@ -148,3 +148,61 @@ odometry or activate a node to mask the failure.
 This does not unblock live Nav2 control: the real robot still lacks
 validated metric localization, calibration, obstacle freshness,
 footprint and independently verified motion protection.
+
+## Nav2 Configure/Cleanup audit PASSED; container shutdown BLOCKED
+
+The operator's first no-device Nav2 lifecycle test after the Jazzy
+`AMENT_TRACE_SETUP_FILES` / Bash nounset fix reported:
+
+```text
+STAGE3_NAV2_CONFIGURE_controller_server=INACTIVE
+STAGE3_NAV2_CONFIGURE_planner_server=INACTIVE
+STAGE3_NAV2_CONFIGURE_bt_navigator=INACTIVE
+STAGE3_NAV2_CLEANUP_bt_navigator=UNCONFIGURED
+STAGE3_NAV2_CLEANUP_planner_server=UNCONFIGURED
+STAGE3_NAV2_CLEANUP_controller_server=UNCONFIGURED
+STAGE3_NAV2_CONFIGURE=PASS_REAL_SERVERS_CONFIGURE_CLEANUP_NO_ACTIVATION
+STAGE3_NAV2_OMIT_ODOM_TF_GOALS=CONFIRMED
+STAGE3_NAV2_SENSOR_ACCESS=NONE
+STAGE3_NAV2_MOTION_AUTHORIZATION=NONE
+STAGE3_NAV2_CONFIGURE=BLOCKED_LIFECYCLE_OR_SHUTDOWN
+```
+
+**Interpretation:** The actual Nav2 controller/planner/BT navigator
+plugins configured, remained INACTIVE, and all returned to UNCONFIGURED.
+But the overall Podman run returned nonzero; the previous wrapper could
+block indefinitely while waiting for a background `ros2 launch` process
+that might ignore the wrapper's SIGINT. No per-process teardown exit
+status was preserved by that wrapper. **Do not claim full supervisor
+acceptance or a clean shutdown based only on the in-container audit
+PASS.** The precise failure mechanism is unconfirmed.
+
+**Targeted follow-up:** `m23bv_v3_stage3_nav2_configure_supervisor.py`
+now spawns `ros2 launch` in a dedicated process session, preserving
+normal SIGINT handling, and explicitly waits with a fixed deadline. It
+collects the audit status, Nav2 launch exit code, and bounded launch
+logs on failure. A timeout or abnormal exit remains a failure; no
+attempt to hide an observed shutdown crash. The modified
+`m23bv_v3_stage3_nav2_configure_no_device.sh` invokes this
+supervisor in the same pinned rootless network-none container.
+All lifecycle transitions, hardware prohibitions and motor isolation
+are unchanged.
+
+Run from `ros/` on the updated Stage 3 branch (NO DEVICES):
+
+```bash
+git pull --ff-only
+bash -n ./m23bv_v3_stage3_nav2_configure_no_device.sh
+bash ./m23bv_v3_stage3_nav2_configure_no_device.sh
+```
+
+Expected **only after observed clean shutdown**:
+`STAGE3_NAV2_SHUTDOWN=PASS_GRACEFUL_PROCESS_EXIT`,
+`STAGE3_NAV2_SUPERVISOR=PASS_AUDIT_AND_CLEAN_SHUTDOWN`,
+`STAGE3_NAV2_CONFIGURE=PASS_NO_DEVICE_LIFECYCLE`.
+If instead `BLOCKED_SIGINT_TIMEOUT`, `BLOCKED_NAV2_CHILD_CRASH`
+or `BLOCKED_LAUNCH_EXIT` appears, inspect the bounded
+`STAGE3_NAV2_LAUNCH_LOG` excerpts. Do **not** declare cleanup
+successful by ignoring exit codes or forcing the container to terminate.
+This new runner version is untested on the operator's host.
+
