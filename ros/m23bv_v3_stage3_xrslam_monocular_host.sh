@@ -8,7 +8,7 @@ fail() { echo "STAGE3_MONOCULAR=BLOCKED_$1" >&2; exit 2; }
 [[ "$(git branch --show-current)" == feature/m23bv-v3-stage3-fullstack-diagnostic ]] || fail BRANCH
 [[ -z "$(git status --porcelain)" ]] || fail DIRTY
 git merge-base --is-ancestor 93a399fe0b9b0572d389d4c5139f092f4423ceb1 HEAD || fail STACK
-for f in m23bv_v3_stage3_physical_camera_supervisor.py m23bv_v3_stage3_xrslam_monocular_audit.py m23bv_v3_stage3_nav2_smoke.launch.py m23bv_v3_stage3_xrslam_monocular_diag.launch.py m23bv_v3_stage3_xrslam_monocular_diag.yaml; do
+for f in m23bv_v3_stage3_physical_camera_supervisor.py m23bv_v3_stage3_xrslam_monocular_audit.py m23bv_v3_stage3_nav2_smoke.launch.py m23bv_v3_stage3_xrslam_monocular_diag.launch.py m23bv_v3_stage3_xrslam_monocular_diag.yaml m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml; do
   [[ -f "$f" && ! -L "$f" ]] || fail SOURCE_MISSING
   [[ "$(git hash-object "$f")" == "$(git rev-parse "HEAD:ros/$f")" ]] || fail SOURCE_DRIFT
 done
@@ -118,6 +118,7 @@ podman run -d --name "$xr" --pull=never --network "container:$parent" --ipc "con
   --tmpfs /tmp:rw,nosuid,nodev,size=128m \
   --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_monocular_diag.yaml,dst=/opt/leroy_stage3_slam.yaml,readonly" \
   --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_monocular_diag.launch.py,dst=/opt/leroy_stage3_xrslam.launch.py,readonly" \
+  --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml,dst=/opt/leroy_stage3_device.yaml,readonly" \
   -e ROS_DOMAIN_ID=170 -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   -e ROS_LOG_DIR=/tmp/stage3-ros -e XDG_CACHE_HOME=/tmp/stage3-cache -e PYTHONDONTWRITEBYTECODE=1 \
   -e M23BV_STAGE3_XRSLAM_MONOCULAR_DIAG=YES \
