@@ -101,7 +101,7 @@ On the Stage 3 branch:
 ```bash
 cd ros
 bash -n ./m23bv_v3_stage3_no_device_dds.sh
-python3 -m py_compile ./m23bv_v3_stage3_dds_probe.py
+python3 -c "import ast,pathlib; ast.parse(pathlib.Path('m23bv_v3_stage3_dds_probe.py').read_text())"
 bash ./m23bv_v3_stage3_no_device_dds.sh
 ```
 
