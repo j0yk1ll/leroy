@@ -82,7 +82,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-boot='set -e; . /opt/ros/jazzy/setup.sh; . /leroy_ws/install/setup.sh; exec "$@"'
+boot='set -e; . /opt/ros/jazzy/setup.sh; . /leroy_ws/install/setup.sh; . /opt/m23bv_reliable_rectifier_proto/ws/install/setup.sh; exec "$@"'
 # Parent gets exactly the V3 camera; no MCU device mapping.
 podman run -d --name "$parent" --pull=never --network none --ipc shareable --pid private \
   --read-only --cap-drop all --security-opt no-new-privileges \
