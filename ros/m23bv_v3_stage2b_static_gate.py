@@ -15,6 +15,8 @@ class Stage2BContract(unittest.TestCase):
         cls.ast = ast.parse(cls.probe)
         cls.stage1 = (ROOT / "m23bv_v3_stage1_camera_observer.py").read_text()
         cls.m20 = (ROOT / "m20_combined_observer.py").read_text()
+        cls.m18 = (ROOT / "m18_imu_stream_source.py").read_text()
+        cls.preflight = (ROOT / "m23bv_v3_stage2b_preflight.sh").read_text()
 
     def test_exact_unchanged_m20_and_v3_source_pins(self):
         for required in (
@@ -43,6 +45,32 @@ class Stage2BContract(unittest.TestCase):
                       self.host)
         self.assertIn("M20_COMBINED_VERDICT=OBSERVED_CONCURRENT_CAMERA_IMU_ROS_CONTRACT",
                       self.probe)
+
+    def test_two_exact_source_overlays_and_protected_stop_region(self):
+        # Historical V3 image has older M20/M18 source blobs. The reviewed
+        # M20 cleanup fix and M18 terminal-fault latch must be mounted.
+        mounts = (
+            'type=bind,src=$PWD/m20_combined_observer.py,dst=/opt/m20/m20_combined_observer.py,readonly',
+            'type=bind,src=$PWD/m18_imu_stream_source.py,dst=/opt/m18/m18_imu_stream_source.py,readonly',
+        )
+        for mount in mounts:
+            self.assertIn(mount, self.host)
+            self.assertIn(mount, self.preflight)
+        self.assertIn("M23BV_V3_STAGE2B_CORRECTED_M20_M18_MOUNTS=PASS",
+                      self.preflight)
+        self.assertIn("BLOCKED_IMPORT_LOCATION", self.preflight)
+        self.assertIn("CORRECTED_M20_PIN", self.preflight)
+        self.assertIn("CORRECTED_M18_PIN", self.preflight)
+        self.assertIn("device.reset_input_buffer()", self.m20)
+        protected = self.m20.split("with serial.Serial(", 1)[1]
+        self.assertLess(protected.index("try:"),
+                        protected.index("device.reset_input_buffer()"))
+        self.assertLess(protected.index("device.reset_input_buffer()"),
+                        protected.index("finally:"))
+        self.assertLess(protected.index("finally:"),
+                        protected.index("send_only_whitelisted_serial_command(device, STOP)"))
+        self.assertIn("if self.terminal_fault is not None:", self.m18)
+        self.assertIn("imu_source_terminal_fault_latched", self.m18)
 
     def test_human_gate_before_two_device_mappings(self):
         for token in (
