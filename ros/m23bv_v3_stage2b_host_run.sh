@@ -20,6 +20,12 @@ BRANCH='feature/m23bv-v3-stage2b-physical-sensors-optin'
 CAMERA_BY_ID="${M23BV_STAGE2B_CAMERA_STABLE_LINK:-}"
 CAMERA_VERIFIED_NODE="${M23BV_STAGE2B_CAMERA_VISUALLY_VERIFIED_NODE:-}"
 CAMERA_SERIAL='Wed_Camera_Wed_Camera_20240420112206'
+# Two Wed Camera interfaces have the SAME ID_SERIAL and model.
+# ONLY USB port 3.4.2 was visually verified with ffplay as front camera.
+CAMERA_APPROVED_LINK='/dev/v4l/by-path/pci-0000:00:14.0-usb-0:3.4.2:1.0-video-index0'
+CAMERA_APPROVED_ID_PATH='pci-0000:00:14.0-usb-0:3.4.2:1.0'
+CAMERA_VENDOR_ID='32e6'
+CAMERA_MODEL_ID='9221'
 CAL_SHA='f1c99cb8d4e4f3c77373dcabbe683dee9ffbc050614396fcd2964d61e965a138'
 
 root="$(git rev-parse --show-toplevel)" || fail WORKTREE
@@ -54,9 +60,8 @@ logdir="${M23BV_LOG_DIR:-}"
 
 # Bind the exact real camera stream established visually by the operator
 # to a stable V4L by-id or by-path symlink. No implicit default.
-[[ "$CAMERA_BY_ID" == /dev/v4l/by-id/* ||
-   "$CAMERA_BY_ID" == /dev/v4l/by-path/* ]] ||
-  fail CAMERA_VERIFIED_STABLE_LINK_REQUIRED
+[[ "$CAMERA_BY_ID" == "$CAMERA_APPROVED_LINK" ]] ||
+  fail CAMERA_APPROVED_USB_PORT_LINK_REQUIRED
 [[ "$CAMERA_VERIFIED_NODE" =~ ^/dev/video[0-9]+$ ]] ||
   fail CAMERA_VISUAL_CONFIRMATION_REQUIRED
 [[ -L "$CAMERA_BY_ID" ]] || fail CAMERA_STABLE_ID_MISSING
@@ -69,6 +74,14 @@ cam_properties="$(udevadm info --query=property --name="$cam")" ||
   fail CAMERA_UDEV_INFO
 cam_serial="$(sed -n 's/^ID_SERIAL=//p' <<<"$cam_properties")"
 [[ "$cam_serial" == "$CAMERA_SERIAL" ]] || fail CAMERA_SERIAL_CHANGED
+cam_id_path="$(sed -n 's/^ID_PATH=//p' <<<"$cam_properties")"
+cam_vendor="$(sed -n 's/^ID_VENDOR_ID=//p' <<<"$cam_properties")"
+cam_model="$(sed -n 's/^ID_MODEL_ID=//p' <<<"$cam_properties")"
+[[ "$cam_id_path" == "$CAMERA_APPROVED_ID_PATH" ]] ||
+  fail CAMERA_USB_PORT_CHANGED
+[[ "$cam_vendor" == "$CAMERA_VENDOR_ID" &&
+   "$cam_model" == "$CAMERA_MODEL_ID" ]] ||
+  fail CAMERA_USB_VENDOR_MODEL_CHANGED
 cam_v4l_caps="$(sed -n 's/^ID_V4L_CAPABILITIES=//p' <<<"$cam_properties")"
 [[ "$cam_v4l_caps" == *:capture:* ]] || fail CAMERA_NOT_CAPTURE_CAPABLE
 # Pin character-device major:minor to detect hotplug replacement after
@@ -136,6 +149,11 @@ cam_recheck="$(udevadm info --query=property --name="$cam")" ||
   fail CAMERA_RECHECK_UDEV
 [[ "$(sed -n 's/^ID_SERIAL=//p' <<<"$cam_recheck")" == "$CAMERA_SERIAL" ]] ||
   fail CAMERA_SERIAL_CHANGED_AFTER_SIGNOFF
+[[ "$(sed -n 's/^ID_PATH=//p' <<<"$cam_recheck")" == "$CAMERA_APPROVED_ID_PATH" ]] ||
+  fail CAMERA_USB_PORT_CHANGED_AFTER_SIGNOFF
+[[ "$(sed -n 's/^ID_VENDOR_ID=//p' <<<"$cam_recheck")" == "$CAMERA_VENDOR_ID" &&
+   "$(sed -n 's/^ID_MODEL_ID=//p' <<<"$cam_recheck")" == "$CAMERA_MODEL_ID" ]] ||
+  fail CAMERA_USB_VENDOR_MODEL_CHANGED_AFTER_SIGNOFF
 [[ "$(sed -n 's/^ID_V4L_CAPABILITIES=//p' <<<"$cam_recheck")" == *:capture:* ]] ||
   fail CAMERA_CAPABILITY_CHANGED_AFTER_SIGNOFF
 [[ -L "$mcu_by_id" && "$(readlink -f -- "$mcu_by_id")" == "$mcu" &&
@@ -163,6 +181,8 @@ Camera visually verified host node: $CAMERA_VERIFIED_NODE
 Camera observed stream: OPERATOR ATTESTED
 Camera device: $cam
 Camera USB serial: $cam_serial
+Camera verified USB port: $cam_id_path
+Camera USB vendor:model: $cam_vendor:$cam_model
 MCU stable ID: $mcu_by_id
 MCU device: $mcu
 MCU ID_SERIAL: $actual_mcu_id
@@ -182,6 +202,8 @@ name="m23bv-v3-stage2b-$$"
   echo "M23BV_V3_STAGE2B_CAMERA_STABLE_ID=$CAMERA_BY_ID"
   echo "M23BV_V3_STAGE2B_CAMERA_VISUALLY_VERIFIED_NODE=$CAMERA_VERIFIED_NODE"
   echo "M23BV_V3_STAGE2B_CAMERA_DEVICE=$cam"
+  echo "M23BV_V3_STAGE2B_CAMERA_ID_PATH=$cam_id_path"
+  echo "M23BV_V3_STAGE2B_CAMERA_VENDOR_MODEL=$cam_vendor:$cam_model"
   echo "M23BV_V3_STAGE2B_CAMERA_RDEV=$cam_rdev"
   echo "M23BV_V3_STAGE2B_MCU_DEVICE=$mcu"
   echo "M23BV_V3_STAGE2B_MCU_ID_SERIAL=$actual_mcu_id"
