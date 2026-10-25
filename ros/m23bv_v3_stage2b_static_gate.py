@@ -100,8 +100,19 @@ class Stage2BContract(unittest.TestCase):
     def test_camera_hotplug_uses_only_verified_by_id_and_serial(self):
         self.assertIn('M23BV_STAGE2B_CAMERA_STABLE_LINK', self.host)
         self.assertIn('M23BV_STAGE2B_CAMERA_VISUALLY_VERIFIED_NODE', self.host)
-        self.assertIn('"$CAMERA_BY_ID" == /dev/v4l/by-id/*', self.host)
-        self.assertIn('"$CAMERA_BY_ID" == /dev/v4l/by-path/*', self.host)
+        self.assertIn(
+            "pci-0000:00:14.0-usb-0:3.4.2:1.0-video-index0", self.host)
+        self.assertIn("CAMERA_APPROVED_ID_PATH='pci-0000:00:14.0-usb-0:3.4.2:1.0'",
+                      self.host)
+        self.assertIn("CAMERA_VENDOR_ID='32e6'", self.host)
+        self.assertIn("CAMERA_MODEL_ID='9221'", self.host)
+        self.assertIn('"$CAMERA_BY_ID" == "$CAMERA_APPROVED_LINK"', self.host)
+        self.assertIn('CAMERA_APPROVED_USB_PORT_LINK_REQUIRED', self.host)
+        self.assertIn('"$cam_id_path" == "$CAMERA_APPROVED_ID_PATH"', self.host)
+        self.assertIn('"$cam_vendor" == "$CAMERA_VENDOR_ID"', self.host)
+        self.assertIn('"$cam_model" == "$CAMERA_MODEL_ID"', self.host)
+        self.assertIn('CAMERA_USB_PORT_CHANGED_AFTER_SIGNOFF', self.host)
+        self.assertIn('CAMERA_USB_VENDOR_MODEL_CHANGED_AFTER_SIGNOFF', self.host)
         self.assertIn('CAMERA_LINK_NOT_VISUALLY_VERIFIED_STREAM', self.host)
         self.assertIn('"$cam" == "$CAMERA_VERIFIED_NODE"', self.host)
         self.assertIn('CAMERA STREAM VERIFIED %s', self.host)
