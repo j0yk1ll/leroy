@@ -1,8 +1,10 @@
 # Stage 3 XRSLAM camera+MCU IMU diagnostic ONLY.
 # Tuning copied from pinned XRSLAM 53adcdafd065ec1b2239b9d000205ea243e8342d
 # configs/euroc_slam.yaml; NOT robot-calibrated, NOT production navigation.
-# The only modifications are the explicit monocular mode and no IMU refinement.
-# Camera-IMU offset ZERO is a provisional initialization DIAGNOSTIC guess,\n# NOT a measured temporal offset. Spatial extrinsics are also provisional.\n# Native XRSLAM may initialize/tracking; ROS metric pose/odom stay inhibited.
+# Adapted to monocular_imu mode with IMU refinement for diagnostics only.
+# Camera-IMU offset ZERO is a provisional initialization DIAGNOSTIC guess,
+# NOT a measured temporal offset. Spatial extrinsics are also provisional.
+# Native XRSLAM may initialize/tracking; ROS metric pose/odom stay inhibited.
 sensor:
   mode: monocular_imu
 output:
