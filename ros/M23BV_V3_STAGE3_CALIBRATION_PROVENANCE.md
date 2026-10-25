@@ -1,5 +1,30 @@
 # Stage 3: XRSLAM Camera–IMU Calibration Provenance
 
+## Effective patched camera overlay — operator PASS
+
+The hardware-free overlay test subsequently passed:
+`STAGE3_USB_CAM_EFFECTIVE_PREFIX=/leroy_ws/install/usb_cam`,
+`STAGE3_USB_CAM_EFFECTIVE_SOURCE=CORRECT_MICROSECOND_EPOCH_FORMULA`,
+`STAGE3_USB_CAM_EFFECTIVE_LINKAGE=OVERLAY_COMPONENT_AND_LIBRARY`,
+`STAGE3_USB_CAM_EFFECTIVE=PASS_PATCHED_OVERLAY_SELECTED_NO_DEVICE`.
+The camera executable SHA-256 is
+`6f19b25e2ce97bdaac6106e93de1f2a8fe0842cb6a5f3fba1f8a084c75a87edf`;
+the linked camera library SHA-256 is
+`8841f868515337e0b637520d5da9e99ea4776f8eae39653ef8f50498d8381aeb`.
+
+**The earlier concern that the Debian-installed header's epoch
+arithmetic bug is the live camera code is resolved.** The active
+camera uses the previously patched overlay. The true exposure
+timestamp convention, camera–IMU phase and rigid mounting geometry
+remain unmeasured; neither source nor build provenance fixes those.
+
+The existing physical worksheet below is the next non-runtime task.
+Confirm `base_link` origin and camera/IMU physical frame axes,
+sensor center offsets and their uncertainty **without moving the rig
+or opening any device**. A later excitation/calibration session
+would require a distinct reviewed plan and new operator authorization.
+
+
 > **Correction after reviewing the existing Leroy build recipe.**
 > The image's Debian-installed usb_cam 0.8.1 header carries the
 > upstream divide-by-1000 bug, but the accepted
