@@ -96,7 +96,7 @@ podman run -d --name "$parent" --pull=never --network none --ipc shareable --pid
   --mount "type=bind,src=$cal,dst=/config/camera/front_camera.yaml,readonly" \
   --mount "type=bind,src=$PWD/m23bv_v3_stage3_physical_camera_supervisor.py,dst=/opt/stage3_camera_supervisor.py,readonly" \
   -e ROS_DOMAIN_ID=170 -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
-  -e ROS_LOG_DIR=/tmp/stage3-ros -e PYTHONDONTWRITEBYTECODE=1 \
+  -e ROS_LOG_DIR=/tmp/stage3-ros -e XDG_CACHE_HOME=/tmp/stage3-cache -e PYTHONDONTWRITEBYTECODE=1 \
   -e LEROY_M20_SENSOR_ONLY=1 -e LEROY_NAV2_DRY_RUN=1 \
   -e M23BV_CAMERA_READY_CANDIDATE=1 -e M23BV_RELIABLE_RECTIFIER_PROTO_V3=1 \
   -e M23BV_STAGE3_PHYSICAL_CAMERA_ONLY=YES --entrypoint /bin/bash \
@@ -117,7 +117,7 @@ podman run -d --name "$xr" --pull=never --network "container:$parent" --ipc "con
   --mount "type=bind,src=$PWD/m23bv_v3_stage3_smoke_monocular.yaml,dst=/opt/stage3_slam.yaml,readonly" \
   --mount "type=bind,src=$PWD/m23bv_v3_stage3_smoke_device.yaml,dst=/opt/stage3_device.yaml,readonly" \
   -e ROS_DOMAIN_ID=170 -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
-  -e ROS_LOG_DIR=/tmp/stage3-ros -e PYTHONDONTWRITEBYTECODE=1 \
+  -e ROS_LOG_DIR=/tmp/stage3-ros -e XDG_CACHE_HOME=/tmp/stage3-cache -e PYTHONDONTWRITEBYTECODE=1 \
   --entrypoint /bin/bash "$xrimage" -c "$side" stage3 \
   ros2 run leroy_xrslam leroy_xrslam_node --ros-args \
     -p slam_yaml:=/opt/stage3_slam.yaml -p device_template_yaml:=/opt/stage3_device.yaml \
@@ -130,7 +130,7 @@ podman run -d --name "$nav" --pull=never --network "container:$parent" --ipc "co
   --mount "type=bind,src=$PWD/m23bv_v3_stage3_nav2_smoke.launch.py,dst=/opt/stage3_nav2.launch.py,readonly" \
   --mount "type=bind,src=$PWD/m23bv_v3_stage3_live_camera_audit.py,dst=/opt/stage3_live_audit.py,readonly" \
   -e ROS_DOMAIN_ID=170 -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
-  -e ROS_LOG_DIR=/tmp/stage3-ros -e PYTHONDONTWRITEBYTECODE=1 \
+  -e ROS_LOG_DIR=/tmp/stage3-ros -e XDG_CACHE_HOME=/tmp/stage3-cache -e PYTHONDONTWRITEBYTECODE=1 \
   -e M23BV_STAGE3_NO_DEVICE_APP_SMOKE=1 -e M23BV_STAGE3_CAMERA_SIDECAR=1 \
   --entrypoint /bin/bash "$navimage" -c "$side" stage3 \
   ros2 launch /opt/stage3_nav2.launch.py >/dev/null || fail NAV2_START
