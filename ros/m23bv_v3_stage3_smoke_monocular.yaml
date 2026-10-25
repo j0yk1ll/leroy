@@ -1,0 +1,4 @@
+sensor:
+  mode: monocular
+# Stage 3 no-device XRSLAM application startup only.
+# Not a calibrated Leroy SLAM configuration. No camera frames are provided.
