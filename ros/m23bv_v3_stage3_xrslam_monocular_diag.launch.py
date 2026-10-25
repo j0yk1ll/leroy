@@ -12,7 +12,7 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
-UPSTREAM_EUROC_TEMPLATE = "/opt/xrslam/configs/euroc_sensor.yaml"
+DIAGNOSTIC_EUROC_TEMPLATE = "/opt/leroy_stage3_device.yaml"
 STAGE3_S = "/opt/leroy_stage3_slam.yaml"
 
 
@@ -28,7 +28,7 @@ def _guard(_context, *args, **_kwargs):
             raise RuntimeError("BLOCKED_STAGE3_XRSLAM_ENV_" + key)
     if os.path.exists("/dev/ttyACM0") or os.path.exists("/dev/video2"):
         raise RuntimeError("BLOCKED_STAGE3_XRSLAM_DEVICE_VISIBLE")
-    for file in (STAGE3_S, UPSTREAM_EUROC_TEMPLATE):
+    for file in (STAGE3_S, DIAGNOSTIC_EUROC_TEMPLATE):
         if not os.path.isfile(file):
             raise RuntimeError("BLOCKED_STAGE3_XRSLAM_CONFIG_MISSING:" + file)
     return []
@@ -48,10 +48,10 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             "slam_yaml": STAGE3_S,
-            # Upstream EuRoC template supplies UNVALIDATED noise defaults.
+            # Normalized pinned upstream EuRoC template supplies UNVALIDATED noise.
             # The adapter overwrites camera intrinsics from real CameraInfo
             # and camera-to-body extrinsics from the PROVISIONAL robot URDF.
-            "device_template_yaml": UPSTREAM_EUROC_TEMPLATE,
+            "device_template_yaml": DIAGNOSTIC_EUROC_TEMPLATE,
             "image_topic": "/camera/image_rect",
             "camera_info_topic": "/camera/camera_info",
             "imu_topic": "/imu/data_raw",
