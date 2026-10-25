@@ -59,7 +59,12 @@ IFS= read -r answer </dev/tty || fail NO_REPLY
 [[ "$answer" == YES ]] || fail DECLINED
 [[ "$(readlink -f "$link")" == "$cam" && "$(stat -Lc '%t:%T' "$cam")" == "$rdev" ]] || fail CAMERA_HOTPLUG
 again="$(udevadm info --query=property --name="$cam")" || fail POST_ATTESTATION_UDEV
-[[ "$(sed -n 's/^ID_PATH=//p' <<<"$again")" == pci-0000:00:14.0-usb-0:3.4.2:1.0 && "$(sed -n 's/^ID_SERIAL=//p' <<<"$again")" == Wed_Camera_Wed_Camera_20240420112206 ]] || fail POST_ATTESTATION_CAMERA
+[[ "$(sed -n 's/^ID_PATH=//p' <<<"$again")" == pci-0000:00:14.0-usb-0:3.4.2:1.0 &&
+   "$(sed -n 's/^ID_SERIAL=//p' <<<"$again")" == Wed_Camera_Wed_Camera_20240420112206 &&
+   "$(sed -n 's/^ID_VENDOR_ID=//p' <<<"$again")" == 32e6 &&
+   "$(sed -n 's/^ID_MODEL_ID=//p' <<<"$again")" == 9221 &&
+   "$(sed -n 's/^ID_V4L_CAPABILITIES=//p' <<<"$again")" == *:capture:* ]] ||
+  fail POST_ATTESTATION_CAMERA
 approval="$(mktemp --tmpdir="$M23BV_LOG_DIR" stage3_camera_approval_XXXXXXXX.txt)"
 printf 'UTC=%s HEAD=%s CAMERA=%s CAMERA_RDEV=%s MOTOR_RAILS=OPERATOR_ATTESTED_DISCONNECTED ESTOP=OPERATOR_ATTESTED IMMEDIATE_DISCONNECT=OPERATOR_ATTESTED AUTHORIZE=YES MCU=NONE\n' "$(date -u -Is)" "$(git rev-parse HEAD)" "$cam" "$rdev" >"$approval"
 log="$(mktemp --tmpdir="$M23BV_LOG_DIR" stage3_camera_XXXXXXXX.log)"
@@ -79,7 +84,7 @@ cleanup() {
     fi
   done
 }
-trap cleanup EXIT
+trap 'cleanup; echo "STAGE3_CAMERA_FAILURE_LOG=$log" >&2; sha256sum "$log" >&2' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 boot='set -e; . /opt/ros/jazzy/setup.sh; . /leroy_ws/install/setup.sh; . /opt/m23bv_reliable_rectifier_proto/ws/install/setup.sh; exec "$@"'
@@ -139,6 +144,12 @@ timeout --foreground --signal=TERM --kill-after=8s 133s \
     '. /opt/ros/jazzy/setup.sh; . /leroy_ws/install/setup.sh; exec python3 -u /opt/stage3_live_audit.py' >>"$log" 2>&1
 rc=$?
 set -e
+for name in "$parent" "$xr" "$nav"; do
+  if [[ "$(podman inspect "$name" --format '{{.State.Running}}')" != true ]]; then
+    echo "STAGE3_PREMATURE_PROCESS_EXIT=$name" >>"$log"
+    rc=2
+  fi
+done
 cleanup
 trap - EXIT
 echo "STAGE3_AUDIT_RC=$rc" >>"$log"
