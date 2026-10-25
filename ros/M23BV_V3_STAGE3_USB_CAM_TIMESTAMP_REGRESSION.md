@@ -1,5 +1,30 @@
 # Stage 3: usb_cam 0.8.1 epoch timestamp regression investigation
 
+> **Update — overlay selection is the decisive question.** The accepted
+> `ros/Dockerfile` already clones upstream usb_cam 0.8.1 at
+> `cb2ae6bc0a312de629f84fef933fb3e07dac1ef8`, substitutes the
+> corrected `epoch_time.tv_usec` expression and installs a separate
+> `/leroy_ws/install/usb_cam` overlay. `ros/CAMERA_TIMESTAMP_FIX.md`
+> records previous physical measurements with that fix (about 50–60 ms
+> apparent raw-image delay versus 110–971 ms for the Debian binary).
+> The pinned V3 image derives from the M16 sensors layer, which declares
+> it inherits that patched base. **The operator's just-reported
+> `LEGACY_DIVIDE_1000_PRESENT` was found in the Debian underlay's
+> installed headers; it does not demonstrate the active camera node
+> executes that code.** My earlier interpretation of those installed
+> headers as evidence of an unresolved runtime bug was too strong.
+>
+> **Next source-resolving test, NOT YET EXECUTED**:
+> `bash ./m23bv_v3_stage3_usb_cam_effective_overlay.sh` from `ros/`,
+> after `git pull --ff-only`. It checks `ros2 pkg prefix usb_cam`,
+> patched source bytes, overlaid executable/component and dynamic
+> `libusb_cam.so` linkage in the exact accepted image, using
+> `--network none` with no devices. If PASS, the known tagged upstream
+> conversion defect is **already mitigated in the running ROS overlay**;
+> the true exposure timestamp event and absolute camera–IMU phase
+> would still be unmeasured.
+
+
 ## Status
 
 The accepted no-device provenance inventory identified:
