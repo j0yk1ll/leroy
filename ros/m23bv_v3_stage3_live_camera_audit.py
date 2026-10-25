@@ -122,9 +122,22 @@ def main():
             if any(x != "waiting_calibration" for x in xr_state):
                 raise RuntimeError("BLOCKED_XRSLAM_UNEXPECTED_STATE:" +
                                    repr(xr_state[-5:]))
+            # Presence of XRSLAM or DepthART is insufficient: require
+            # actual graph subscriptions to both stamped camera interfaces.
+            xr_image = node.get_subscriptions_info_by_topic("/camera/image_rect")
+            info_readers = node.get_subscriptions_info_by_topic("/camera/camera_info")
+            def has_reader(endpoints, name):
+                return any(ep.node_name == name and ep.node_namespace == "/"
+                           for ep in endpoints)
+            subscriptions_live = (
+                has_reader(xr_image, "leroy_xrslam")
+                and has_reader(info_readers, "leroy_xrslam")
+                and has_reader(xr_image, "depthart")
+                and has_reader(info_readers, "depthart")
+            )
             paired = seen["raw"] & seen["info"] & seen["rect"]
             depth_matches = seen["depth"] & seen["rect"]
-            ready = (required.issubset(nodes)
+            ready = (required.issubset(nodes) and subscriptions_live
                      and len(paired) >= 90
                      and len(depth_matches) >= 1
                      and xr_state and xr_valid and not xr_valid[-1])
