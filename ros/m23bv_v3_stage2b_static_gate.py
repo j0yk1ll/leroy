@@ -147,6 +147,24 @@ class Stage2BContract(unittest.TestCase):
         self.assertLess(self.host.index("MCU_SERIAL_CHANGED_AFTER_SIGNOFF"),
                         self.host.index("podman run"))
 
+    def test_rootless_crun_retains_only_existing_host_mcu_group(self):
+        self.assertIn("mcu_gid=\"$(stat -Lc '%g' -- \"$mcu\")\"", self.host)
+        self.assertIn('[[ " $(id -G) " == *" $mcu_gid "* ]]', self.host)
+        self.assertIn('[[ -r "$mcu" && -w "$mcu" ]]', self.host)
+        self.assertIn('HOST_MCU_GROUP_MEMBERSHIP_MISSING', self.host)
+        self.assertIn('HOST_MCU_ACCESS_DENIED', self.host)
+        self.assertIn('KEEP_GROUPS_NEEDS_ROOTLESS_CRUN', self.host)
+        self.assertIn('podman info --format \'{{.Host.Security.Rootless}}\'', self.host)
+        self.assertIn('podman info --format \'{{.Host.OCIRuntime.Name}}\'', self.host)
+        self.assertIn('  --group-add keep-groups \\', self.host)
+        self.assertLess(self.host.index('KEEP_GROUPS_NEEDS_ROOTLESS_CRUN'),
+                        self.host.index('podman run'))
+        self.assertEqual(self.host.count('  --group-add keep-groups'), 1)
+        self.assertNotIn('--privileged', self.host.split('podman run', 1)[1])
+        self.assertNotIn('--userns=host', self.host.split('podman run', 1)[1])
+        self.assertNotIn('--group-add uucp', self.host)
+        self.assertEqual(self.host.count('  --device "'), 2)
+
     def test_pre_serial_gate_and_original_m20_lifecycle(self):
         self.assertLess(self.probe.index("graph_pre_serial(node)"),
                         self.probe.index('m20_proc = subprocess.Popen'))
