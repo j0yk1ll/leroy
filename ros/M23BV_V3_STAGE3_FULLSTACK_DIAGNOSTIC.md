@@ -1,7 +1,7 @@
 # M23BV V3 Stage 3 — full-stack diagnostic integration (draft)
 
 **Status: source-only diagnostic candidate.** Stack parent: PR #153 at
-\`93a399fe0b9b0572d389d4c5139f092f4423ceb1\`. Does not modify,
+`93a399fe0b9b0572d389d4c5139f092f4423ceb1`. Does not modify,
 merge, or replace any accepted Stage 1/2A/2B source or branches.
 
 ## Goal and test-first approach
@@ -18,54 +18,54 @@ or validated-metric-odometry claims.
 ## Discovered incompatibilities
 
 1. The accepted V3 sensor image is pinned to
-   \`f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c\`.
+   `f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c`.
    It was not built to contain all optional XRSLAM and Nav2 software.
-   Independent \`Dockerfile.xrslam\` and \`Dockerfile.nav2\` produce
+   Independent `Dockerfile.xrslam` and `Dockerfile.nav2` produce
    separate runtime families. Do not assume one image contains everything.
-2. \`m20_sensor_only_run.sh\` and the Stage 2B physical harness deliberately
-   reject odometry, \`leroy_xrslam\`, \`controller_server\`, and other Nav2
+2. `m20_sensor_only_run.sh` and the Stage 2B physical harness deliberately
+   reject odometry, `leroy_xrslam`, `controller_server`, and other Nav2
    graph participants. **Never weaken these accepted exclusions.**
-3. \`leroy_bringup/launch/robot.launch.py\` includes the hardware MCU
+3. `leroy_bringup/launch/robot.launch.py` includes the hardware MCU
    bridge and a different camera/rectifier launch; it is **not** a safe
    shortcut for V3 full-stack testing.
-4. XRSLAM \`monocular_imu\` requires a finite, measured
-   \`camera_imu_offset_sec\` before a calibrated deployment. The M20
+4. XRSLAM `monocular_imu` requires a finite, measured
+   `camera_imu_offset_sec` before a calibrated deployment. The M20
    relative clock-rate estimate (-41.95 ppm) does **not** supply that
    offset. Provisional, explicitly labelled offset values are permitted
    only for a diagnostic initialization investigation, never to mark
    localization or pose direction validated.
 5. The current URDF camera/IMU extrinsics are **provisional**.
-   \`pose_convention_validated\` stays **false** and \`enable_map_tf\` stays
-   **false**. Consequently, odometry and dynamic \`odom -> base_link\`
+   `pose_convention_validated` stays **false** and `enable_map_tf` stays
+   **false**. Consequently, odometry and dynamic `odom -> base_link`
    are not enabled by this candidate.
 6. Current Nav2 diagnostics use domain 167 and a separate disconnected
    graph. Any later live-sensor diagnostic integration must be a new
    explicit domain-170 candidate; do not modify existing dry-run guards.
 7. DepthART depth estimates and preliminary Nav2 depth-to-obstacle
    adapter are not verified obstacle coverage. Keep
-   \`publish_obstacles=false\`,
-   \`extrinsics_validated=false\`, and
-   \`ground_reference_validated=false\`. No obstacle-clearance claims.
+   `publish_obstacles=false`,
+   `extrinsics_validated=false`, and
+   `ground_reference_validated=false`. No obstacle-clearance claims.
 8. Existing Nav2 commands must remain remapped to the **unconsumed**
-   \`/leroy_nav2/diagnostics/proposed_cmd_vel\` topic. An inhibited
+   `/leroy_nav2/diagnostics/proposed_cmd_vel` topic. An inhibited
    diagnostic output is not a physical emergency stop.
 
 ## First action: no-device inventory
 
 On the operator's Arch host, with no changes to running containers:
 
-\`\`\`bash
+```bash
 cd ros
 bash ./m23bv_v3_stage3_runtime_inventory.sh
-\`\`\`
+```
 
 This source-only tool checks the exact accepted V3 image ID, checks the
 presence of the legacy XRSLAM and Nav2 images, and uses a rootless
-\`podman run --network none\` with no \`--device\` or bind mounts to
+`podman run --network none` with no `--device` or bind mounts to
 inspect installed ROS package prefixes, XRSLAM native shared library
 linkage, and the DepthART checkpoint. Each inspected container is a
 read-only, isolated, inert Bash process. No ROS nodes or MCU serial port
-are opened. Missing **optional** images are reported as \`ABSENT\`
+are opened. Missing **optional** images are reported as `ABSENT`
 without failing the inventory: that is an actionable packaging gap.
 
 **Not yet executed on the operator's host.** The helper does not build
@@ -89,10 +89,10 @@ After inspecting the inventory output:
    rails disconnected, robot immobilized, E-stop functional, a present
    operator with immediate power-disconnect ability, correct camera
    physical USB path and MCU by-id, rootless device isolation, and one
-   fresh uppercase \`YES\`. Opening the MCU CDC port/DTR can reset
+   fresh uppercase `YES`. Opening the MCU CDC port/DTR can reset
    motor-capable firmware. The approved MCU commands remain only
-   \`set_imu_stream_hz 50\\r\\n\` and
-   \`set_imu_stream_hz 0\\r\\n\`; a missed STOP ACK is an unknown
+   `set_imu_stream_hz 50\\r\\n` and
+   `set_imu_stream_hz 0\\r\\n`; a missed STOP ACK is an unknown
    streaming state, not grounds for blind retry.
 4. Start V3 camera/IMU and instrument XRSLAM tracking/initialization,
    TF graph, DepthART timing/geometry, Nav2 costmap/lifecycle and
@@ -110,7 +110,7 @@ After inspecting the inventory output:
 - XRSLAM adapter/library launch outcome and tracking state.
 - DepthART inference outcome and whether any real valid depth appears.
 - Nav2 lifecycle state and remapped-only proposal endpoints.
-- Explicit graph proof of **no** MCU bridge, physical \`/cmd_vel\`
+- Explicit graph proof of **no** MCU bridge, physical `/cmd_vel`
   connection, or competing odom/TF authority.
 - Clean shutdown, both MCU ACKs, and any terminal fault.
 
