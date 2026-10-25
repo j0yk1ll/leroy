@@ -47,13 +47,20 @@ logdir="${M23BV_LOG_DIR:-}"
 [[ "$(stat -c %a "$logdir")" == 700 ]] || fail LOGDIR_MODE
 [[ -r /dev/tty && -w /dev/tty ]] || fail INTERACTIVE_OPERATOR_REQUIRED
 
-# Pin BOTH actual physical devices using stable by-id links.
+# Pin physical identity, NOT the volatile host video device number.
+# The exact by-id video-index0 path and camera ID_SERIAL remain immutable.
+# Linux may renumber /dev/videoN; only container /dev/video2 is fixed.
 [[ -L "$CAMERA_BY_ID" ]] || fail CAMERA_STABLE_ID_MISSING
-cam="$(readlink -f "$CAMERA_BY_ID")" || fail CAMERA_RESOLUTION
-[[ "$cam" == /dev/video8 && -c "$cam" ]] || fail CAMERA_DEVICE_CHANGED
-cam_serial="$(udevadm info --query=property --name="$cam" |
-  sed -n 's/^ID_SERIAL=//p')" || fail CAMERA_UDEV_INFO
+cam="$(readlink -f -- "$CAMERA_BY_ID")" || fail CAMERA_RESOLUTION
+[[ "$cam" =~ ^/dev/video[0-9]+$ && -c "$cam" ]] ||
+  fail CAMERA_DEVICE_NOT_VIDEO_CAPTURE_NODE
+cam_properties="$(udevadm info --query=property --name="$cam")" ||
+  fail CAMERA_UDEV_INFO
+cam_serial="$(sed -n 's/^ID_SERIAL=//p' <<<"$cam_properties")"
 [[ "$cam_serial" == "$CAMERA_SERIAL" ]] || fail CAMERA_SERIAL_CHANGED
+# Pin character-device major:minor to detect hotplug replacement after
+# operator approval. Never accept a generic /dev/video* without by-id+serial.
+cam_rdev="$(stat -Lc '%t:%T' -- "$cam")" || fail CAMERA_RDEV_MISSING
 
 mcu_by_id="${M23BV_STAGE2B_MCU_BY_ID:-}"
 mcu_id="${M23BV_STAGE2B_MCU_ID_SERIAL:-}"
@@ -65,6 +72,7 @@ actual_mcu_id="$(udevadm info --query=property --name="$mcu" |
   sed -n 's/^ID_SERIAL=//p')" || fail MCU_UDEV_INFO
 [[ "$actual_mcu_id" == "$mcu_id" ]] || fail MCU_SERIAL_ID_MISMATCH
 [[ "$cam" != "$mcu" ]] || fail DEVICES_IDENTICAL
+mcu_rdev="$(stat -Lc '%t:%T' -- "$mcu")" || fail MCU_RDEV_MISSING
 
 cal="$root/ros/config/camera/front_camera.yaml"
 [[ -f "$cal" && ! -L "$cal" &&
@@ -97,6 +105,24 @@ IFS= read -r authorization </dev/tty || fail NO_HUMAN_OPTIN
 [[ "$authorization" == 'AUTHORIZE V3 CAMERA AND M20 IMU NO RECORDING' ]] ||
   fail OPTIN_DECLINED
 
+# Recheck BOTH stable symlinks and USB IDs after physical attestations,
+# before creating the approval record and before any Podman device mapping.
+# Hotplug or unrelated process takeover must block the whole attempt.
+[[ -L "$CAMERA_BY_ID" && "$(readlink -f -- "$CAMERA_BY_ID")" == "$cam" &&
+   -c "$cam" && "$(stat -Lc '%t:%T' -- "$cam")" == "$cam_rdev" ]] ||
+  fail CAMERA_CHANGED_AFTER_SIGNOFF
+cam_recheck="$(udevadm info --query=property --name="$cam")" ||
+  fail CAMERA_RECHECK_UDEV
+[[ "$(sed -n 's/^ID_SERIAL=//p' <<<"$cam_recheck")" == "$CAMERA_SERIAL" ]] ||
+  fail CAMERA_SERIAL_CHANGED_AFTER_SIGNOFF
+[[ -L "$mcu_by_id" && "$(readlink -f -- "$mcu_by_id")" == "$mcu" &&
+   -c "$mcu" && "$(stat -Lc '%t:%T' -- "$mcu")" == "$mcu_rdev" ]] ||
+  fail MCU_CHANGED_AFTER_SIGNOFF
+mcu_recheck="$(udevadm info --query=property --name="$mcu")" ||
+  fail MCU_RECHECK_UDEV
+[[ "$(sed -n 's/^ID_SERIAL=//p' <<<"$mcu_recheck")" == "$mcu_id" ]] ||
+  fail MCU_SERIAL_CHANGED_AFTER_SIGNOFF
+
 # Create a NEW private approval record for THIS attempt only.
 approval="$(mktemp --tmpdir="$logdir" m23bv_v3_stage2b_approval_XXXXXXXX.txt)"
 cat >"$approval" <<EOF
@@ -128,7 +154,9 @@ name="m23bv-v3-stage2b-$$"
   echo "M23BV_V3_STAGE2B_APPROVAL_RECORD=$approval"
   echo "M23BV_V3_STAGE2B_APPROVAL_SHA256=$(sha256sum "$approval" | awk '{print $1}')"
   echo "M23BV_V3_STAGE2B_GIT_HEAD=$(git rev-parse HEAD)"
+  echo "M23BV_V3_STAGE2B_CAMERA_STABLE_ID=$CAMERA_BY_ID"
   echo "M23BV_V3_STAGE2B_CAMERA_DEVICE=$cam"
+  echo "M23BV_V3_STAGE2B_CAMERA_RDEV=$cam_rdev"
   echo "M23BV_V3_STAGE2B_MCU_DEVICE=$mcu"
   echo "M23BV_V3_STAGE2B_MCU_ID_SERIAL=$actual_mcu_id"
   echo "M23BV_V3_STAGE2B_IMAGE_ID=$IMAGE_ID"
