@@ -281,6 +281,129 @@ not authorize opening the motor-capable STM32F401, fabricating a
 temporal offset, declaring physical obstacle safety, publishing
 metric odometry, or running Nav2 actions.
 
+## Operator-observed real-camera acceptance and real XRSLAM frame test
+
+The operator reported a successful supervised Stage 3 camera-only trial:
+
+```text
+M23BV_STAGE3_REAL_CAMERA_AUDIT=PASS
+M23BV_STAGE3_REAL_CAMERA_READY=PASS
+M23BV_STAGE3_REAL_CAMERA_SHUTDOWN=PASS
+STAGE3_LIVE_CAMERA=PASS_DIAGNOSTICS_ONLY
+```
+
+Private log: `stage3_camera_vFVFv85b.log`; SHA-256
+`dcbd362a9b7389ed75313a7f4368d7e894d50c1c5ff6d5551a6f443376849a23`.
+The log contents were not available for independent inspection in this
+review; do not claim its per-stream counts or latency measurements.
+
+**The next candidate is additive**, leaving that accepted operator
+camera-only runner unchanged:
+
+- `m23bv_v3_stage3_xrslam_monocular_diag.yaml` comes from
+  pinned `j0yk1ll/xrslam` `53adcdaf...` EuRoC SLAM tuning, with
+  `sensor.mode=monocular`, `initializer.refine_imu=false`.
+- `m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml`
+  contains the pinned EuRoC sensor template with its nonstandard
+  OpenCV YAML directive removed for YAML-CPP parsing. Its
+  **noise values are not Leroy measurements**. The existing adapter
+  overwrites camera intrinsics using actual rectified CameraInfo,
+  and extrinsic q_bc/p_bc using provisional URDF static TF.
+- `m23bv_v3_stage3_xrslam_monocular_diag.launch.py` starts the real
+  Leroy robot_state_publisher and XRSLAM adapter. Camera frames should
+  be submitted to the native `libxrslam.so` using actual V3 timestamps.
+  **Metric odometry and map TF remain hard-disabled**. The camera/IMU
+  transform remains provisional and is never accepted as a real
+  calibrated VIO deployment.
+- `m23bv_v3_stage3_xrslam_monocular_audit.py` checks actual camera
+  image/depth timestamps, static TF authority, XRSLAM status
+  `initializing` or `pose_convention_unverified`, Nav2 lifecycle
+  unconfigured, `/odom` message count zero, false localization and
+  no `/cmd_vel`/bridge.
+- `m23bv_v3_stage3_xrslam_monocular_host.sh` uses the same pinned
+  V3 camera-only hardware isolation and fresh per-attempt physical
+  consent, and additionally requires the XRSLAM C++ log message
+  confirming **native camera frame submission**. The inherited
+  Stage 3 camera-only supervisor still owns camera/depth shutdown.
+
+This is the first **actual XRSLAM algorithm-ingress** experiment.
+A stationary camera can remain at `initializing` for lack of
+parallax, so do not force motion or fabricate input to obtain tracking
+success. The target is valid XRSLAM native frame submission, not
+calibrated localization or autonomous Nav2 navigation.
+
+### Source-only preflight: run before touching devices
+
+On the current Stage 3 branch, from `ros/`:
+
+```bash
+git pull --ff-only
+bash -n m23bv_v3_stage3_xrslam_monocular_host.sh
+python3 -B - <<'PY'
+import ast
+from pathlib import Path
+for name in ('m23bv_v3_stage3_xrslam_monocular_diag.launch.py',
+             'm23bv_v3_stage3_xrslam_monocular_audit.py'):
+    ast.parse(Path(name).read_text(), filename=name)
+    print("STAGE3_MONOCULAR_SOURCE_PASS=" + name)
+PY
+```
+
+Run the **no-device** XRSLAM image dependency/template check:
+
+```bash
+podman run --rm --pull=never --network none --ipc private --pid private \
+  --cap-drop all --security-opt no-new-privileges --read-only \
+  --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+  --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_monocular_diag.yaml,dst=/opt/leroy_stage3_slam.yaml,readonly" \
+  --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml,dst=/opt/leroy_stage3_device.yaml,readonly" \
+  --entrypoint /bin/bash localhost/leroy-ros:xrslam -c '
+    set -e
+    . /opt/ros/jazzy/setup.sh
+    . /leroy_ws/install/setup.sh
+    test ! -e /dev/video2 && test ! -e /dev/ttyACM0
+    ros2 pkg prefix leroy_description >/dev/null
+    ros2 pkg prefix leroy_xrslam >/dev/null
+    python3 - <<"PY"
+import yaml
+from pathlib import Path
+s = yaml.safe_load(Path("/opt/leroy_stage3_slam.yaml").read_text())
+d = yaml.safe_load(Path("/opt/leroy_stage3_device.yaml").read_text())
+assert s["sensor"]["mode"] == "monocular"
+assert s["initializer"]["refine_imu"] is False
+assert {"imu", "cam0"} <= set(d)
+assert all(k in d["cam0"] for k in ("intrinsics", "extrinsic", "noise"))
+print("STAGE3_MONOCULAR_NO_DEVICE_ASSETS=PASS")
+PY
+  '
+```
+
+No physical camera run has been performed for **this new
+monocular native-frame candidate**. Do not launch it without review
+of the sources, motor-power rails physically disconnected,
+secured chassis, tested E-stop, supervised emergency power disconnect,
+fresh visual camera identification and calibration attestation, an
+existing owner-private `M23BV_LOG_DIR` and a new uppercase
+`YES` for **this attempt**. No MCU serial device is mounted.
+
+Once those requirements are met, the proposed physical invocation
+(on the Stage 3 branch) is:
+
+```bash
+export M23BV_STAGE3_CAMERA_VISUALLY_VERIFIED_NODE=/dev/videoN
+export M23BV_LOG_DIR=/absolute/owner-private/0700-log-directory
+bash ./m23bv_v3_stage3_xrslam_monocular_host.sh
+```
+
+The node value must be replaced with the *newly visually verified*
+physical front-camera stream, not a historical device index.
+Supply the bounded terminal verdict and private log excerpts on
+failure. The next step after observing a real native-frame result
+will be testing the IMU intake with a **separate physical operator
+authorization** and strictly measured/labelled timing. Do not
+claim validated metric odometry, obstacle authority, Nav2 drive
+readiness or a released actuator path.
+
 ## Follow-up integration run (separate review and authorization)
 
 After inspecting the inventory output:
