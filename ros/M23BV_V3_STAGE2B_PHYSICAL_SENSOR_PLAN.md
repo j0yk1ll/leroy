@@ -104,10 +104,13 @@ invoked; the assistant has no hardware access.
 host program, not the accepted Stage 1 runner. It pins the source
 branch/clean tree/protected blobs, immutable image, camera ID and
 calibration, and an operator-supplied exact MCU stable USB by-id
-symlink plus its udev `ID_SERIAL`. It requires an interactive physical
-safety attestation, separate camera-calibration attestation and the
-exact phrase `AUTHORIZE V3 CAMERA AND M20 IMU NO RECORDING`; writes
-a **fresh dated approval record mode 0600** and private SHA-256 log.
+symlink plus its udev `ID_SERIAL`. It displays **all physical safety,
+verified camera-stream, calibration and one-attempt sensor-only conditions**
+before accepting **one exact uppercase `YES`** through the operator TTY.
+Any other response (including empty input or EOF) blocks before Podman;
+there is no automatic/env bypass. A single approval is not evidence
+that the physical conditions are true. The runner writes a
+**fresh dated approval record mode 0600** and private SHA-256 log.
 
 The isolated container maps **exactly two** devices:
 camera `explicit operator-specified stable /dev/v4l/by-id or
@@ -119,8 +122,8 @@ The physical runner requires **both**
 `M23BV_STAGE2B_CAMERA_VISUALLY_VERIFIED_NODE` to be explicitly supplied.
 Their resolved paths must agree, the selected node must have
 `ID_SERIAL=Wed_Camera_Wed_Camera_20240420112206`, report
-`ID_V4L_CAPABILITIES=:capture:`, and pass a new interactive
-`CAMERA STREAM VERIFIED /dev/videoN` attestation.
+`ID_V4L_CAPABILITIES=:capture:`, and have its visually verified
+identity and calibration provenance included in the one `YES` confirmation.
 The selected stable link, both USB IDs, current resolved character
 devices and major:minor numbers are revalidated **after** the physical
 safety signoff and immediately before Podman. A mismatch blocks
@@ -256,8 +259,8 @@ physically identified stream was used for the calibration file.
 **Source repair committed, physical runtime UNTESTED:** require explicit
 stable link and its `ffplay`-confirmed host node to match **AND**
 the exact `3.4.2:1.0` USB ID_PATH, serial, vendor/product
-`32e6:9221`, capture capability, fresh interactive stream
-attestation and post-signoff identity recheck. Re-run only the
+`32e6:9221`, capture capability, the single operator `YES` covering
+stream and calibration, and post-signoff identity recheck. Re-run only the
 focused source/syntax checks after updating the review branch.
 No broad synthetic tests, image rebuild, physical recording,
 motion or auto-retry.
@@ -306,6 +309,27 @@ physical Stage 2B attempt be considered. If serial access still
 fails, stop and diagnose the new log, do not bypass restrictions.
 A success opening serial still does NOT by itself establish START,
 STOP ACK, 120-second M20 contract, or camera/IMU calibration.
+
+## One operator confirmation (UI simplification)
+
+The physical runner previously requested four separate typed phrases.
+The active Stage 2B source now presents one consolidated preflight
+statement and accepts only **exactly `YES`** on a real operator TTY,
+for **one** physical test attempt. This covers: both motor-power
+rails physically disconnected, immobilized chassis, tested E-stop,
+human available to disconnect power immediately, the exact visually
+verified camera feed, calibration association with that real feed, no
+motor motion/recording/Nav2/XRSLAM, and the MCU STOP-ACK uncertainty
+boundary. The single `YES` replaces only the *repeated human input*;
+it does not change noninteractive identity/calibration/source pins,
+runtime scope, pre-/post-confirmation checks, approval record, or
+fail-closed abort behavior. A fresh `YES` remains mandatory for
+each new physical attempt, and prior consent never carries over.
+
+**Current status:** source change committed for review; updated
+source gate and live physical run have not been executed by the
+operator. Retain both motor rails disconnected and do not infer
+hardware safety from a prompt response.
 
 ## Evidence acceptance
 
