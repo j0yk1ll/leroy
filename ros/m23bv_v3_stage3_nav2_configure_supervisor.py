@@ -65,7 +65,12 @@ def stop_group(process, sig):
 def shutdown(process):
     # Never leave a background wait unbounded. A clean launch should exit
     # itself on SIGINT and gracefully stop its three managed Nav2 children.
-    stop_group(process, signal.SIGINT)
+    # Ask the launch coordinator (not the whole process group) to
+    # propagate SIGINT exactly once to its managed ROS children.
+    # A double SIGINT delivered directly and via ros2 launch can itself
+    # turn a graceful lifecycle teardown into a false abnormal exit.
+    if process.poll() is None:
+        process.send_signal(signal.SIGINT)
     forced = False
     try:
         rc = process.wait(timeout=SHUTDOWN_GRACE)
