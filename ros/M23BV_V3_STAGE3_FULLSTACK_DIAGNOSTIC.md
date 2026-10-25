@@ -608,3 +608,33 @@ After inspecting the inventory output:
 Current result: **NOT RUN**. No full-stack execution, localization
 accuracy, calibrated extrinsics, calibrated temporal offset,
 physical obstacle validity, or motion safety has been established.
+
+## Next hardware-free calibration provenance inventory
+
+After the accepted physical VIO ingress and no-device Nav2
+Configure/Cleanup + graceful shutdown results, the remaining
+navigation-critical blocker is **not sensor transport or Nav2
+package startup**. XRSLAM has only shown `initializing`, and
+camera–IMU temporal offset and rigid extrinsics have not been measured.
+
+The next *source-only* no-device operation, performed from `ros/`
+after `git pull --ff-only`, is:
+
+```bash
+bash ./m23bv_v3_stage3_calibration_provenance_host.sh
+```
+
+The wrapper verifies exact accepted source Git blobs and image
+calibration SHA, traces usb_cam/V3 rectifier timestamp lineage and the
+M18 clock-rate mapper, checks provisional `base_link` sensor
+transforms/pose gates, and inventories the **installed** usb_cam package
+version and executable digest from the accepted sensor container using
+rootless `podman --network none` with NO devices. It explicitly
+returns `NOT_MEASURED` for camera exposure phase and extrinsics.
+
+See `ros/M23BV_V3_STAGE3_CALIBRATION_PROVENANCE.md` for the source
+evidence and stationary-robot measurement worksheet. That static
+inspection is NOT camera–IMU calibration and does not authorize
+moving the chassis, physically exciting the camera/IMU rig,
+recording, accessing MCU serial or activating Nav2. A new physical
+calibration plan and consent must precede any of those actions.
