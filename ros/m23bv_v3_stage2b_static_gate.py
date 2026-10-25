@@ -98,9 +98,16 @@ class Stage2BContract(unittest.TestCase):
         self.assertIn("chmod 0600", self.host)
 
     def test_camera_hotplug_uses_only_verified_by_id_and_serial(self):
-        self.assertIn(
-            "/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0",
-            self.host)
+        self.assertIn('M23BV_STAGE2B_CAMERA_STABLE_LINK', self.host)
+        self.assertIn('M23BV_STAGE2B_CAMERA_VISUALLY_VERIFIED_NODE', self.host)
+        self.assertIn('"$CAMERA_BY_ID" == /dev/v4l/by-id/*', self.host)
+        self.assertIn('"$CAMERA_BY_ID" == /dev/v4l/by-path/*', self.host)
+        self.assertIn('CAMERA_LINK_NOT_VISUALLY_VERIFIED_STREAM', self.host)
+        self.assertIn('"$cam" == "$CAMERA_VERIFIED_NODE"', self.host)
+        self.assertIn('CAMERA STREAM VERIFIED %s', self.host)
+        self.assertIn('CAMERA_STREAM_ATTESTATION_DECLINED', self.host)
+        self.assertIn('"$cam_v4l_caps" == *:capture:*', self.host)
+        self.assertIn('CAMERA_CAPABILITY_CHANGED_AFTER_SIGNOFF', self.host)
         self.assertIn("CAMERA_SERIAL='Wed_Camera_Wed_Camera_20240420112206'",
                       self.host)
         self.assertNotIn('"$cam" == /dev/video8', self.host)
@@ -120,6 +127,10 @@ class Stage2BContract(unittest.TestCase):
         # camera/MCU --device mapping in Podman.
         self.assertLess(self.host.index("SAFETY_ATTESTATION_DECLINED"),
                         self.host.index("CAMERA_CHANGED_AFTER_SIGNOFF"))
+        self.assertLess(self.host.index("CAMERA_STREAM_ATTESTATION_DECLINED"),
+                        self.host.index("CAMERA_CHANGED_AFTER_SIGNOFF"))
+        self.assertLess(self.host.index("CAMERA_LINK_NOT_VISUALLY_VERIFIED_STREAM"),
+                        self.host.index("podman run"))
         self.assertLess(self.host.index("CAMERA_CHANGED_AFTER_SIGNOFF"),
                         self.host.index("podman run"))
         self.assertLess(self.host.index("MCU_SERIAL_CHANGED_AFTER_SIGNOFF"),
