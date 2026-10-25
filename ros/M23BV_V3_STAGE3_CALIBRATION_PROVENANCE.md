@@ -1,5 +1,19 @@
 # Stage 3: XRSLAM Camera–IMU Calibration Provenance
 
+> **Correction after reviewing the existing Leroy build recipe.**
+> The image's Debian-installed usb_cam 0.8.1 header carries the
+> upstream divide-by-1000 bug, but the accepted
+> `ros/Dockerfile` already builds a separate fixed usb_cam
+> overlay. Do not assume the header examined by the underlay-only
+> inventory is the header or implementation selected by the live
+> `ros2 launch` process. The next no-device test is
+> `bash ./m23bv_v3_stage3_usb_cam_effective_overlay.sh`, which
+> explicitly reconstructs the accepted Stage 3 overlay sourcing
+> order and resolves the executable, component, linked library
+> and patched source. The physical exposure event/phase and rig
+> extrinsics remain unmeasured even if this overlay check passes.
+
+
 **Status:** Pinned source inspection only; physical calibration has **not**
 been performed. This document must never be interpreted as approval to
 record, move the robot, operate the MCU or enable navigation.
