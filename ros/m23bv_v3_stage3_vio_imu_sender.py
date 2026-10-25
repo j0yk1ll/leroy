@@ -9,7 +9,6 @@ import json
 import os
 import signal
 import time
-from rclpy.qos import DurabilityPolicy
 
 import rclpy
 import serial
@@ -174,6 +173,9 @@ def run():
         and metrics["counts"]["stale_or_future_withheld"] == 0
         and metrics["counts"]["malformed_imu_packets"] == 0
         and metrics["counts"]["sequence_gap_samples"] == 0
+        and metrics["counts"]["calibration_withheld"] == 0
+        and metrics["counts"]["invalid_ascii_lines"] == 0
+        and metrics["counts"]["unexpected_serial_lines"] == 0
         and metrics["terminal_fault"] is None
     )
     print("STAGE3_VIO_IMU_VERDICT=" +
