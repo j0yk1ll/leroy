@@ -23,11 +23,30 @@ actual="$(podman image inspect "$IMAGE" --format '{{.Id}}')" ||
 [[ "${actual#sha256:}" == "$PIN" ]] || fail V3_IMAGE_CHANGED
 [[ -z "$(podman ps --format '{{.Names}}')" ]] || fail OTHER_CONTAINER_RUNNING
 
-# Source-only check of imported M20/M18 stack IN EXACT V3 runtime image.
-# No --device, --mount, ros2 launch or physical access.
+# The inherited V3 image contains EXACT M20-era sources 0aada34d...
+# and 5f15cbe... from the accepted original M20 commit 5976d20.
+# Later protected M20 moves CDC settling/input reset INSIDE STOP finally.
+# Later M18 adds fail-closed terminal fault latching. Mount ONLY these two
+# reviewed source files read-only, without rebuilding or changing V3 camera.
+for file in m20_combined_observer.py m18_imu_stream_source.py; do
+  [[ -f "$file" && ! -L "$file" ]] || fail CORRECTED_SOURCE_MISSING
+  [[ "$(git hash-object "$file")" == "$(git rev-parse "HEAD:ros/$file")" ]] ||
+    fail CORRECTED_SOURCE_DRIFT
+done
+[[ "$(git hash-object m20_combined_observer.py)" == \
+   5cf2f88cb2f79be80821888401b57a6393ee5e3b ]] ||
+  fail CORRECTED_M20_PIN
+[[ "$(git hash-object m18_imu_stream_source.py)" == \
+   3c5fb37ca291533e2702a9159f3e8db11b076d22 ]] ||
+  fail CORRECTED_M18_PIN
+
+# Minimal NO-DEVICE import check using exactly the mounts intended for
+# the physical runner. No serial open, --device, ROS launch or network.
 podman run --rm -i --pull=never --network none --ipc private --pid private \
   --cap-drop all --security-opt no-new-privileges --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+  --mount "type=bind,src=$PWD/m20_combined_observer.py,dst=/opt/m20/m20_combined_observer.py,readonly" \
+  --mount "type=bind,src=$PWD/m18_imu_stream_source.py,dst=/opt/m18/m18_imu_stream_source.py,readonly" \
   --entrypoint /bin/bash "$IMAGE" -c \
   'set -Eeuo pipefail; set +u; source /opt/ros/jazzy/setup.bash; source /leroy_ws/install/setup.bash; source /opt/m23bv_reliable_rectifier_proto/ws/install/setup.bash; set -u; export PYTHONPATH="/opt/m23bv:/opt/m20:/opt/m18:/opt/m18/monitor:${PYTHONPATH:-}"; exec python3 -B -' <<'PY'
 import hashlib
@@ -51,6 +70,12 @@ if (START != b"set_imu_stream_hz 50\r\n" or
 for blocked in ("/dev/video2", "/dev/ttyACM0"):
     if Path(blocked).exists():
         raise SystemExit("M23BV_V3_STAGE2B_IMAGE_IMPORT=BLOCKED_DEVICE_VISIBLE:" + blocked)
+if (Path(m20_combined_observer.__file__).resolve() !=
+        Path("/opt/m20/m20_combined_observer.py") or
+        Path(m18_imu_stream_source.__file__).resolve() !=
+        Path("/opt/m18/m18_imu_stream_source.py")):
+    raise SystemExit("M23BV_V3_STAGE2B_IMAGE_IMPORT=BLOCKED_IMPORT_LOCATION")
+print("M23BV_V3_STAGE2B_CORRECTED_M20_M18_MOUNTS=PASS")
 print("M23BV_V3_STAGE2B_IMAGE_IMPORTS=PASS")
 print("M23BV_V3_STAGE2B_PREFLIGHT_DEVICE_ACCESS=NONE")
 PY
