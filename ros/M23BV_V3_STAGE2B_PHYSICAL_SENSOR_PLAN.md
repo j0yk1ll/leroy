@@ -262,6 +262,51 @@ focused source/syntax checks after updating the review branch.
 No broad synthetic tests, image rebuild, physical recording,
 motion or auto-retry.
 
+## First real MCU session blocked: rootless supplementary group permissions
+
+The operator's first physical Stage 2B attempt at SHA
+`2453cae0a45a6186c1988e4b20be7a4c9a66caf7`
+confirmed real V3 camera `PRE_SERIAL_GRAPH_QOS=PASS` and 90 matched
+frames but M20 could not open `/dev/ttyACM0`:
+`SerialException: [Errno 13] Permission denied`. This occurred
+**before START**, so there were zero IMU packets/published samples,
+no command ACKs, and zero motor commands. Camera and child teardown
+were clean. Original operator-private log SHA-256:
+`ef4bd84e1616dae9b260b21b8ee3dcfa7629f26aeac66e2d0a03f27dcffa9c68`.
+
+Follow-up **read-only** operator-host permission inventory:
+```text
+MCU_DEVICE=/dev/ttyACM0
+mode=660 owner=root group=uucp gid=986
+uid=1000(kevin) gid=1000(kevin) groups=1000(kevin),986(uucp),994(input),998(wheel)
+M23BV_STAGE2B_HOST_SERIAL_ACCESS=READ_WRITE_ALLOWED
+rootless=true oci_runtime=crun
+M23BV_STAGE2B_DEVICE_OPEN=NONE
+```
+
+The host user may access the serial device via its preexisting
+supplementary `uucp` group, but the original rootless container
+did not preserve those supplementary groups. Podman's `--group-add
+keep-groups` with OCI `crun` is the documented resolution for
+rootless devices accessible only through the caller's supplementary
+group. The revised Stage 2B host runner additionally requires
+non-root execution, host `id -G` membership of the device's actual
+group GID, host `-r` and `-w` access, and actual rootless `crun`
+before mapping any devices. It keeps the original exact two device
+mappings, all source/calibration/USB pins, `--cap-drop all`,
+`--read-only`, `--network none`, `no-new-privileges`, and
+operator-confirmed motor rail isolation. **Never `sudo`, `chmod 666`,
+change udev rules or add `--privileged` to work around this test.**
+
+**New correction remains SOURCE ONLY / operator runtime UNTESTED.**
+Run the focused static source guard and Bash parser on the pinned
+review SHA; no broad synthetic retest. Only after renewed physical
+safety verification and fresh operator opt-in should a **single**
+physical Stage 2B attempt be considered. If serial access still
+fails, stop and diagnose the new log, do not bypass restrictions.
+A success opening serial still does NOT by itself establish START,
+STOP ACK, 120-second M20 contract, or camera/IMU calibration.
+
 ## Evidence acceptance
 
 Demand all:
