@@ -129,33 +129,24 @@ actual="$(podman image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null)" ||
 [[ "${actual#sha256:}" == "$IMAGE_ID" ]] || fail IMAGE_ID_CHANGED
 [[ -z "$(podman ps --format '{{.Names}}')" ]] || fail CONTAINER_ALREADY_RUNNING
 
+# A SINGLE deliberate operator authorization for one bounded attempt.
+# This typed acknowledgement does not replace physical motor power isolation,
+# camera/calibration verification or fail-closed device/source checks.
 printf '%s\n' \
-  'STAGE 2B MOTOR-CAPABLE MCU SERIAL ACCESS: motor rails BOTH physically' \
-  'DISCONNECTED (electrical isolation), chassis secured, emergency stop' \
-  'tested, supervisor present with immediate physical power disconnect.' \
-  'No wheels or manipulators may be energized. Camera calibration must' \
-  'belong to the pinned camera serial. No recording, Nav2 or XRSLAM.' \
-  'Opening USB CDC can reset the MCU EVEN BEFORE START/STOP requests.' \
-  'Type exactly: MOTOR RAILS OFF MCU SENSOR ONLY' >&2
-IFS= read -r attestation </dev/tty || fail NO_PHYSICAL_ATTESTATION
-[[ "$attestation" == 'MOTOR RAILS OFF MCU SENSOR ONLY' ]] ||
-  fail SAFETY_ATTESTATION_DECLINED
-printf '%s\n' "Operator-verified physical front-camera stream MUST be $cam." \
-  "The exact link $CAMERA_BY_ID currently resolves to that node." \
-  "Independently confirm THIS is the same visually checked camera." >&2
-printf 'Type exactly: CAMERA STREAM VERIFIED %s\n' "$cam" >&2
-IFS= read -r stream_attestation </dev/tty || fail NO_CAMERA_STREAM_ATTESTATION
-[[ "$stream_attestation" == "CAMERA STREAM VERIFIED $cam" ]] ||
-  fail CAMERA_STREAM_ATTESTATION_DECLINED
-printf '%s\n' 'Type exactly: CALIBRATION VERIFIED FOR CAMERA' >&2
-IFS= read -r cal_attestation </dev/tty || fail NO_CALIBRATION_ATTESTATION
-[[ "$cal_attestation" == 'CALIBRATION VERIFIED FOR CAMERA' ]] ||
-  fail CALIBRATION_UNVERIFIED
-printf '%s\n' \
-  'Type exactly: AUTHORIZE V3 CAMERA AND M20 IMU NO RECORDING' >&2
-IFS= read -r authorization </dev/tty || fail NO_HUMAN_OPTIN
-[[ "$authorization" == 'AUTHORIZE V3 CAMERA AND M20 IMU NO RECORDING' ]] ||
-  fail OPTIN_DECLINED
+  'STAGE 2B — ONE supervised physical camera + MCU-IMU sensor-only attempt.' \
+  'Opening the MCU USB CDC port can reset motor-capable firmware.' \
+  'Before approving, the operator MUST have verified ALL of the following:' \
+  '  - BOTH motor-power rails are PHYSICALLY DISCONNECTED.' \
+  '  - The chassis is secured and immobilized; E-stop has been tested.' \
+  '  - A supervisor is present and can immediately disconnect power.' \
+  "  - The real front-camera feed is $cam (visually checked, not $CAMERA_BY_ID alone)." \
+  '  - The pinned camera calibration belongs to that verified physical camera.' \
+  '  - This trial is sensor-only: NO motor motion, rosbag, Nav2 or XRSLAM.' \
+  '  - Any missing STOP acknowledgment leaves MCU state unverified.' \
+  'If any item is untrue, do NOT approve or start this test.' \
+  'Type YES to confirm every item above and authorize this ONE test:' >&2
+IFS= read -r operator_confirmation </dev/tty || fail OPERATOR_CONFIRMATION_MISSING
+[[ "$operator_confirmation" == YES ]] || fail OPERATOR_CONFIRMATION_DECLINED
 
 # Recheck BOTH stable symlinks and USB IDs after physical attestations,
 # before creating the approval record and before any Podman device mapping.
@@ -198,6 +189,7 @@ Camera calibration provenance: OPERATOR ATTESTED
 Camera stable ID: $CAMERA_BY_ID
 Camera visually verified host node: $CAMERA_VERIFIED_NODE
 Camera observed stream: OPERATOR ATTESTED
+Single operator consent: YES (all physical safety, stream, calibration and trial scope)
 Camera device: $cam
 Camera USB serial: $cam_serial
 Camera verified USB port: $cam_id_path
