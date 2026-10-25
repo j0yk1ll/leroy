@@ -97,6 +97,34 @@ class Stage2BContract(unittest.TestCase):
         self.assertIn("m23bv_v3_stage2b_approval_", self.host)
         self.assertIn("chmod 0600", self.host)
 
+    def test_camera_hotplug_uses_only_verified_by_id_and_serial(self):
+        self.assertIn(
+            "/dev/v4l/by-id/usb-Wed_Camera_Wed_Camera_20240420112206-video-index0",
+            self.host)
+        self.assertIn("CAMERA_SERIAL='Wed_Camera_Wed_Camera_20240420112206'",
+                      self.host)
+        self.assertNotIn('"$cam" == /dev/video8', self.host)
+        self.assertIn('"$cam" =~ ^/dev/video[0-9]+$ && -c "$cam"', self.host)
+        self.assertIn('cam="$(readlink -f -- "$CAMERA_BY_ID")"', self.host)
+        self.assertIn('"$cam_serial" == "$CAMERA_SERIAL"', self.host)
+        self.assertIn('cam_rdev="$(stat -Lc', self.host)
+        self.assertIn('"$(readlink -f -- "$CAMERA_BY_ID")" == "$cam"',
+                      self.host)
+        self.assertIn('"$(stat -Lc \'%t:%T\' -- "$cam")" == "$cam_rdev"',
+                      self.host)
+        self.assertIn('CAMERA_SERIAL_CHANGED_AFTER_SIGNOFF', self.host)
+        self.assertIn('MCU_CHANGED_AFTER_SIGNOFF', self.host)
+        self.assertIn('MCU_SERIAL_CHANGED_AFTER_SIGNOFF', self.host)
+        self.assertIn('--device "$cam:/dev/video2:rw"', self.host)
+        # Hotplug checks occur after fresh signoff and before the first
+        # camera/MCU --device mapping in Podman.
+        self.assertLess(self.host.index("SAFETY_ATTESTATION_DECLINED"),
+                        self.host.index("CAMERA_CHANGED_AFTER_SIGNOFF"))
+        self.assertLess(self.host.index("CAMERA_CHANGED_AFTER_SIGNOFF"),
+                        self.host.index("podman run"))
+        self.assertLess(self.host.index("MCU_SERIAL_CHANGED_AFTER_SIGNOFF"),
+                        self.host.index("podman run"))
+
     def test_pre_serial_gate_and_original_m20_lifecycle(self):
         self.assertLess(self.probe.index("graph_pre_serial(node)"),
                         self.probe.index('m20_proc = subprocess.Popen'))
