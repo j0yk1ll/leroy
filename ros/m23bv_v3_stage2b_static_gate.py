@@ -72,30 +72,49 @@ class Stage2BContract(unittest.TestCase):
         self.assertIn("if self.terminal_fault is not None:", self.m18)
         self.assertIn("imu_source_terminal_fault_latched", self.m18)
 
-    def test_human_gate_before_two_device_mappings(self):
+    def test_one_explicit_yes_covers_all_physical_conditions(self):
+        # Exactly one interactive input after all passive source, ID,
+        # calibration, container, and host-group preflight gates.
+        self.assertEqual(self.host.count("IFS= read -r "), 1)
+        self.assertEqual(self.host.count("Type YES"), 1)
+        self.assertNotIn("Type exactly:", self.host)
+        self.assertIn('IFS= read -r operator_confirmation </dev/tty', self.host)
+        self.assertIn('[[ "$operator_confirmation" == YES ]]', self.host)
+        self.assertIn('OPERATOR_CONFIRMATION_MISSING', self.host)
+        self.assertIn('OPERATOR_CONFIRMATION_DECLINED', self.host)
         for token in (
-            "MOTOR RAILS OFF MCU SENSOR ONLY",
-            "CALIBRATION VERIFIED FOR CAMERA",
-            "AUTHORIZE V3 CAMERA AND M20 IMU NO RECORDING",
+            "BOTH motor-power rails are PHYSICALLY DISCONNECTED",
+            "The chassis is secured and immobilized",
+            "E-stop has been tested",
+            "A supervisor is present",
+            "immediately disconnect power",
+            "real front-camera feed is $cam",
+            "pinned camera calibration belongs to that verified physical camera",
+            "NO motor motion, rosbag, Nav2 or XRSLAM",
+            "missing STOP acknowledgment",
             "M23BV_STAGE2B_MCU_BY_ID",
             "M23BV_STAGE2B_MCU_ID_SERIAL",
-            "/dev/serial/by-id/",
             "MCU_SERIAL_ID_MISMATCH",
             "CAMERA_SERIAL_CHANGED",
-            "ESTOP",
+            "emergency",
         ):
-            # E-stop instructions are case-sensitive text and must be present.
-            if token == "ESTOP":
-                self.assertIn("emergency stop", self.host)
-            else:
-                self.assertIn(token, self.host)
-        self.assertLess(self.host.index("MOTOR RAILS OFF MCU SENSOR ONLY"),
-                        self.host.index("podman run"))
+            if token == "emergency":
+                continue
+            self.assertIn(token, self.host)
+        # Single opt-in remains after passive identity checks and before
+        # fresh camera/MCU rechecks, approval log and exact two mappings.
+        self.assertLess(self.host.index('KEEP_GROUPS_NEEDS_ROOTLESS_CRUN'),
+                        self.host.index('IFS= read -r operator_confirmation'))
+        self.assertLess(self.host.index('OPERATOR_CONFIRMATION_DECLINED'),
+                        self.host.index('CAMERA_CHANGED_AFTER_SIGNOFF'))
+        self.assertLess(self.host.index('OPERATOR_CONFIRMATION_DECLINED'),
+                        self.host.index('podman run'))
         self.assertEqual(self.host.count('  --device "'), 2)
         self.assertIn('--device "$cam:/dev/video2:rw"', self.host)
         self.assertIn('--device "$mcu:/dev/ttyACM0:rw"', self.host)
-        self.assertIn("m23bv_v3_stage2b_approval_", self.host)
-        self.assertIn("chmod 0600", self.host)
+        self.assertIn('m23bv_v3_stage2b_approval_', self.host)
+        self.assertIn('chmod 0600', self.host)
+        self.assertIn('Single operator consent: YES', self.host)
 
     def test_camera_hotplug_uses_only_verified_by_id_and_serial(self):
         self.assertIn('M23BV_STAGE2B_CAMERA_STABLE_LINK', self.host)
@@ -115,8 +134,8 @@ class Stage2BContract(unittest.TestCase):
         self.assertIn('CAMERA_USB_VENDOR_MODEL_CHANGED_AFTER_SIGNOFF', self.host)
         self.assertIn('CAMERA_LINK_NOT_VISUALLY_VERIFIED_STREAM', self.host)
         self.assertIn('"$cam" == "$CAMERA_VERIFIED_NODE"', self.host)
-        self.assertIn('CAMERA STREAM VERIFIED %s', self.host)
-        self.assertIn('CAMERA_STREAM_ATTESTATION_DECLINED', self.host)
+        self.assertIn('real front-camera feed is $cam', self.host)
+        self.assertIn('OPERATOR_CONFIRMATION_DECLINED', self.host)
         self.assertIn('"$cam_v4l_caps" == *:capture:*', self.host)
         self.assertIn('CAMERA_CAPABILITY_CHANGED_AFTER_SIGNOFF', self.host)
         self.assertIn("CAMERA_SERIAL='Wed_Camera_Wed_Camera_20240420112206'",
@@ -136,9 +155,7 @@ class Stage2BContract(unittest.TestCase):
         self.assertIn('--device "$cam:/dev/video2:rw"', self.host)
         # Hotplug checks occur after fresh signoff and before the first
         # camera/MCU --device mapping in Podman.
-        self.assertLess(self.host.index("SAFETY_ATTESTATION_DECLINED"),
-                        self.host.index("CAMERA_CHANGED_AFTER_SIGNOFF"))
-        self.assertLess(self.host.index("CAMERA_STREAM_ATTESTATION_DECLINED"),
+        self.assertLess(self.host.index("OPERATOR_CONFIRMATION_DECLINED"),
                         self.host.index("CAMERA_CHANGED_AFTER_SIGNOFF"))
         self.assertLess(self.host.index("CAMERA_LINK_NOT_VISUALLY_VERIFIED_STREAM"),
                         self.host.index("podman run"))
