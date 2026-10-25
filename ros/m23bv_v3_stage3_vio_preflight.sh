@@ -97,8 +97,8 @@ assert not Path("/dev/video2").exists()
 assert not Path("/dev/ttyACM0").exists()
 from m18_imu_stream_contract import START, STOP, PORT
 assert (START, STOP, PORT) == (
-    b"set_imu_stream_hz 50\\r\\n",
-    b"set_imu_stream_hz 0\\r\\n",
+    b"set_imu_stream_hz 50\r\n",
+    b"set_imu_stream_hz 0\r\n",
     "/dev/ttyACM0")
 spec=importlib.util.spec_from_file_location(
     "stage3_vio_imu_sender", "/opt/stage3_imu_sender.py")
