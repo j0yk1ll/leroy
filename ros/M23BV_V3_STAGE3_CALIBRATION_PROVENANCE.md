@@ -136,3 +136,44 @@ manufacture a localization PASS.
   actual camera/IMU mounting transforms, VIO tracking performance.
 - BLOCKED: metric pose output, map/odom TF, live Nav2 activation,
   costmap collision-safety claim, motor commands, motion and recording.
+
+## Newly identified upstream usb_cam 0.8.1 release timestamp defect
+
+The operator completed the accepted source + pinned image inventory:
+
+```text
+STAGE3_CAL_PROVENANCE=PASS_SOURCE_ONLY_UNCALIBRATED
+STAGE3_CAL_USB_CAM_INSTALLED_PACKAGE=ros-jazzy-usb-cam
+STAGE3_CAL_USB_CAM_INSTALLED_VERSION=0.8.1-1noble.20260912.190806
+STAGE3_CAL_USB_CAM_NODE_BINARY_SHA256=b760f640ecb19fdded3c4028c2f4cbd44b64ed93912246eaaad86155c5d96249
+STAGE3_CAL_PROVENANCE=PASS_PINNED_SOURCE_AND_INSTALLED_DRIVER_INVENTORY
+STAGE3_CAL_CAMERA_EXPOSURE_PHASE=NOT_MEASURED
+STAGE3_CAL_EXTRINSICS=NOT_MEASURED
+```
+
+Review of **tagged upstream usb_cam 0.8.1** uncovered the
+`epoch_time.tv_usec / 1000.0` conversion defect in the epoch shift
+helper. Upstream issue #327 was addressed by PR #338 **after** the
+0.8.1 tag. The affected 0.8.1 MMAP capture path converts V4L2
+buffer timestamps through that helper. Depending on the process's
+start-time microsecond fraction, the tagged source can apply up to
+almost one second of systematic timestamp bias, without breaking
+raw/rectified/DepthART stamp matching. The tagged source flaw is
+real, but it remains necessary to verify the shipped binary was
+built from that implementation; a package version alone cannot
+prove it. This is a **new software-timing risk**, separate from the
+unmeasured physical camera–IMU offset.
+
+The next strictly no-device source/install inspection is:
+
+```bash
+git pull --ff-only
+bash -n ./m23bv_v3_stage3_usb_cam_epoch_inspect.sh
+bash ./m23bv_v3_stage3_usb_cam_epoch_inspect.sh
+```
+
+See `ros/M23BV_V3_STAGE3_USB_CAM_TIMESTAMP_REGRESSION.md` for
+the exact upstream source/issue links, formula, prediction examples,
+operator commands, and confidence limits. Physical calibration,
+video recording, camera restarts, MCU tests and robot/sensor movement
+remain unauthorized. Do **not** enable XRSLAM pose or Nav2.
