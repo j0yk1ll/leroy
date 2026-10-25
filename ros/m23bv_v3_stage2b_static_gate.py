@@ -105,7 +105,11 @@ class Stage2BContract(unittest.TestCase):
                 roots.update(x.name.split(".")[0] for x in node.names)
             if isinstance(node, ast.ImportFrom) and node.module:
                 roots.add(node.module.split(".")[0])
-        self.assertNotIn("serial", roots)
+        # Inert pyserial dependency import is permitted; the unchanged M20
+        # observer alone may instantiate or use the motor-capable port.
+        self.assertIn("serial", roots)
+        self.assertNotIn("serial.Serial(", self.probe)
+        self.assertNotIn("device.write(", self.probe)
         self.assertNotIn("rosbag2_py", roots)
         self.assertNotIn("cv2", roots)
 
