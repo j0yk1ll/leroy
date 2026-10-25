@@ -2,6 +2,9 @@
 # STAGE 2B PHYSICAL CAMERA + MCU IMU, sensor-only and human-supervised.
 # No recording, motor commands, M20 bridge, Nav2, XRSLAM or production changes.
 # Serial CDC open may RESET motor-capable firmware. MOTOR RAILS MUST BE DISCONNECTED.
+# Two additional protected read-only source bind mounts supply the later
+# M20 STOP-finally fix and M18 terminal-fault latch absent in inherited V3 image.
+# They are exact Git-blobs verified below; V3 camera binaries/image are unchanged.
 set -Eeuo pipefail
 umask 077
 cd "$(dirname -- "${BASH_SOURCE[0]}")"
@@ -150,6 +153,8 @@ timeout --foreground --signal=INT --kill-after=45s 260s \
   --mount "type=bind,src=$cal,dst=/config/camera/front_camera.yaml,readonly" \
   --mount "type=bind,src=$PWD/m23bv_v3_stage1_camera_observer.py,dst=/opt/m23bv/m23bv_v3_stage1_camera_observer.py,readonly" \
   --mount "type=bind,src=$PWD/m23bv_v3_stage2b_physical_probe.py,dst=/opt/m23bv/m23bv_v3_stage2b_physical_probe.py,readonly" \
+  --mount "type=bind,src=$PWD/m20_combined_observer.py,dst=/opt/m20/m20_combined_observer.py,readonly" \
+  --mount "type=bind,src=$PWD/m18_imu_stream_source.py,dst=/opt/m18/m18_imu_stream_source.py,readonly" \
   -e ROS_DOMAIN_ID=170 -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   -e LEROY_M20_SENSOR_ONLY=1 -e LEROY_NAV2_DRY_RUN=1 \
   -e M23BV_CAMERA_READY_CANDIDATE=1 \
