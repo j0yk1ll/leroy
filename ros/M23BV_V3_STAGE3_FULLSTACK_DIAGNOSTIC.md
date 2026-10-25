@@ -543,7 +543,7 @@ operator-private log still on disk:
 
 ```bash
 git pull --ff-only
-python3 -B -m py_compile ./m23bv_v3_stage3_vio_log_report.py
+python3 -B -c "import ast,pathlib; ast.parse(pathlib.Path('m23bv_v3_stage3_vio_log_report.py').read_text())"
 python3 -B ./m23bv_v3_stage3_vio_log_report.py \
   --log /home/kevin/.local/state/leroy-m23bv/stage3_vio_QiKefpTz.log \
   --expect-sha256 5f3a1129ec679a2c3715514109dd833fdda5cb7cd70699f445ff337456f88e0f
