@@ -66,13 +66,17 @@ for p in paths:
     print("STAGE3_USB_CAM_EPOCH_HEADER_SHA256=" +
           hashlib.sha256(p.read_bytes()).hexdigest())
 PY
-dpkg -L ros-jazzy-usb-cam | grep -E "[.]so([.]|$)" |
+libs="$(dpkg -L ros-jazzy-usb-cam | grep -E "[.]so([.]|$)" || true)"
+if test -z "$libs"; then
+  echo STAGE3_USB_CAM_EPOCH_LIBRARY_IN_PACKAGE=NOT_LISTED
+else
   while IFS= read -r so; do
     if test -f "$so"; then
       printf "STAGE3_USB_CAM_EPOCH_LIBRARY_SHA256=%s\n" \
         "$(sha256sum "$so" | cut -d" " -f1)"
     fi
-  done
+  done <<<"$libs"
+fi
 echo STAGE3_USB_CAM_EPOCH_CONTAINER_DEVICES=NONE
 ' || fail INSTALLED_PACKAGE_AUDIT
 
