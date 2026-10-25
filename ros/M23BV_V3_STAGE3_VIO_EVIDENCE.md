@@ -1,5 +1,28 @@
 # Stage 3 VIO — accepted operator diagnostics and next blockers
 
+## Camera driver provenance resolved (operator no-device PASS)
+
+The original distro `ros-jazzy-usb-cam` 0.8.1 contains a
+known `tv_usec/1000.0` epoch conversion defect. But the **accepted
+runtime** source and linker checks selected Leroy's **already
+patched** `/leroy_ws/install/usb_cam` overlay:
+`STAGE3_USB_CAM_EFFECTIVE_SOURCE=CORRECT_MICROSECOND_EPOCH_FORMULA`,
+`STAGE3_USB_CAM_EFFECTIVE_LINKAGE=OVERLAY_COMPONENT_AND_LIBRARY`,
+`STAGE3_USB_CAM_EFFECTIVE=PASS_PATCHED_OVERLAY_SELECTED_NO_DEVICE`.
+See `M23BV_V3_STAGE3_USB_CAM_TIMESTAMP_REGRESSION.md` for SHA256s.
+The underlay header result should not be misdiagnosed as a live bug.
+No new camera binary or duplicate physical transport trial is needed.
+
+**Remaining real localization blocker:** the native XRSLAM state
+was `initializing`, meaning the last observed result was not
+`XRSLAM_STATE_TRACKING_SUCCESS`; stationary operation and the
+unmeasured camera/IMU absolute timestamp phase and physical geometry
+remain possible contributors, not proven individual root causes.
+The clock mapper's rate estimate is not an exposure offset. Maintain
+pose/TF/Nav2 gates; prioritize the non-runtime geometry worksheet
+and a separately authorized, safe calibration design.
+
+
 **Evidence scope:** Values below come from the operator's text output of the
 read-only `m23bv_v3_stage3_vio_log_report.py` on October 25, 2026.
 The private log itself was not transferred or independently examined in
