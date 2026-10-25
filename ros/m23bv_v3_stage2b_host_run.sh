@@ -2,6 +2,9 @@
 # STAGE 2B PHYSICAL CAMERA + MCU IMU, sensor-only and human-supervised.
 # No recording, motor commands, M20 bridge, Nav2, XRSLAM or production changes.
 # Serial CDC open may RESET motor-capable firmware. MOTOR RAILS MUST BE DISCONNECTED.
+# Supplementary group access to uucp must be passed from the existing
+# unprivileged operator with crun via --group-add keep-groups. This never
+# modifies host device permissions or broadens mapped physical devices.
 # Two additional protected read-only source bind mounts supply the later
 # M20 STOP-finally fix and M18 terminal-fault latch absent in inherited V3 image.
 # They are exact Git-blobs verified below; V3 camera binaries/image are unchanged.
@@ -99,6 +102,22 @@ actual_mcu_id="$(udevadm info --query=property --name="$mcu" |
 [[ "$actual_mcu_id" == "$mcu_id" ]] || fail MCU_SERIAL_ID_MISMATCH
 [[ "$cam" != "$mcu" ]] || fail DEVICES_IDENTICAL
 mcu_rdev="$(stat -Lc '%t:%T' -- "$mcu")" || fail MCU_RDEV_MISSING
+
+# Required least-privilege access in rootless crun. Rootless Podman does
+# not automatically keep caller supplementary groups inside its container,
+# although the host user can write group-owned /dev/ttyACM0.
+# Never sudo, chmod the serial device, or launch --privileged.
+mcu_gid="$(stat -Lc '%g' -- "$mcu")" || fail MCU_GROUP_INVENTORY
+[[ "$(id -u)" != 0 ]] || fail NO_ROOT_PODMAN
+[[ " $(id -G) " == *" $mcu_gid "* ]] ||
+  fail HOST_MCU_GROUP_MEMBERSHIP_MISSING
+[[ -r "$mcu" && -w "$mcu" ]] || fail HOST_MCU_ACCESS_DENIED
+rootless="$(podman info --format '{{.Host.Security.Rootless}}')" ||
+  fail PODMAN_ROOTLESS_INVENTORY
+runtime="$(podman info --format '{{.Host.OCIRuntime.Name}}')" ||
+  fail PODMAN_RUNTIME_INVENTORY
+[[ "$rootless" == true && "$runtime" == crun ]] ||
+  fail KEEP_GROUPS_NEEDS_ROOTLESS_CRUN
 
 cal="$root/ros/config/camera/front_camera.yaml"
 [[ -f "$cal" && ! -L "$cal" &&
@@ -207,6 +226,9 @@ name="m23bv-v3-stage2b-$$"
   echo "M23BV_V3_STAGE2B_CAMERA_RDEV=$cam_rdev"
   echo "M23BV_V3_STAGE2B_MCU_DEVICE=$mcu"
   echo "M23BV_V3_STAGE2B_MCU_ID_SERIAL=$actual_mcu_id"
+  echo "M23BV_V3_STAGE2B_ROOTLESS_OCI=$rootless/$runtime"
+  echo "M23BV_V3_STAGE2B_MCU_GROUP_GID=$mcu_gid"
+  echo "M23BV_V3_STAGE2B_MCU_GROUP_ACCESS=CALLER_SUPPLEMENTARY_GROUP_PRESERVED"
   echo "M23BV_V3_STAGE2B_IMAGE_ID=$IMAGE_ID"
   echo "M23BV_V3_STAGE2B_CALIBRATION_SHA256=$CAL_SHA"
 } >>"$log"
@@ -223,6 +245,7 @@ timeout --foreground --signal=INT --kill-after=45s 260s \
   podman run --rm --name "$name" --pull=never \
   --network none --ipc private --pid private \
   --cap-drop all --security-opt no-new-privileges --read-only \
+  --group-add keep-groups \
   --tmpfs /tmp:rw,nosuid,nodev,size=768m \
   --device "$cam:/dev/video2:rw" \
   --device "$mcu:/dev/ttyACM0:rw" \
