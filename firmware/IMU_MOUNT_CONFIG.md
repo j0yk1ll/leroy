@@ -86,7 +86,27 @@ checks the actual `imu.c` source calls the helper twice. It does NOT
 build or flash a complete STM32 firmware image, start ROS, or
 access any device.
 
-Expected marker (not yet observed on the operator host):
+**Operator result: PASS (host-only; no hardware), after correcting the
+relative invocation path from the `ros/` checkout directory.** The
+operator reported the following exact markers:
+
+```text
+IMU_MOUNT_DEFAULT_PARITY=PASS_NEG_X_NEG_Y_POS_Z
+IMU_MOUNT_ALTERNATE_RIGHT_HANDED_AXIS_PERMUTATION=PASS
+IMU_MOUNT_REFLECTION=REJECTED_AT_COMPILE_TIME
+IMU_MOUNT_DUPLICATE_AXIS=REJECTED_AT_COMPILE_TIME
+IMU_MOUNT_CONFIG=PASS_SOURCE_ONLY_NO_HARDWARE
+IMU_MOUNT_FIRMWARE_FLASH=NOT_PERFORMED
+IMU_MOUNT_MCU_SERIAL_AND_MOTOR_ACCESS=NONE
+```
+
+This accepts **only** the host C fixture checks and source-call
+verification. A complete cross-compiled STM32 image has not been
+built or flashed, and behavior of the hardware/ROS running image is
+unchanged. This source-only test should not be repeated without
+a reason (changed transform/profile/toolchain source).
+
+Original expected terminal markers:
 
 ```text
 IMU_MOUNT_CONFIG=PASS_SOURCE_ONLY_NO_HARDWARE
