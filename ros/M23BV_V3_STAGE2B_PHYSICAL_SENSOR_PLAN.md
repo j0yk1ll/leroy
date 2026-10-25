@@ -239,13 +239,28 @@ If no uniquely stable symlink pointing to the visually confirmed
 runner MUST remain blocked: do not simply pass a raw `/dev/video8`
 without stable identity or loosen the calibration pin.
 
-**Source repair committed, physical runtime UNTESTED:** remove
-implicit `video-index0` camera selection; require explicit stable
-link and its `ffplay`-confirmed host node to match, plus USB serial,
-capture capability, fresh interactive stream attestation, and
-post-signoff identity recheck. Re-run only the focused source/syntax
-checks after updating the review branch. No broad synthetic tests,
-image rebuild, physical recording, motion or auto-retry.
+**Stable interface resolved by operator read-only inventory:** both
+`/dev/video6` and `/dev/video8` report
+`V4L_NAME=Wed Camera: Wed Camera`, USB serial
+`Wed_Camera_Wed_Camera_20240420112206`, and USB vendor/product
+`32e6:9221`. The **critical distinction** is physical USB path:
+`/dev/video6` has `ID_PATH=pci-0000:00:14.0-usb-0:3.4.1:1.0`,
+while the visually verified `/dev/video8` has
+`ID_PATH=pci-0000:00:14.0-usb-0:3.4.2:1.0`.
+Its stable link is exactly
+`/dev/v4l/by-path/pci-0000:00:14.0-usb-0:3.4.2:1.0-video-index0`.
+No other path or the by-id `video-index0` entry is permitted for
+this run. The operator must still independently attest that the
+physically identified stream was used for the calibration file.
+
+**Source repair committed, physical runtime UNTESTED:** require explicit
+stable link and its `ffplay`-confirmed host node to match **AND**
+the exact `3.4.2:1.0` USB ID_PATH, serial, vendor/product
+`32e6:9221`, capture capability, fresh interactive stream
+attestation and post-signoff identity recheck. Re-run only the
+focused source/syntax checks after updating the review branch.
+No broad synthetic tests, image rebuild, physical recording,
+motion or auto-retry.
 
 ## Evidence acceptance
 
