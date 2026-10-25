@@ -1,5 +1,55 @@
 # Stage 3: usb_cam 0.8.1 epoch timestamp regression investigation
 
+## Operator-verified resolution: patched runtime overlay PASS
+
+**Supersedes the earlier pending/conditional checks below.** The
+operator executed the new read-only test against accepted sensor image
+`f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c`
+and reported:
+
+```text
+STAGE3_USB_CAM_EFFECTIVE_PREFIX=/leroy_ws/install/usb_cam
+STAGE3_USB_CAM_EFFECTIVE_EXE_SHA256=6f19b25e2ce97bdaac6106e93de1f2a8fe0842cb6a5f3fba1f8a084c75a87edf
+STAGE3_USB_CAM_EXECUTABLE=OVERLAY_NOT_DEBIAN_UNDERLAY
+STAGE3_USB_CAM_EFFECTIVE_UPSTREAM_SOURCE_REF=cb2ae6bc0a312de629f84fef933fb3e07dac1ef8
+STAGE3_USB_CAM_EFFECTIVE_SOURCE=CORRECT_MICROSECOND_EPOCH_FORMULA
+STAGE3_USB_CAM_EFFECTIVE_SOURCE_SHA256=e3db0bea1927081ff95387794e576fcd9f394a7bd70be92bdf40bec88acaf121
+STAGE3_USB_CAM_COMPONENT_SHA256=e6cf10645b1baf97c33de4dfdf7b21719072d4e35319691078ce97d9f766ac80
+STAGE3_USB_CAM_LINKED_LIBRARY=  libusb_cam.so => /leroy_ws/install/usb_cam/lib/libusb_cam.so
+STAGE3_USB_CAM_EFFECTIVE_LIBRARY_SHA256=8841f868515337e0b637520d5da9e99ea4776f8eae39653ef8f50498d8381aeb
+STAGE3_USB_CAM_EFFECTIVE_LINKAGE=OVERLAY_COMPONENT_AND_LIBRARY
+STAGE3_USB_CAM_EFFECTIVE_CONTAINER_DEVICES=NONE
+STAGE3_USB_CAM_EFFECTIVE=PASS_PATCHED_OVERLAY_SELECTED_NO_DEVICE
+STAGE3_USB_CAM_ABSOLUTE_EXPOSURE_TIME=NOT_MEASURED
+STAGE3_USB_CAM_CAMERA_IMU_PHASE=NOT_CALIBRATED
+```
+
+The actual ROS package-selected camera executable, associated component,
+and dynamically linked `libusb_cam.so` resolve into Leroy's **existing
+source-patched overlay**, not the old Debian underlay. The exact
+patched source expression was verified. Therefore the specific tagged
+0.8.1 `tv_usec/1000.0` error is **mitigated in the selected
+runtime source/build/linkage**. The earlier underlay header's
+`LEGACY_DIVIDE_1000_PRESENT` is **not evidence of an active V3
+camera timestamp regression**, and no new patched image or rebuild
+is justified by that finding.
+
+This is a hardware-free source/linker determination, not an
+independent exposure-timestamp measurement. It does **not** prove
+the camera header is exactly an exposure midpoint or calibrated
+to the STM32 IMU. The M18 anchor still has unknown one-way transport
+delay. XRSLAM was observed `initializing` under provisional
+camera–IMU phase and extrinsics; the code returns that status unless
+the native estimator reports `XRSLAM_STATE_TRACKING_SUCCESS`. A
+stationary VIO diagnostic is not a calibration exercise.
+
+**Next blocker:** preserve all accepted builds/runners; obtain
+documented physical camera/IMU extrinsics and explicit exposure
+timestamp semantics under a separately reviewed measurement plan.
+Do not move the robot or attached rig, record streams, open MCU
+serial or activate Nav2 without fresh authorization.
+
+
 > **Update — overlay selection is the decisive question.** The accepted
 > `ros/Dockerfile` already clones upstream usb_cam 0.8.1 at
 > `cb2ae6bc0a312de629f84fef933fb3e07dac1ef8`, substitutes the
