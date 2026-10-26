@@ -2,8 +2,8 @@
 
 ## Current validation result
 
-**Operator PASS — two distinct gates:** the source-only YAML
-validation reported `STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE`.
+**Operator PASS — source, isolated TF and full-runtime candidate gates:**
+The source-only YAML validation reported `STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE`.
 The subsequent isolated integration test built and installed the
 current description package inside a temporary rootless container and
 launched six actual static TF publishers. The independent ROS observer
@@ -18,10 +18,12 @@ STAGE3_SENSOR_TF_INTEGRATION_SHUTDOWN=PASS
 STAGE3_SENSOR_TF_INTEGRATION=PASS_REAL_TF_STATIC_NO_DEVICE
 ```
 
-Both tests used the pinned sensor image with **no physical devices or
-host network access**. The real robot runtime image has not been
-updated; geometry and sensor synchronisation remain provisional.
-No source test or integration test repeat is needed on unchanged code.
+The first two tests used the pinned sensor image without devices or
+host network access. A **third** test in the existing XRSLAM runtime
+family also passed in a new, inert, separately tagged image candidate.
+No accepted image tag or active robot runtime has been replaced;
+geometry and sensor synchronisation remain provisional. Re-running
+unchanged acceptance tests is unnecessary.
 
 
 This package **does not use URDF or Xacro**. A small ROS 2 launch file
@@ -168,6 +170,25 @@ overlay precedence, six **live** static TF DDS transforms and bounded
 cleanup using the previously accepted observer. It builds a
 separately tagged local image offline; it does **not** deploy or
 activate the physical robot runtime or replace any accepted image.
-**Candidate build and runtime verification not yet operator-run.**
-See `ros/M23BV_V3_STAGE3_FULLSTACK_DIAGNOSTIC.md` for the
-precise expected acceptance markers and unresolved calibration gates.
+**Operator PASS:** the offline candidate build produced image ID
+`9985c05cfcd5d9774b64b790c6f5c1b39c29f989d7ace6dca4e341f5f511841d`.
+The new YAML description overrode the old ament package while the
+bringup, bridge, DepthART and XRSLAM packages were retained. The
+no-device candidate test then launched six actual static TF publishers
+and observed correct `/tf_static` frames, translations, quaternions,
+six DDS writers and clean controlled shutdown:
+
+```text
+STAGE3_TF_RUNTIME_CANDIDATE_DEFAULT=PASS_INERT_NO_ROBOT_BRINGUP
+STAGE3_TF_RUNTIME_OVERLAY=PASS_NEW_YAML_DESCRIPTION_RESOLVED
+STAGE3_TF_RUNTIME_STACK=PASS_BRINGUP_BRIDGE_DEPTHART_XRSLAM_RETAINED
+STAGE3_TF_RUNTIME_LIVE_TF=PASS_SIX_EDGES_IN_FULL_RUNTIME_IMAGE
+STAGE3_TF_RUNTIME=PASS_CANDIDATE_REAL_TF_NO_DEVICE
+STAGE3_TF_RUNTIME_ACTIVE_ROBOT=NOT_DEPLOYED
+```
+
+The accepted original runtime images were not overwritten. The new
+candidate was **not deployed**, and normal robot bringup was **not
+started**. There is no need to repeat these tests on unchanged code.
+See `ros/M23BV_V3_STAGE3_FULLSTACK_DIAGNOSTIC.md` for scope
+and remaining calibration/deployment gates.
