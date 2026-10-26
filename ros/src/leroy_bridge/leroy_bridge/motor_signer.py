@@ -132,7 +132,9 @@ def main_operator(args=None):
         tty.flush()
         if tty.readline().strip() != "ARM_MOTORS":
             raise SystemExit("Operator declined motor arming")
-    rclpy.init()
+    # The explicit --operator-key-file argument is handled by argparse,
+    # not by the ROS argument parser.
+    rclpy.init(args=[])
     node = None
     try:
         node = LocalOperatorGrant(opts.operator_key_file)
