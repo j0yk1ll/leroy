@@ -568,43 +568,6 @@ static void process_command(char *line)
         return;
     }
 
-    if (strings_equal(command, "move_platform_forward")) {
-        platform_set_motion(PLATFORM_FORWARD);
-        refresh_activity();
-        usb_serial_write_line("ok move_platform_forward");
-        return;
-    }
-    if (strings_equal(command, "move_platform_backward")) {
-        platform_set_motion(PLATFORM_BACKWARD);
-        refresh_activity();
-        usb_serial_write_line("ok move_platform_backward");
-        return;
-    }
-    if (strings_equal(command, "move_platform_left")) {
-        platform_set_motion(PLATFORM_LEFT);
-        refresh_activity();
-        usb_serial_write_line("ok move_platform_left");
-        return;
-    }
-    if (strings_equal(command, "move_platform_right")) {
-        platform_set_motion(PLATFORM_RIGHT);
-        refresh_activity();
-        usb_serial_write_line("ok move_platform_right");
-        return;
-    }
-    if (strings_equal(command, "rotate_platform_cw")) {
-        platform_set_motion(PLATFORM_CW);
-        refresh_activity();
-        usb_serial_write_line("ok rotate_platform_cw");
-        return;
-    }
-    if (strings_equal(command, "rotate_platform_ccw")) {
-        platform_set_motion(PLATFORM_CCW);
-        refresh_activity();
-        usb_serial_write_line("ok rotate_platform_ccw");
-        return;
-    }
-
     if (strings_equal(command, "move_manipulators_up")) {
         if (!manipulator_move_up()) {
             usb_serial_write_line("blocked top_limit");
