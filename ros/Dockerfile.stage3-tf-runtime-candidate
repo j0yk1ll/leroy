@@ -1,0 +1,39 @@
+# Stage 3 additive YAML static TF candidate for the REAL Leroy XRSLAM runtime.
+# Build context: ros/. NEVER replace accepted leroy-ros:xrslam or sensors tags.
+# Host build gate checks the XRSLAM base image's EXACT local image ID.
+ARG STAGE3_TF_XRSLAM_BASE=localhost/leroy-ros:xrslam
+FROM ${STAGE3_TF_XRSLAM_BASE}
+
+# Preserve /leroy_ws, XRSLAM, DepthART, bridge and existing image layers.
+# Overlay leroy_description with the NEW YAML-only version; do not modify
+# the older ament package in the inherited underlay.
+COPY src/leroy_description/ /opt/leroy_stage3_tf_ws/src/leroy_description/
+COPY m23bv_v3_stage3_tf_runtime_env.sh /usr/local/bin/leroy-stage3-tf-runtime-env
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /leroy_ws/install/setup.sh \
+    && command -v colcon \
+    && cd /opt/leroy_stage3_tf_ws \
+    && colcon --log-base /tmp/leroy_stage3_tf_build_log build \
+         --base-paths /opt/leroy_stage3_tf_ws/src \
+         --packages-select leroy_description \
+         --merge-install \
+         --build-base /opt/leroy_stage3_tf_ws/build \
+         --install-base /opt/leroy_stage3_tf_ws/install \
+         --cmake-args -DBUILD_TESTING=OFF \
+         --event-handlers console_direct+ \
+    && . /usr/local/bin/leroy-stage3-tf-runtime-env \
+    && test "$(ros2 pkg prefix leroy_description)" = /opt/leroy_stage3_tf_ws/install \
+    && test -f /opt/leroy_stage3_tf_ws/install/share/leroy_description/config/sensor_mounts.yaml \
+    && test -f /opt/leroy_stage3_tf_ws/install/share/leroy_description/launch/description.launch.py \
+    && test ! -e /opt/leroy_stage3_tf_ws/install/share/leroy_description/urdf \
+    && ros2 pkg prefix leroy_bringup \
+    && ros2 pkg prefix leroy_bridge \
+    && ros2 pkg prefix leroy_depthart \
+    && ros2 pkg prefix leroy_xrslam \
+    && python3 -c 'import yaml, rclpy, tf2_msgs, launch_ros; print("STAGE3_TF_RUNTIME_OVERLAY=PASS_INSTALLED")'
+
+# Fail-safe default for this CANDIDATE tag. Unlike the inherited normal
+# Leroy runtime CMD, no camera, bridge, MCU, XRSLAM or Nav2 starts by default.
+# The standard robot runtime and the accepted physical runners are untouched.
+CMD ["/bin/bash", "-c", "echo STAGE3_TF_RUNTIME_CANDIDATE=INERT_NO_AUTOMATIC_ROBOT_BRINGUP"]
