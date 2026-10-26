@@ -1,5 +1,81 @@
 # M23BV V3 Stage 3 — full-stack diagnostic integration (draft)
 
+## Current acceptance: full XRSLAM-runtime YAML static TF candidate — OPERATOR PASS
+
+The operator completed the **offline build and no-device runtime test**
+of the separately tagged full Leroy/XRSLAM image candidate using
+`ros/m23bv_v3_stage3_tf_runtime_candidate_no_device.sh`.
+The accepted full XRSLAM base image remained unchanged, and the new
+`leroy_description` ament overlay was selected ahead of the old
+description while the normal Leroy bringup, bridge, DepthART and
+XRSLAM packages remained installed. **Normal bringup was NOT launched.**
+
+**Newly built candidate image ID:**
+
+```text
+9985c05cfcd5d9774b64b790c6f5c1b39c29f989d7ace6dca4e341f5f511841d
+```
+
+**Observed operator PASS markers (2026-10-26):**
+
+```text
+STAGE3_TF_RUNTIME_CANDIDATE_BUILD=PASS_OFFLINE_SEPARATE_IMAGE
+STAGE3_TF_RUNTIME_CANDIDATE_DEFAULT=PASS_INERT_NO_ROBOT_BRINGUP
+STAGE3_TF_RUNTIME_SOURCE_OVERLAY=PASS_FULL_RUNTIME_SELECTED
+STAGE3_TF_RUNTIME_OVERLAY=PASS_NEW_YAML_DESCRIPTION_RESOLVED
+STAGE3_TF_RUNTIME_STACK=PASS_BRINGUP_BRIDGE_DEPTHART_XRSLAM_RETAINED
+STAGE3_TF_RUNTIME_BRINGUP=NOT_LAUNCHED
+STAGE3_SENSOR_TF_INTEGRATION_INSTALLED_PACKAGE=PASS_NEW_SOURCE_BUILD_AND_BYTE_PARITY
+STAGE3_SENSOR_TF_INTEGRATION_GEOMETRY=PROVISIONAL_NOT_CALIBRATED
+STAGE3_SENSOR_TF_INTEGRATION_TF_STATIC=PASS_SIX_REAL_EDGES
+STAGE3_SENSOR_TF_INTEGRATION_TRANSLATIONS_AND_QUATERNIONS=PASS
+STAGE3_SENSOR_TF_INTEGRATION_PUBLISHERS=PASS_SIX_DISTINCT_DDS_WRITERS
+STAGE3_SENSOR_TF_INTEGRATION_FRAME_OWNERSHIP=PASS_EXACT_CHILDREN_AND_PARENTS
+STAGE3_SENSOR_TF_INTEGRATION_SHUTDOWN=PASS
+STAGE3_SENSOR_TF_INTEGRATION_REAL_NODES=PASS_SIX_STANDARD_STATIC_TF_PUBLISHERS
+STAGE3_TF_RUNTIME_LIVE_TF=PASS_SIX_EDGES_IN_FULL_RUNTIME_IMAGE
+STAGE3_TF_RUNTIME_MCU_CAMERA_BRIDGE_NAV2=NOT_STARTED
+STAGE3_TF_RUNTIME_CONTAINER_DEVICES=NONE
+STAGE3_TF_RUNTIME=PASS_CANDIDATE_REAL_TF_NO_DEVICE
+STAGE3_TF_RUNTIME_BASE_IMAGE=UNCHANGED
+STAGE3_TF_RUNTIME_ACTIVE_ROBOT=NOT_DEPLOYED
+STAGE3_TF_RUNTIME_GEOMETRY_CALIBRATION=PROVISIONAL
+STAGE3_TF_RUNTIME_MCU_CAMERA_MOTORS=NOT_AUTHORIZED
+```
+
+**Exit-code interpretation:** After all six transforms and DDS
+writers were independently observed, the test deliberately sent a
+`SIGINT` to the ROS launch process group. ROS launch logged
+`process has died` with exit code `-2` for publisher processes
+during shutdown. The bounded supervisor then reported
+`STAGE3_SENSOR_TF_INTEGRATION_SHUTDOWN=PASS` and the final
+`STAGE3_TF_RUNTIME=PASS_CANDIDATE_REAL_TF_NO_DEVICE`. This is
+consistent with intentional shutdown and does not indicate a
+runtime failure in this test.
+
+**Accepted:** standalone YAML source validation, isolated six-writer
+ROS static TF integration, and the new full XRSLAM-runtime **candidate
+image** build, installed package overlay resolution, inherited
+application-package presence, actual six-edge `/tf_static` messages,
+quaternion/translation correctness, concurrent writer count and
+bounded cleanup. **No re-run is required on unchanged candidate
+sources.**
+
+**Not accepted:** replacing the currently selected robot runtime,
+the normal `leroy_bringup` integration under hardware conditions,
+camera/MCU interface access, firmware flashing, motor control,
+physical sensor geometry calibration, camera–IMU time offset,
+XRSLAM metric odometry, map/odom authority or Nav2 goals.
+The accepted source image tags have not been overwritten and the
+candidate is **NOT DEPLOYED**. No robot startup, actuation,
+recording or navigation authorization is implied.
+
+Earlier pending and build-failure sections below are preserved as
+chronological history, **superseded by this observed candidate PASS**.
+PR #154 stays DRAFT; any switch to the active robot runtime is
+a separate explicit deployment and safety review.
+
+
 ## Current full-runtime candidate build: Colcon CLI mismatch fixed, RETEST PENDING
 
 The operator's first **new full XRSLAM-runtime candidate** build reached
