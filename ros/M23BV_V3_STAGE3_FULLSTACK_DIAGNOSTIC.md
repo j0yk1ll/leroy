@@ -700,3 +700,42 @@ this new source revision; prior physical acceptance is unaffected.
 No CAD-based extraction, additional MCU access, camera recording,
 sensor-rig motion, pose validation, Nav2 activation or motor control
 is authorized by this change.
+
+## Direct YAML static TF (supersedes previous Xacro subsection)
+
+The user selected **one YAML configuration and six standard
+`tf2_ros/static_transform_publisher` nodes**, not URDF/Xacro.
+Current authoritative source is
+`ros/src/leroy_description/config/sensor_mounts.yaml`;
+`ros/src/leroy_description/launch/description.launch.py`
+loads it and generates exactly the existing six fixed frame edges.
+Source Xacro was deleted and the old YAML-to-Xacro test deleted.
+`robot_state_publisher` is no longer used by this package.
+The original Stage 3 physical runner and immutable images were not
+changed or rebuilt, so their historic execution is unaffected.
+
+The replacement test, not yet operator-run, is:
+
+```bash
+# If the current shell is in repository root:
+bash ros/m23bv_v3_stage3_sensor_tf_yaml_no_device.sh
+# If inside ros/ instead:
+# bash ./m23bv_v3_stage3_sensor_tf_yaml_no_device.sh
+```
+
+It runs source checks in the pinned no-device ROS Jazzy image, verifies
+all six transforms and conventional camera frame IDs, creates six
+`tf2_ros` action descriptions **without starting ROS nodes**, checks
+an ephemeral 1 mm YAML adjustment and rejects malformed/unsafe values.
+A PASS does not prove active TF publication or spatial calibration.
+Do NOT run the old deleted `m23bv_v3_stage3_sensor_mounts_yaml_no_device.sh`.
+The older pinned URDF provenance tool also belongs to the prior
+source revision; do not weaken its historical pins.
+
+If `git status --short` shows unrelated local deletions, preserve
+them; do not use `git reset --hard` or `git clean` just to perform
+this test. This new focused test verifies only its own committed
+source inputs.
+
+XRSLAM offset 0.0 s, pose validity, map TF and real Nav2 goals remain
+gated; no MCU or motor access is authorized.
