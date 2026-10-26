@@ -44,18 +44,27 @@ def main(args=None):
         parser.error("pass actual /dev/ttyACM* controller path")
 
     # An interactive local operator is required before ANY nonzero packet.
-    with open("/dev/tty", "r+", encoding="ascii") as tty:
-        tty.write(
-            "ONE-WHEEL BENCH PULSE. STOP the ROS bridge first.\n"
-            "Robot SECURELY SUPPORTED, wheels clear, hands/tools away.\n"
-            "Independent HARDWIRED motor-power cutoff physically verified,\n"
-            "accessible and interrupts motor supply despite USB power.\n"
-            "This tool cannot read the E-stop state.\n"
-            "Type WHEEL_TEST_READY (exactly) to proceed: "
-        )
-        tty.flush()
-        if tty.readline().strip() != "WHEEL_TEST_READY":
-            raise SystemExit("No wheel command sent")
+    # /dev/tty is not seekable. Python "r+" requires seekable input on
+    # some systems and fails before a single serial command is sent.
+    # Separate read/write handles work with normal interactive POSIX TTYs.
+    try:
+        with open("/dev/tty", "r", encoding="ascii") as tty_in, \
+             open("/dev/tty", "w", encoding="ascii") as tty_out:
+            tty_out.write(
+                "ONE-WHEEL BENCH PULSE. STOP the ROS bridge first.\n"
+                "Robot SECURELY SUPPORTED, wheels clear, hands/tools away.\n"
+                "Independent HARDWIRED motor-power cutoff physically verified,\n"
+                "accessible and interrupts motor supply despite USB power.\n"
+                "This tool cannot read the E-stop state.\n"
+                "Type WHEEL_TEST_READY (exactly) to proceed: "
+            )
+            tty_out.flush()
+            if tty_in.readline().strip() != "WHEEL_TEST_READY":
+                raise SystemExit("No wheel command sent")
+    except OSError as exc:
+        raise SystemExit(
+            f"Interactive operator terminal unavailable: {exc}"
+        ) from exc
 
     # A persistent MCU may have seen a prior host's sequence. Unix seconds
     # exceed typical session counters and rise between sessions; same-second
