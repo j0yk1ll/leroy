@@ -24,18 +24,35 @@ be serialized. Bridge serial read/write/flush, clock faults and
 shutdown revoke any pending authority. The existing single
 `self._serial.write` call is unchanged.
 
-**Physical movement is still disabled:** The normal bridge sets
-`_motor_authority=None` and
-`_motor_hardware_release_verified=False` before opening serial,
-and no ROS publisher or config parameter can release either value.
-There is **no** trusted physical interlock source, authenticated
-operator/controller key provisioning, accepted physical MCU STOP/ACK,
-or signed-controller ROS ingress yet. The conditional nonzero CDC
-path is therefore *not reachable from the normal robot runtime*.
-This commit is a functional in-process handoff, **not** permission
-to power motors or deploy `robot.launch.py`. A Python software
-gate alone cannot replace independent physical e-stop protection.
-No firmware, startup image or camera process changed.
+**Controller-facing ROS ingress is now wired.** When (and
+only when) **both** protected 32-byte role-key files are provided
+through the read-only startup parameters `motor_motion_key_file` and
+`motor_operator_key_file`, the bridge instantiates a new signed
+session. It publishes a fresh nonce on `/leroy/motor/session_id`
+(`std_msgs/String`, transient-local) and subscribes to the two
+`std_msgs/String` JSON topics
+`/leroy/motor/signed_motion` and
+`/leroy/motor/signed_rearm`. Messages have exact
+`MotionEnvelope` / `RearmEnvelope` fields, no duplicate JSON
+keys, and no raw `/cmd_vel` alternative. The bridge runs one
+20-Hz authority evaluation loop, and terminal faults revoke the
+session. Key files must be regular, nonsymlinked, single-link
+32-byte files owned by the process UID with no group/other access.
+Neither key nor HMAC is published as a status.
+
+**Physical movement is still disabled:** With the default empty
+role-key paths, the bridge creates **no signed motor subscribers**
+and sets `_motor_authority=None` before MCU serial initialization.
+Even if signing keys are explicitly provisioned, the code sets
+`_motor_hardware_release_verified=False` and its independent
+trusted-health, physical E-stop, motor-rail and sole-controller
+provider reports unavailable. No ROS publisher, remap or parameter
+can turn that into physical permission. The signed topics are a
+transport and authenticity mechanism, **not** independent
+hardware-interlock evidence. The conditional nonzero CDC path
+cannot activate in normal robot runtime. Do not start powered
+motors or deploy `robot.launch.py` based on this commit.
+No firmware, image or camera process changed.
 
 One focused pure-Python test, with no ROS, Podman or device access:
 
@@ -45,12 +62,13 @@ PYTHONPATH="$PWD/src/leroy_bridge" PYTHONDONTWRITEBYTECODE=1 \
   python3 -m unittest discover -s src/leroy_bridge/test -p test_motor_authority.py -v
 ```
 
-Next implementation work is **not another TF/ROS diagnostic**:
-connect signed controller/rearm ROS ingress, secure key custody and
-measured health plus an independent physical interlock provider
-before making the internal serial handoff reachable. Do not
-remove the M22D raw-string allowlist or run `robot.launch.py`
-to bypass remaining physical safety.
+The remaining implementation blockers are **trusted physical
+interlock acquisition and measured sensor/controller ownership**,
+followed by a real MCU STOP/ACK and fail-safe stop behavior at
+the physical interface. This work belongs in the same focused
+motor-control workstream, not another TF test campaign.
+Do not remove the M22D raw-string allowlist or run
+`robot.launch.py` to bypass physical protection.
 
 
 ROS 2 Jazzy serial bridge for Leroy's MCU. It owns hardware
