@@ -364,24 +364,50 @@ class LeroyBridgeNode(Node):
             'nonzero serial release stays inhibited.')
 
     def _motor_trusted_inputs(self):
-        """Never mistake subscribed ROS status for trusted safety state.
+        """Sample local GPIO feedback and measured sensor/nav messages.
 
-        An independent hardware interlock + real validated localization
-        adapter must replace these conservative defaults before motor
-        authority can arm. Do not add a ROS boolean 'enable' topic.
+        The GPIO inputs MUST come from an independent hardwired motor power
+        cutoff circuit. Software cannot substitute for that circuit.
+        ROS graph counts are collision checks, not authentication; signed
+        envelopes separately enforce session ownership.
         """
+        estop, power = (False, False)
+        if self._motor_feedback is not None:
+            estop, power = self._motor_feedback.read()
+        health = (self._motor_health.state()
+                  if self._motor_health is not None
+                  else {key: False for key in HEALTH_KEYS})
+        source_counts_ok = (
+            self._motor_odom_sub.get_publisher_count() == 1
+            and self._motor_depth_sub.get_publisher_count() == 1
+            and self._motor_costmap_sub.get_publisher_count() == 1
+            and self._motor_valid_sub.get_publisher_count() == 1
+        ) if self._motor_health is not None else False
+        controller_ok = (
+            self._motor_motion_sub.get_publisher_count() == 1
+            if hasattr(self, '_motor_motion_sub') else False
+        )
+        if not source_counts_ok:
+            health = {key: False for key in HEALTH_KEYS}
+        transport_ok = (
+            not self._transport_fault.is_set()
+            and self._motor_watchdog_ack.is_set()
+            and self._motor_cdc is not None
+            and self._motor_cdc.healthy)
+        # This software release flag is advisory; the power cutoff itself
+        # operates independently of Linux, ROS and the MCU.
+        self._motor_hardware_release_verified = bool(
+            estop and power and source_counts_ok and controller_ok
+            and all(health.values()) and transport_ok
+            and not self._clock_fault and not self._stop_event.is_set())
         return dict(
-            health={key: False for key in HEALTH_KEYS},
-            estop_released=False,
-            motor_rails_verified=False,
-            transport_healthy=(
-                not self._transport_fault.is_set()
-                and self._motor_watchdog_ack.is_set()
-                and self._motor_cdc is not None
-                and self._motor_cdc.healthy),
+            health=health,
+            estop_released=estop,
+            motor_rails_verified=power,
+            transport_healthy=transport_ok,
             clock_healthy=not self._clock_fault,
             bridge_running=not self._stop_event.is_set(),
-            single_controller=False,
+            single_controller=controller_ok,
         )
 
     def _on_signed_motor_motion(self, message):
@@ -563,6 +589,14 @@ class LeroyBridgeNode(Node):
             if is_stop:
                 payload = self._motor_cdc.stop(now_ns=time.monotonic_ns())
             elif authority is not None:
+                # Recheck the independent physical feedback at the final
+                # locked writer boundary. Old software readiness booleans
+                # cannot authorize transmission after power loss / E-stop.
+                if (self._motor_feedback is None
+                        or self._motor_feedback.read() != (True, True)
+                        or not self._motor_hardware_release_verified):
+                    authority.stop()
+                    return False
                 # The signed decision alone cannot supply arbitrary serial
                 # bytes. Its identity-bound one-time payload must match the
                 # exact PWM tuple before the MCU transaction is constructed.
@@ -878,6 +912,17 @@ class LeroyBridgeNode(Node):
         # Revoke any outstanding motor decision before serial teardown.
         if getattr(self, '_motor_authority', None) is not None:
             self._motor_authority.stop()
+            # Request MCU driver disable, retaining the reader briefly to
+            # collect its sequence-matched stop ACK. Timeout is NOT a stop.
+            if not self._transport_fault.is_set():
+                if self._send_command(_MOTOR_STOP):
+                    end = time.monotonic() + 0.15
+                    while (time.monotonic() < end and
+                           not self._motor_cdc.stop_confirmed):
+                        time.sleep(0.005)
+                if not self._motor_cdc.stop_confirmed:
+                    self.get_logger().error(
+                        'MCU motor STOP unconfirmed; independent cutoff required')
         # Stop asynchronous telemetry before ROS context teardown.
         # After a transport fault the zero/stream-disable writes below
         # are intentionally refused by _send_command. This does NOT
@@ -893,6 +938,8 @@ class LeroyBridgeNode(Node):
                 self._reader.join(timeout=1.0)
             if hasattr(self, '_serial') and self._serial.is_open:
                 self._serial.close()
+            if self._motor_feedback is not None:
+                self._motor_feedback.close()
         return super().destroy_node()
 
 
