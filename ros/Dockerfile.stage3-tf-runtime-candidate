@@ -27,6 +27,7 @@ RUN . /opt/ros/jazzy/setup.sh \
     && colcon --log-base /tmp/leroy_stage3_tf_build_log build \
          --base-paths /opt/leroy_stage3_tf_ws/src \
          --packages-select leroy_description \
+         --allow-overriding leroy_description \
          --merge-install \
          --build-base /opt/leroy_stage3_tf_ws/build \
          --install-base /opt/leroy_stage3_tf_ws/install \
