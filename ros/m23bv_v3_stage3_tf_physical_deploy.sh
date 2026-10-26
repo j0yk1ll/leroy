@@ -96,7 +96,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 owned=1
-podman run --detach --name "$name" --stop-signal SIGINT \
+podman run --rm --detach --name "$name" --stop-signal SIGINT \
   "${common[@]}" "$image_id" \
   -c 'set -e; . /usr/local/bin/leroy-stage3-tf-runtime-env; exec ros2 launch leroy_description description.launch.py' \
   >/dev/null || fail TF_ONLY_SIDECAR_START
@@ -113,7 +113,8 @@ podman exec "$name" /bin/bash -c \
 owned=0
 trap - EXIT INT TERM
 echo STAGE3_TF_DEPLOY=PASS_PHYSICAL_HOST_TF_ONLY_SIDECAR
-echo STAGE3_TF_DEPLOY_MCU_CAMERA_MOTOR_OPEN=NONE
+echo STAGE3_TF_DEPLOY_SIDECAR_DEVICE_MAPPINGS=NONE
+echo STAGE3_TF_DEPLOY_SIDECAR_BRIDGE_NAV2_XRSLAM=NOT_STARTED
 echo STAGE3_TF_DEPLOY_MOTION_AND_ODOMETRY=NOT_AUTHORIZED
 echo "STAGE3_TF_DEPLOY_STOP_COMMAND=podman stop $name"
 echo STAGE3_TF_DEPLOY_ACTIVE_ROBOT_BRINGUP=NOT_STARTED
