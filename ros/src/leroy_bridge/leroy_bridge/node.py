@@ -25,6 +25,7 @@ from leroy_bridge.authorized_session import (
     MotionEnvelope, RearmEnvelope, SessionVerifier,
 )
 from leroy_bridge.motor_authority import MotorAuthority, HEALTH_KEYS
+from leroy_bridge.motor_cdc_protocol import MotorCdcProtocol
 from leroy_bridge.motor_signed_ingress import (
     MotorInputRejected, parse_signed_envelope, read_protected_key,
 )
@@ -32,6 +33,7 @@ from leroy_bridge.motor_signed_ingress import (
 import serial
 
 
+_MOTOR_STOP = object()
 _KEY_VALUE_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=(-?\d+)')
 class McuClock:
     """Wrap the hardware-clock estimator with the ROS clock and message type."""
@@ -172,6 +174,8 @@ class LeroyBridgeNode(Node):
         # provider or key custody yet; production physical release remains
         # structurally unavailable (not a user-togglable ROS parameter).
         self._motor_authority = None
+        self._motor_cdc = None
+        self._motor_stop_requested = False
         self._motor_hardware_release_verified = False
         self._serial_lock = threading.Lock()
         self._transport_fault = threading.Event()
@@ -294,6 +298,7 @@ class LeroyBridgeNode(Node):
             half_track_m=float(self._half_track_m),
             pwm_per_rad_s=float(self._wheel_velocity_to_pwm_gain),
             max_pwm=int(self._max_pwm))
+        self._motor_cdc = MotorCdcProtocol()
         self._motor_session_pub = self.create_publisher(
             String, '/leroy/motor/session_id',
             QoSProfile(
@@ -325,7 +330,9 @@ class LeroyBridgeNode(Node):
             motor_rails_verified=False,
             transport_healthy=(
                 not self._transport_fault.is_set()
-                and self._motor_watchdog_ack.is_set()),
+                and self._motor_watchdog_ack.is_set()
+                and self._motor_cdc is not None
+                and self._motor_cdc.healthy),
             clock_healthy=not self._clock_fault,
             bridge_running=not self._stop_event.is_set(),
             single_controller=False,
@@ -362,6 +369,8 @@ class LeroyBridgeNode(Node):
     def _motor_tick(self):
         if self._motor_authority is None:
             return
+        if self._motor_cdc.expired(now_ns=time.monotonic_ns()):
+            self._motor_authority.stop()
         motion = self._pending_motor_motion
         self._pending_motor_motion = None
         decision = self._motor_authority.step(
@@ -370,11 +379,16 @@ class LeroyBridgeNode(Node):
         if decision.nonzero_candidate:
             if not self._send_command(decision):
                 self._motor_authority.stop()
-        elif (self._motor_last_state == 'ARMED'
-              and decision.state in ('LATCHED', 'TERMINAL')):
-            # Fast zero request is not proof of physical stopping.
-            if not self._send_command('set_wheels 0 0 0 0'):
-                self._motor_authority.stop()
+        if decision.state == 'ARMED':
+            self._motor_stop_requested = False
+        if (self._motor_last_state == 'ARMED'
+                and decision.state in ('LATCHED', 'TERMINAL')):
+            if not self._motor_stop_requested:
+                self._motor_stop_requested = True
+                # Independent MCU stop request; the reader must correlate its
+                # ACK, otherwise the session stays terminally inhibited.
+                if not self._send_command(_MOTOR_STOP):
+                    self._motor_authority.stop()
         self._motor_last_state = decision.state
 
     def _validate_parameters(self) -> None:
@@ -530,6 +544,7 @@ class LeroyBridgeNode(Node):
         authority = getattr(self, '_motor_authority', None)
         if authority is not None and (
                 not self._motor_watchdog_ack.is_set()
+                or self._motor_cdc.expired(now_ns=time.monotonic_ns())
                 or not authority.heartbeat_allowed(
                     now_ns=time.monotonic_ns())):
             return
@@ -593,6 +608,11 @@ class LeroyBridgeNode(Node):
         return {key: int(value) for key, value in _KEY_VALUE_RE.findall(line)}
 
     def _handle_line(self, line: str) -> None:
+        if self._motor_cdc is not None and self._motor_cdc.receive(
+                line, now_ns=time.monotonic_ns()):
+            if not self._motor_cdc.healthy:
+                self._motor_authority.stop()
+            return
         if line == 'ok set_watchdog_ms':
             # MCU accepted the timeout; this is NOT a stop acknowledgement.
             self._motor_watchdog_ack.set()
@@ -606,6 +626,7 @@ class LeroyBridgeNode(Node):
         if line == 'event watchdog_stop':
             if self._motor_authority is not None:
                 self._motor_authority.stop()
+                self._motor_cdc.abort('MCU_WATCHDOG_STOP')
             self.get_logger().warning(
                 'MCU reported watchdog stop; signed motor session revoked')
             return
