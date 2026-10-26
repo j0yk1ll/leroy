@@ -34,9 +34,14 @@ class MotorCdcProtocol:
         if type(now_ns) is not int or now_ns <= 0:
             return None
         with self._lock:
-            if self._pending is not None or self._next_seq > _MAX_SEQ:
-                self._fault = "PENDING_TRANSACTION_OR_SEQUENCE_EXHAUSTED"
+            if self._next_seq > _MAX_SEQ:
+                self._fault = "SEQUENCE_EXHAUSTED"
                 return None
+            if self._pending is not None and kind != "stop_wheels_tx":
+                self._fault = "UNACKNOWLEDGED_PREVIOUS_WHEEL_PACKET"
+                return None
+            # Emergency stop supersedes any outstanding wheel ACK; a
+            # delayed earlier ACK is never mistaken for this stop ACK.
             if self._fault is not None and kind != "stop_wheels_tx":
                 return None
             seq = self._next_seq
