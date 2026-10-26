@@ -66,8 +66,8 @@ MUST first be stopped so there is only one USB CDC controller. Run
 The script refuses noninteractive execution, insists on an explicit operator
 confirmation of mechanical support and a *verified working hardwired
 motor-supply cutoff*, and sends one sequence-numbered nonzero packet to
-one wheel only (maximum ±24/255 duty, 60 ms). It first requests MCU
-driver disable, configures the 120 ms firmware watchdog with an exact
+one wheel only (maximum ±48/255 duty, operator-selected 20–150 ms). It first requests MCU
+driver disable, configures the bounded firmware watchdog (pulse duration + 100 ms) with an exact
 ACK, never sends keepalive, and requests an exact sequence-matched STOP
 ACK in both normal and exception paths. Failure or absent ACK is a stop
 condition; independent power cutoff is always the final safeguard.
@@ -79,7 +79,7 @@ The MCU watchdog zeroes commanded outputs only while MCU main loop
 runs; the separate hardware cutoff is essential. Check the motor-rail
 voltage with the cutoff operated *while the laptop USB is connected*,
 ensure the wheel cannot reach the floor or an operator, and only then
-run the one-shot pulse. The script can be run with motor supply
+run the one-shot pulse. Begin with `--wheel fl --pwm 24 --duration-ms 150` only if\nindependent motor cutoff has been physically verified with USB connected,\nwheels are securely supported, and the previous 60 ms pulse showed only a\nsmall twitch. If that barely moves, stop before trying higher duty and\nrecord the supply/driver wiring and observations. The script can be run with motor supply
 disconnected first as a communication/protocol rehearsal. It never
 configures the production authority's E-stop or rail inputs.
 
