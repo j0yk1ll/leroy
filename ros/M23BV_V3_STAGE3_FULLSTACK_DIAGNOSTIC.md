@@ -1,5 +1,67 @@
 # M23BV V3 Stage 3 — full-stack diagnostic integration (draft)
 
+## Current acceptance: installed ROS static TF and actual /tf_static — OPERATOR PASS
+
+The operator executed the **separate live ROS 2 no-device integration**
+`ros/m23bv_v3_stage3_sensor_tf_integration_no_device.sh` in the exact
+pinned sensor image
+`f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c`.
+The command built and installed `leroy_description` within a temporary
+container-only workspace, then launched six actual ROS 2 Jazzy
+`tf2_ros/static_transform_publisher` processes. The independent
+transient-local `/tf_static` observer validated all six child/parent
+edges, translations, equivalent orientation quaternions, six current
+DDS publishers and termination.
+
+**Observed operator stdout (2026-10-26):**
+
+```text
+STAGE3_SENSOR_TF_INTEGRATION_ROS_SETUP=PASS_NOUNSET_RESTORED
+STAGE3_SENSOR_TF_INTEGRATION_LOCAL_SETUP=PASS_NOUNSET_RESTORED
+STAGE3_SENSOR_TF_INTEGRATION_BUILD=PASS_EPHEMERAL_PACKAGE_INSTALL
+STAGE3_SENSOR_TF_INTEGRATION_INSTALLED_PACKAGE=PASS_NEW_SOURCE_BUILD_AND_BYTE_PARITY
+STAGE3_SENSOR_TF_INTEGRATION_GEOMETRY=PROVISIONAL_NOT_CALIBRATED
+STAGE3_SENSOR_TF_INTEGRATION_TF_STATIC=PASS_SIX_REAL_EDGES
+STAGE3_SENSOR_TF_INTEGRATION_TRANSLATIONS_AND_QUATERNIONS=PASS
+STAGE3_SENSOR_TF_INTEGRATION_PUBLISHERS=PASS_SIX_DISTINCT_DDS_WRITERS
+STAGE3_SENSOR_TF_INTEGRATION_FRAME_OWNERSHIP=PASS_EXACT_CHILDREN_AND_PARENTS
+STAGE3_SENSOR_TF_INTEGRATION_SHUTDOWN=PASS
+STAGE3_SENSOR_TF_INTEGRATION_REAL_NODES=PASS_SIX_STANDARD_STATIC_TF_PUBLISHERS
+STAGE3_SENSOR_TF_INTEGRATION_MCU_CAMERA_MOTOR_ACCESS=NONE
+STAGE3_SENSOR_TF_INTEGRATION_MOTION_OR_RECORDING=NOT_AUTHORIZED
+STAGE3_SENSOR_TF_INTEGRATION_CONTAINER_DEVICES=NONE
+STAGE3_SENSOR_TF_INTEGRATION=PASS_REAL_TF_STATIC_NO_DEVICE
+STAGE3_SENSOR_TF_INTEGRATION_HOST_DEVICES=NOT_MAPPED
+STAGE3_SENSOR_TF_INTEGRATION_PINNED_IMAGE=UNCHANGED
+STAGE3_SENSOR_TF_INTEGRATION_GEOMETRY=PROVISIONAL
+STAGE3_SENSOR_TF_INTEGRATION_MCU_CAMERA_MOTORS=NOT_AUTHORIZED
+```
+
+**Shutdown log interpretation:** The launch printed process-exit
+`-2` and `process has died` messages *after* the observer initiated
+a controlled `SIGINT` on the isolated process group. It subsequently
+confirmed `STAGE3_SENSOR_TF_INTEGRATION_SHUTDOWN=PASS`, and the final
+test PASS was emitted. These shutdown diagnostics are not evidence of
+an unexpected runtime crash in this trial.
+
+**Accepted scope:** real package build/install in disposable container
+tmpfs, real six static TF processes, six correct ROS `/tf_static`
+transform messages, DDS publisher count/ownership, and graceful
+observed shutdown. The original source-only YAML test also remains
+PASS. **No need to rerun either unchanged test.**
+
+**Still unvalidated:** installation into the actual deployed robot
+runtime image, physical IMU/camera sensor centres, camera–IMU event
+phase, live XRSLAM metric pose, Nav2 navigation safety, MCU serial,
+recording or motor access. The `status: provisional` YAML marker and
+XRSLAM/Nav2 inhibit gates remain in place. Draft PR #154 stays draft.
+
+Earlier `NOT YET RUN` or `RETEST PENDING` notes later in this
+document are **historical development records, superseded by the
+operator PASS above**, not current instructions to retest the same
+source.
+
+
 ## Current acceptance: direct YAML static TF source test — OPERATOR PASS
 
 The operator's latest zero-device test of the pinned, source-only
