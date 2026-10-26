@@ -39,7 +39,9 @@ class PhysicalMotorFeedback:
             active = self._gpiod.line.Value.ACTIVE
             return (self._request.get_value(self._estop) == active,
                     self._request.get_value(self._power) == active)
-        except (OSError, RuntimeError, ValueError):
+        except Exception:
+            # A Python binding/backend fault must never leave a remembered
+            # "powered and E-stop released" state.
             return False, False
 
     def close(self):
