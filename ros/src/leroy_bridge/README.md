@@ -79,7 +79,11 @@ The MCU watchdog zeroes commanded outputs only while MCU main loop
 runs; the separate hardware cutoff is essential. Check the motor-rail
 voltage with the cutoff operated *while the laptop USB is connected*,
 ensure the wheel cannot reach the floor or an operator, and only then
-run the one-shot pulse. Begin with `--wheel fl --pwm 24 --duration-ms 150` only if\nindependent motor cutoff has been physically verified with USB connected,\nwheels are securely supported, and the previous 60 ms pulse showed only a\nsmall twitch. If that barely moves, stop before trying higher duty and\nrecord the supply/driver wiring and observations. The script can be run with motor supply
+run the one-shot pulse. Begin with `--wheel fl --pwm 24 --duration-ms 150` only if
+independent motor cutoff has been physically verified with USB connected,
+wheels are securely supported, and the previous 60 ms pulse showed only a
+small twitch. If that barely moves, stop before trying higher duty and
+record the supply/driver wiring and observations. The script can be run with motor supply
 disconnected first as a communication/protocol rehearsal. It never
 configures the production authority's E-stop or rail inputs.
 
