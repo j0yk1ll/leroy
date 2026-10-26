@@ -8,9 +8,12 @@ import rclpy
 from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.qos import (
+    DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy,
+)
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu
+from std_msgs.msg import String
 from tf2_ros import TransformBroadcaster
 from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
@@ -18,6 +21,13 @@ from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
 from leroy_bridge.command_ingress import command_to_bytes, CommandRejected
 from leroy_bridge.bridge_signed_audit import BridgeSignedAudit
 from leroy_bridge.bridge_diagnostic_supervisor import BridgeDiagnosticSupervisor
+from leroy_bridge.authorized_session import (
+    MotionEnvelope, RearmEnvelope, SessionVerifier,
+)
+from leroy_bridge.motor_authority import MotorAuthority, HEALTH_KEYS
+from leroy_bridge.motor_signed_ingress import (
+    MotorInputRejected, parse_signed_envelope, read_protected_key,
+)
 
 import serial
 
@@ -80,6 +90,14 @@ class LeroyBridgeNode(Node):
                                descriptor=ParameterDescriptor(read_only=True))
         self.declare_parameter('max_pwm', 255,
                                descriptor=ParameterDescriptor(read_only=True))
+        # Both role keys must come from protected files. Empty-by-default
+        # means no signed actuator ROS ingress or signing session at all.
+        self.declare_parameter(
+            'motor_motion_key_file', '',
+            descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter(
+            'motor_operator_key_file', '',
+            descriptor=ParameterDescriptor(read_only=True))
 
         # Encoder/odometry calibration. The right-side encoders are currently
         # unavailable, so odometry can explicitly run in a degraded mode using
@@ -160,6 +178,8 @@ class LeroyBridgeNode(Node):
         self._clock_mapper = McuClock(self)
         self._clock_fault = False
         self._stop_event = threading.Event()
+        # Validate optional signer custody BEFORE opening real MCU CDC.
+        self._configure_signed_motor_ingress()
         self._last_imu_seq: Optional[int] = None
         self._last_encoder_seq: Optional[int] = None
 
@@ -200,6 +220,9 @@ class LeroyBridgeNode(Node):
         self._keepalive_timer = self.create_timer(
             self._keepalive_period_s, self._send_keepalive
         )
+        if self._motor_authority is not None:
+            # A single 20 Hz bridge-owned authority evaluator.
+            self._motor_timer = self.create_timer(0.05, self._motor_tick)
 
         if self._publish_odom_tf and not self._degraded_odometry_enabled:
             self.get_logger().warning(
@@ -220,15 +243,127 @@ class LeroyBridgeNode(Node):
         # No geometry, PWM gain, ROS remap or runtime parameter can
         # enable motion under the M22D CDC allowlist.
         self.get_logger().warning(
-            'M22D: raw /cmd_vel disabled; CDC permits ZERO wheel '
-            'commands and approved sensor/watchdog controls ONLY. '
-            'No motion-authority ingress is implemented.'
+            'M22D: raw /cmd_vel disabled; arbitrary string commands '
+            'remain ZERO-wheel only. Signed actuator topics are off '
+            'unless protected role keys are provisioned; independent '
+            'physical-interlock release is NOT implemented.'
         )
 
         self.get_logger().info(
             f'Connected to {self._serial_port}; IMU={self._imu_stream_hz} Hz, '
             f'encoders={self._encoder_stream_hz} Hz, watchdog={self._watchdog_ms} ms'
         )
+
+    def _configure_signed_motor_ingress(self) -> None:
+        """Accept signed ROS messages only with two protected local keys.
+
+        These inputs are NOT motor-power or E-stop assertions. The physical
+        motor release is deliberately false until a real independent
+        hardware interlock provider and sensor readiness exist.
+        """
+        motion_path = self.get_parameter('motor_motion_key_file').value
+        operator_path = self.get_parameter('motor_operator_key_file').value
+        if type(motion_path) is not str or type(operator_path) is not str:
+            raise ValueError('motor signing key paths must be strings')
+        if bool(motion_path) != bool(operator_path):
+            raise ValueError('both motor signing roles must be provisioned')
+        self._pending_motor_motion = None
+        self._motor_last_state = 'LATCHED'
+        if not motion_path:
+            return
+        if not self._kinematics_configured():
+            raise ValueError('motor authority requires configured geometry')
+        motion_key = read_protected_key(motion_path)
+        operator_key = read_protected_key(operator_path)
+        verifier = SessionVerifier(
+            motion_key=motion_key, operator_key=operator_key)
+        self._motor_authority = MotorAuthority(
+            verifier=verifier,
+            wheel_radius_m=float(self._wheel_radius_m),
+            half_wheelbase_m=float(self._half_wheelbase_m),
+            half_track_m=float(self._half_track_m),
+            pwm_per_rad_s=float(self._wheel_velocity_to_pwm_gain),
+            max_pwm=int(self._max_pwm))
+        self._motor_session_pub = self.create_publisher(
+            String, '/leroy/motor/session_id',
+            QoSProfile(
+                depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self._motor_session_pub.publish(
+            String(data=verifier.session_id))
+        self._motor_motion_sub = self.create_subscription(
+            String, '/leroy/motor/signed_motion',
+            self._on_signed_motor_motion, 10)
+        self._motor_rearm_sub = self.create_subscription(
+            String, '/leroy/motor/signed_rearm',
+            self._on_signed_motor_rearm, 10)
+        self.get_logger().warning(
+            'Signed motion ingress configured, but physical motor '
+            'interlock and validated sensor health are still unavailable; '
+            'nonzero serial release stays inhibited.')
+
+    def _motor_trusted_inputs(self):
+        """Never mistake subscribed ROS status for trusted safety state.
+
+        An independent hardware interlock + real validated localization
+        adapter must replace these conservative defaults before motor
+        authority can arm. Do not add a ROS boolean 'enable' topic.
+        """
+        return dict(
+            health={key: False for key in HEALTH_KEYS},
+            estop_released=False,
+            motor_rails_verified=False,
+            transport_healthy=not self._transport_fault.is_set(),
+            clock_healthy=not self._clock_fault,
+            bridge_running=not self._stop_event.is_set(),
+            single_controller=False,
+        )
+
+    def _on_signed_motor_motion(self, message):
+        if self._motor_authority is None:
+            return
+        try:
+            self._pending_motor_motion = parse_signed_envelope(
+                message.data, MotionEnvelope)
+        except MotorInputRejected as exc:
+            self._pending_motor_motion = None
+            self._motor_authority.stop()
+            self.get_logger().error(
+                f'Signed motor proposal rejected and authority revoked: {exc}')
+
+    def _on_signed_motor_rearm(self, message):
+        if self._motor_authority is None:
+            return
+        try:
+            grant = parse_signed_envelope(message.data, RearmEnvelope)
+        except MotorInputRejected as exc:
+            self._motor_authority.stop()
+            self.get_logger().error(
+                f'Signed operator grant malformed; authority revoked: {exc}')
+            return
+        decision = self._motor_authority.rearm(
+            grant=grant, now_ns=time.monotonic_ns(),
+            **self._motor_trusted_inputs())
+        self.get_logger().info(
+            f'Motor rearm result: {decision.state} {decision.reason}')
+
+    def _motor_tick(self):
+        if self._motor_authority is None:
+            return
+        motion = self._pending_motor_motion
+        self._pending_motor_motion = None
+        decision = self._motor_authority.step(
+            motion=motion, now_ns=time.monotonic_ns(),
+            **self._motor_trusted_inputs())
+        if decision.nonzero_candidate:
+            if not self._send_command(decision):
+                self._motor_authority.stop()
+        elif (self._motor_last_state == 'ARMED'
+              and decision.state in ('LATCHED', 'TERMINAL')):
+            # Fast zero request is not proof of physical stopping.
+            if not self._send_command('set_wheels 0 0 0 0'):
+                self._motor_authority.stop()
+        self._motor_last_state = decision.state
 
     def _validate_parameters(self) -> None:
         allowed_stream_hz = {0, 10, 20, 50, 100}
