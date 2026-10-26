@@ -126,12 +126,20 @@ def main_operator(args=None):
     opts = parser.parse_args(args)
     # Require an actual local console; never accept automated stdin input
     # as evidence of the present operator.
-    with open("/dev/tty", "r+", encoding="ascii") as tty:
-        tty.write("Confirm independent motor cutoff and clear wheel paths.\n"
-                  "Type ARM_MOTORS to request this bridge session's grant: ")
-        tty.flush()
-        if tty.readline().strip() != "ARM_MOTORS":
-            raise SystemExit("Operator declined motor arming")
+    try:
+        with open("/dev/tty", "r", encoding="ascii") as tty_in, \
+             open("/dev/tty", "w", encoding="ascii") as tty_out:
+            tty_out.write(
+                "Confirm independent motor cutoff and clear wheel paths.\n"
+                "Type ARM_MOTORS to request this bridge session's grant: "
+            )
+            tty_out.flush()
+            if tty_in.readline().strip() != "ARM_MOTORS":
+                raise SystemExit("Operator declined motor arming")
+    except OSError as exc:
+        raise SystemExit(
+            f"Interactive operator terminal unavailable: {exc}"
+        ) from exc
     # The explicit --operator-key-file argument is handled by argparse,
     # not by the ROS argument parser.
     rclpy.init(args=[])
