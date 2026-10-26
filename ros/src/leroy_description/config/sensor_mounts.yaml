@@ -1,32 +1,44 @@
-# Leroy robot sensor mounting configuration.
+# Leroy's fixed robot sensor TF configuration; no URDF/Xacro is required.
 #
-# Single editable source for fixed, ROBOT-ALIGNED sensor mount geometry
-# consumed by leroy_description/urdf/leroy.urdf.xacro.
+# Only ros/src/leroy_description/launch/description.launch.py publishes
+# these exact six parent->child transforms using tf2_ros static publishers.
 #
-# Frame convention: base_link +X forward, +Y left, +Z up.
-# xyz in METRES, rpy in RADIANS (roll, pitch, yaw).
+# Parent base_link convention: +X forward, +Y left, +Z up.
+# xyz values are METRES. rpy values are RADIANS (roll, pitch, yaw).
+# Frame names/topology are fixed by the launcher and cannot be changed by
+# YAML content. The numbers below preserve the former URDF exactly.
 #
-# IMPORTANT: values below preserve the existing URDF exactly and remain
-# PROVISIONAL where called out. They are NOT validated physical sensor
-# centres, camera/IMU phase calibration or permission to enable VIO/Nav2.
+# WARNING: physical mount positions/angles are PROVISIONAL. Zero camera
+# translations are placeholders, not measured optical centers. No change
+# to this file authorizes XRSLAM metric pose, map TF, Nav2 or motion.
 #
-# The STM32 publishes ALREADY ROTATED robot-frame gyro/accel samples:
-# forward=-ICM X, left=-ICM Y, up=+ICM Z. Do NOT apply that 180-degree
-# physical IMU package rotation here as well. Current imu_link rotation
-# is identity for this pre-rotated ROS message frame.
+# The MCU already outputs robot-aligned IMU values (+forward=-ICM X,
+# +left=-ICM Y, +up=+ICM Z). Keep the imu_link rpy identity to avoid
+# rotating the chip axes twice. Firmware axes are configured separately
+# in PR #155.
 #
-# The fixed front_camera_link -> front_camera_optical_frame conversion
-# (ROS optical axis convention) stays in Xacro, not this hardware profile.
-
+# 'fixed_frames' contain ROS standard optical-axis rotations and a
+# compatibility alias; they were previously fixed joints in Xacro.
 status: provisional
 
 mounts:
   imu:
-    xyz: [0.095, -0.095, 0.0]  # +95 mm forward, -95 mm left (95 mm right)
-    rpy: [0.0, 0.0, 0.0]       # messages already robot-axis-aligned
+    xyz: [0.095, -0.095, 0.0]
+    rpy: [0.0, 0.0, 0.0]
   front_camera:
-    xyz: [0.0, 0.0, 0.0]     # PLACEHOLDER, not measured optical centre
-    rpy: [0.0, 0.5235987755982988, 0.0]   # +30 deg mounting pitch
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [0.0, 0.5235987755982988, 0.0]
   workspace_camera:
-    xyz: [0.0, 0.0, 0.0]     # PLACEHOLDER
-    rpy: [0.0, 1.0471975511965976, 0.0]  # +60 deg mounting pitch
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [0.0, 1.0471975511965976, 0.0]
+
+fixed_frames:
+  front_camera_optical:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [-1.5707963267948966, 0.0, -1.5707963267948966]
+  workspace_camera_optical:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [-1.5707963267948966, 0.0, -1.5707963267948966]
+  camera_optical_alias:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [0.0, 0.0, 0.0]
