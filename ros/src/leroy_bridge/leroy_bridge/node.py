@@ -448,7 +448,14 @@ class LeroyBridgeNode(Node):
         decision = self._motor_authority.step(
             motion=motion, now_ns=time.monotonic_ns(),
             **self._motor_trusted_inputs())
-        if decision.nonzero_candidate:
+        # A freshly signed ZERO Twist is an explicit motor-stop command.
+        # Forward it through the same single-use authority handoff and
+        # sequenced MCU path, which disables wheel drivers on zero duty.
+        # 'nonzero_candidate' must never be used as a serial gate here:
+        # doing so can leave a previous nonzero PWM active while a fresh
+        # zero command incorrectly keeps the session heartbeat valid.
+        if (decision.state == 'ARMED'
+                and decision.reason == 'FRESH_SIGNED_CONTROLLER_COMMAND'):
             if not self._send_command(decision):
                 self._motor_authority.stop()
         if decision.state == 'ARMED':
