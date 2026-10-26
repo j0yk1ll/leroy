@@ -464,6 +464,13 @@ class LeroyBridgeNode(Node):
         authority = None
         try:
             if type(command) is str:
+                # No later in-process call may silently lengthen or
+                # disable a watchdog protecting an active signed session.
+                if (getattr(self, '_motor_authority', None) is not None
+                        and command.startswith('set_watchdog_ms ')
+                        and command != f'set_watchdog_ms {self._watchdog_ms}'):
+                    raise CommandRejected(
+                        'cannot weaken signed-session MCU watchdog')
                 payload = command_to_bytes(command)
             else:
                 authority = getattr(self, '_motor_authority', None)
