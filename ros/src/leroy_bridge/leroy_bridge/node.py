@@ -163,9 +163,9 @@ class LeroyBridgeNode(Node):
             TransformBroadcaster(self)
             if self._degraded_odometry_enabled and self._publish_odom_tf else None
         )
-        # M22D deliberately has NO /cmd_vel subscription. Raw Twist commands
-        # are not an authorized actuator interface. No alternative motion
-        # ingress is enabled in this milestone.
+        # M22D deliberately has NO raw /cmd_vel subscription. The new
+        # signed-only motion/rearm interfaces are provisioned separately;
+        # without independent physical readiness they cannot reach CDC.
 
         # The signed MotorAuthority handoff is now recognized by the sole
         # CDC writer. This deployment has no trusted hardware interlock
