@@ -1,5 +1,41 @@
 # leroy_bridge
 
+## Motor authority implementation (new branch, not energized)
+
+`leroy_bridge.motor_authority.MotorAuthority` is the first
+**functional command-path** implementation: a single signed session
+may produce a finite, bounded four-wheel `set_wheels` command only
+after a separately signed operator rearm, one second of healthy
+continuous evaluation, verified exclusive controller ownership,
+explicit physical-interlock information and fresh signed proposals.
+The evaluator latches sensor/clock/transport/command faults, rejects
+replay and stalls, and never automatically rearms. The PWM ceiling
+is an upper software limit, not measured physical speed calibration.
+
+**Physical movement is still disabled**: no live ROS motion
+subscription, trusted sensor/interlock adapters, key provisioning,
+or MCU serial release is installed. The existing `M22D` production
+`command_ingress.command_to_bytes` still rejects every nonzero wheel
+packet, even when an authority candidate is generated. The authority
+core's packet is not a motor-stop ACK, physical E-stop or a deployment
+permission. No motor, firmware, startup image or camera process is
+changed in this milestone.
+
+One focused pure-Python test, with no ROS, Podman or device access:
+
+```bash
+cd ros
+PYTHONPATH="$PWD/src/leroy_bridge" PYTHONDONTWRITEBYTECODE=1 \
+  python3 -m unittest discover -s src/leroy_bridge/test -p test_motor_authority.py -v
+```
+
+Next implementation work is to connect trusted controller commands,
+authenticated operator arming, verified physical interlocks and the
+bridge's **sole serial writer** under one revocable authority. Do not
+remove `M22D` or run normal `robot.launch.py` merely to bypass the
+remaining physical safety boundary.
+
+
 ROS 2 Jazzy serial bridge for Leroy's MCU. It owns hardware
 telemetry and is the intended future actuator interface, but **M22D removes
 the raw `/cmd_vel` subscription and inhibits ALL nonzero wheel commands**.
