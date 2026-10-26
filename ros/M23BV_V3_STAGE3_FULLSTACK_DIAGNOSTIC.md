@@ -769,3 +769,50 @@ marker, the publisher/action and override/invalid-config PASS markers,
 and only then
 `STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE`.
 Do not declare the previously blocked run as a PASS.
+
+## Stage 3 YAML TF source test — package lookup fixture correction
+
+The operator retried with the corrected ROS log destination. Their
+output confirmed successful:
+```text
+STAGE3_SENSOR_TF_LAUNCH_LOG_DIR=EPHEMERAL_CONTAINER_TMPFS
+STAGE3_SENSOR_TF_FRAME_TREE=PASS_SIX_UNCHANGED_STATIC_EDGES
+STAGE3_SENSOR_TF_IMU=PASS_ALREADY_ROBOT_ALIGNED
+STAGE3_SENSOR_TF_OPTICAL_CONVENTIONS=PASS
+```
+
+The next test step attempted to generate the launch description and
+correctly stopped with:
+
+```text
+ament_index_python.packages.PackageNotFoundError:
+"package 'leroy_description' not found, searching: ['/opt/ros/jazzy']"
+STAGE3_SENSOR_TF=BLOCKED_VALIDATION_FAILED
+```
+
+**This does not implicate the YAML values or TF structure.** The pinned
+sensor image was built before this new source-only description package
+revision and does not contain an installed `leroy_description` package
+in its ament resource index. An installed launch normally discovers its
+package share directory through that index.
+
+The read-only test harness now creates a **minimal temporary ament
+index fixture** entirely in the preexisting container `/tmp` tmpfs,
+registers `leroy_description`, copies the checked-in YAML to the
+temporary package share path, and temporarily prepends the fixture to
+`AMENT_PREFIX_PATH`. It verifies the package lookup resolves and
+the installed-source fixture YAML bytes match the mounted original,
+then continues with action construction, YAML override and negative
+validation. It neither installs `leroy_description` into the immutable
+image nor builds/starts any nodes.
+
+Expected additional markers **not yet operator-observed**:
+
+```text
+STAGE3_SENSOR_TF_AMENT_INDEX=EPHEMERAL_SOURCE_FIXTURE_NO_INSTALL
+STAGE3_SENSOR_TF_PACKAGE_LOOKUP=PASS_EPHEMERAL_AMENT_INDEX_ONLY
+```
+
+The real runtime package install/startup and live TF publication remain
+**NOT TESTED**. A future deployment validation will require a separate
+reviewed image/package build; the accepted pinned images are unchanged.
