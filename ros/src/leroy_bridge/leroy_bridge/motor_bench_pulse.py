@@ -10,9 +10,9 @@ import time
 import serial
 
 
-MAX_PWM = 24
-PULSE_SECONDS = 0.060
-WATCHDOG_MS = 120
+MAX_PWM = 48
+MAX_PULSE_MS = 150
+WATCHDOG_MARGIN_MS = 100
 WHEELS = {"fl": 0, "fr": 1, "rl": 2, "rr": 3}
 
 
@@ -33,13 +33,16 @@ def _request(mcu, command, expected, *, ack_timeout_s=0.25):
 
 def main(args=None):
     parser = argparse.ArgumentParser(
-        description="One <=60ms wheel pulse, with MCU watchdog and stop ACK")
+        description="One short (<=150ms) low-duty wheel pulse with MCU watchdog and STOP ACK")
     parser.add_argument("--port", default="/dev/ttyACM0")
     parser.add_argument("--wheel", choices=tuple(WHEELS), required=True)
     parser.add_argument("--pwm", type=int, default=18)
+    parser.add_argument("--duration-ms", type=int, default=60)
     opts = parser.parse_args(args)
     if not 1 <= opts.pwm <= MAX_PWM:
-        parser.error("pwm must be 1..24")
+        parser.error("pwm must be 1..48")
+    if not 20 <= opts.duration_ms <= MAX_PULSE_MS:
+        parser.error("duration-ms must be 20..150")
     if not opts.port.startswith("/dev/"):
         parser.error("pass actual /dev/ttyACM* controller path")
 
@@ -74,7 +77,10 @@ def main(args=None):
         raise RuntimeError("MCU uint32 sequence range unavailable")
     pwm = [0, 0, 0, 0]
     pwm[WHEELS[opts.wheel]] = opts.pwm
-    print(f"Wheel={opts.wheel} duty={opts.pwm}/255 commanded pulse target 60ms")
+    watchdog_ms = opts.duration_ms + WATCHDOG_MARGIN_MS
+    print(f"Wheel={opts.wheel} duty={opts.pwm}/255 "
+          f"commanded pulse target {opts.duration_ms}ms; "
+          f"MCU watchdog {watchdog_ms}ms")
     try:
         # POSIX exclusive advisory lock: ensure ROS bridge already stopped.
         with serial.Serial(opts.port, baudrate=115200, timeout=0.025,
@@ -84,7 +90,7 @@ def main(args=None):
             try:
                 _request(mcu, f"stop_wheels_tx {seq}",
                          f"ok stop_wheels_tx seq={seq}")
-                _request(mcu, f"set_watchdog_ms {WATCHDOG_MS}",
+                _request(mcu, f"set_watchdog_ms {watchdog_ms}",
                          "ok set_watchdog_ms")
                 pulse_started = time.monotonic()
                 _request(
@@ -95,10 +101,11 @@ def main(args=None):
                 )
                 # Never send keepalive. Bound the host-requested pulse
                 # from BEFORE the wheel packet, not after waiting for ACK.
-                # MCU watchdog (120ms) protects a stalled host only while
+                # MCU watchdog (pulse + 100ms) protects a stalled host while
                 # its main loop remains responsive. The hardwired cutoff
                 # remains essential.
-                remaining = PULSE_SECONDS - (time.monotonic() - pulse_started)
+                remaining = (opts.duration_ms / 1000.0) - (
+                    time.monotonic() - pulse_started)
                 if remaining > 0:
                     time.sleep(remaining)
                 _request(mcu, f"stop_wheels_tx {seq+2}",
