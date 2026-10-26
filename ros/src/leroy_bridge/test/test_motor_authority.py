@@ -80,6 +80,27 @@ class MotorAuthorityTest(unittest.TestCase):
         self.assertEqual(len(d.wheel_pwm), 4)
         self.assertTrue(all(abs(v) <= HARD_PWM_CEILING for v in d.wheel_pwm))
 
+    def test_signed_zero_is_fresh_one_use_serial_stop_command(self):
+        # A signed zero has no nonzero_candidate, but MUST be forwarded
+        # to firmware's set_wheels_tx zero -> platform_disable path.
+        self.arm()
+        self.t += 100_000_000
+        decision = self.authority.step(
+            motion=self.motion(seq=1, vx=0.0, vy=0.0, wz=0.0),
+            now_ns=self.t, health=GOOD_HEALTH, **INTERLOCKS)
+        self.assertEqual(decision.state, "ARMED")
+        self.assertEqual(
+            decision.reason, "FRESH_SIGNED_CONTROLLER_COMMAND")
+        self.assertFalse(decision.nonzero_candidate)
+        self.assertEqual(decision.wheel_pwm, (0, 0, 0, 0))
+        self.assertEqual(
+            self.authority.consume_serial_payload(
+                decision, now_ns=self.t + 1_000_000),
+            b"set_wheels 0 0 0 0\\n")
+        self.assertIsNone(
+            self.authority.consume_serial_payload(
+                decision, now_ns=self.t + 2_000_000))
+
     def test_signed_ros_json_schema_and_duplicate_key_guard(self):
         import json
         from dataclasses import asdict
