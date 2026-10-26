@@ -61,7 +61,14 @@ test "$ROS_LOG_DIR" = /tmp/leroy-ros-logs
 test "$ROS_HOME" = /tmp/leroy-ros-home
 test "$XDG_CACHE_HOME" = /tmp/leroy-cache
 mkdir -p "$ROS_LOG_DIR" "$ROS_HOME" "$XDG_CACHE_HOME"
+# The upstream ROS Jazzy setup files reference optional variables (such as
+# AMENT_TRACE_SETUP_FILES) without a default. Temporarily disable nounset
+# ONLY while sourcing this trusted, pinned image's environment setup.
+# -e and pipefail stay enabled; restore -u before performing any checks.
+set +u
 . /opt/ros/jazzy/setup.sh
+set -u
+echo STAGE3_SENSOR_TF_INTEGRATION_ROS_SETUP=PASS_NOUNSET_RESTORED
 command -v colcon >/dev/null
 command -v ros2 >/dev/null
 python3 -B -c 'import rclpy, launch_ros, tf2_msgs, yaml'
@@ -77,7 +84,12 @@ colcon --log-base /tmp/leroy_static_tf_ws/log build \
   --install-base /tmp/leroy_static_tf_ws/install \
   --cmake-args -DBUILD_TESTING=OFF \
   --event-handlers console_direct+
+# Generated colcon local_setup also expects optional environment variables
+# to be unset safely. Keep strict mode enabled for all actual build checks.
+set +u
 . /tmp/leroy_static_tf_ws/install/local_setup.sh
+set -u
+echo STAGE3_SENSOR_TF_INTEGRATION_LOCAL_SETUP=PASS_NOUNSET_RESTORED
 test "$(ros2 pkg prefix leroy_description)" = /tmp/leroy_static_tf_ws/install
 echo STAGE3_SENSOR_TF_INTEGRATION_BUILD=PASS_EPHEMERAL_PACKAGE_INSTALL
 python3 -B /opt/leroy_tf_live_verify.py
