@@ -1,97 +1,89 @@
 # leroy_bridge
 
-## Motor authority implementation (new branch, not energized)
+## PR #156 — complete software motor-control path (NOT hardware-commissioned)
 
-`leroy_bridge.motor_authority.MotorAuthority` is the first
-**functional command-path** implementation: a single signed session
-may produce a finite, bounded four-wheel `set_wheels` command only
-after a separately signed operator rearm, one second of healthy
-continuous evaluation, verified exclusive controller ownership,
-explicit physical-interlock information and fresh signed proposals.
-The evaluator latches sensor/clock/transport/command faults, rejects
-replay and stalls, and never automatically rearms. The PWM ceiling
-is an upper software limit, not measured physical speed calibration.
+This branch now contains **implementation**, not another ROS diagnostics
+suite:
 
-**Bridge integration (single serial writer):** The production
-`LeroyBridgeNode._send_command` now accepts *an in-process decision
-object*, in addition to its existing string commands. Raw strings
-still go through the unchanged zero-only M22D validator. The new
-`MotorAuthority.consume_serial_payload` recognizes **only the exact
-one-use object** minted from a signed, accepted motion, for at most
-100 ms, and only inside the bridge's existing sole CDC writer
-lock. Forged/copied, stale, replayed and stop-revoked decisions cannot
-be serialized. Bridge serial read/write/flush, clock faults and
-shutdown revoke any pending authority. The existing single
-`self._serial.write` call is unchanged.
+- `MotorAuthority`: session-bound signed rearm plus a one-second healthy
+  dwell, non-replayed signed command, bounded mecanum four-wheel duty
+  (maximum ±64), strict monotonic expiry and latched stop/fault behavior.
+- `motor_signer.py`: separate `leroy_motor_controller_signer` subscribes
+  to actual Nav2 `/cmd_vel` (`geometry_msgs/Twist`), rejects invalid
+  inputs and signs commands with the controller key for the fresh bridge
+  session. `leroy_motor_operator_grant` requires the physically present
+  operator to enter `ARM_MOTORS` on `/dev/tty`, then signs a **separate**
+  one-shot rearm request. Neither component can independently enable motors.
+- `motor_key_provision.py`: explicit `leroy_motor_provision_keys`
+  creates separate 32-byte cryptographic role keys under a pre-existing
+  private, owner-only directory, without printing key material.
+  The bridge reads both through O_NOFOLLOW, verifies size and ownership,
+  and creates no motor ROS subscriptions by default.
+- `motor_cdc_protocol.py` plus `firmware/src/command.c`: the host's
+  **single** `_send_command` CDC writer issues
+  `set_wheels_tx seq FL FR RL RR` only after a signed one-use decision
+  and rechecks physical feedback immediately before writing. MCU
+  `ok set_wheels_tx seq=N` acknowledgement must match exactly the one
+  outstanding transaction inside 150 ms. A separate
+  `stop_wheels_tx seq` overrides a pending motion ACK; the MCU zeros
+  wheel duties, disables wheel-driver enable lines and responds
+  `ok stop_wheels_tx seq=N`. Missing/mismatched ACK terminates
+  the command session. **MCU command acceptance is not physical
+  wheel-stopped confirmation.** Old open-loop movement commands and
+  legacy nonzero `set_wheels` are disabled in the updated firmware.
+- `motor_gpio_feedback.py`: read-only libgpiod-v2 feedback from
+  TWO separate active-high inputs belonging to the independently
+  hardwired motor-power cutoff: E-stop loop healthy and power
+  contactor feedback. Required chip path/offsets are deliberately
+  absent by default. No ROS parameter or GPIO software output
+  substitutes for an independent power-disconnect circuit.
+- `motor_sensor_health.py`: real, typed, freshness-limited data from
+  XRSLAM `/xrslam/localization_valid` and
+  `/xrslam/tracking_status`, metric `/odom`, dynamic `/tf`
+  (`odom → base_link`), DepthART `/depthart/depth`,
+  and `/local_costmap/costmap`. Absent/stale/malformed messages
+  block authority. This is an input plausibility gate, **not proof
+  that sensor timing, extrinsics, footprint or physical obstacle
+  detection is calibrated**.
+- MCU watchdog: the firmware boots with it disabled. A signed session
+  requires a 1–500 ms watchdog ACK and cannot extend it. Bridge
+  keepalive is permitted only while the signed command/authority is
+  continuously fresh; lost controller input or fault stops keepalives.
+  This is separate from the required independent electrical cutoff.
 
-**Controller-facing ROS ingress is now wired.** When (and
-only when) **both** protected 32-byte role-key files are provided
-through the read-only startup parameters `motor_motion_key_file` and
-`motor_operator_key_file`, the bridge instantiates a new signed
-session. It publishes a fresh nonce on `/leroy/motor/session_id`
-(`std_msgs/String`, transient-local) and subscribes to the two
-`std_msgs/String` JSON topics
-`/leroy/motor/signed_motion` and
-`/leroy/motor/signed_rearm`. Messages have exact
-`MotionEnvelope` / `RearmEnvelope` fields, no duplicate JSON
-keys, and no raw `/cmd_vel` alternative. The bridge runs one
-20-Hz authority evaluation loop, and terminal faults revoke the
-session. Key files must be regular, nonsymlinked, single-link
-32-byte files owned by the process UID with no group/other access.
-Neither key nor HMAC is published as a status.
+### Operator configuration, intentionally absent
 
-**Physical movement is still disabled:** With the default empty
-role-key paths, the bridge creates **no signed motor subscribers**
-and sets `_motor_authority=None` before MCU serial initialization.
-Even if signing keys are explicitly provisioned, the code sets
-`_motor_hardware_release_verified=False` and its independent
-trusted-health, physical E-stop, motor-rail and sole-controller
-provider reports unavailable. No ROS publisher, remap or parameter
-can turn that into physical permission. The signed topics are a
-transport and authenticity mechanism, **not** independent
-hardware-interlock evidence. The conditional nonzero CDC path
-cannot activate in normal robot runtime. Do not start powered
-motors or deploy `robot.launch.py` based on this commit.
-No firmware, image or camera process changed.
+**No default robot activation, image switch, GPIO pin guess or
+firmware flash is part of this PR.** Normal `leroy_bridge.yaml` has
+empty motor key paths and no GPIO chip/offsets. Provision keys and
+read-only physical feedback ONLY in a supervised, safety-reviewed
+commissioning session. `python3-gpiod` with the libgpiod **v2** Python
+API and access to the exact `/dev/gpiochip*` device are needed.
+The actual emergency-stop contactor circuit must be built/wired
+independently of ROS/Linux/STM32 and shown to interrupt motor power.
 
-One focused pure-Python test, with no ROS, Podman or device access:
+On a provisioned host, ROS binaries are:
+`leroy_motor_provision_keys --directory <private-dir>`,
+`leroy_motor_controller_signer --ros-args -p
+motion_key_file:=<private-motion.key>`, and
+`leroy_motor_operator_grant --operator-key-file
+<private-operator.key>`. Bridge parameters:
+`motor_motion_key_file`, `motor_operator_key_file`,
+`motor_gpio_chip`, `motor_estop_feedback_offset`,
+`motor_power_feedback_offset`. These are **not executable
+deployment instructions** until installed firmware, verified MCU
+stop behavior, independent cutoff and real source calibration
+are established.
 
-```bash
-cd ros
-PYTHONPATH="$PWD/src/leroy_bridge" PYTHONDONTWRITEBYTECODE=1 \
-  python3 -m unittest discover -s src/leroy_bridge/test -p test_motor_authority.py -v
-```
+A separate supervised powered-wheel acceptance is still required.
+No real rover hardware, MCU, motor supply, firmware flash, depth
+sensor or Nav2 goal has been accessed in this branch. The checked-in
+motor settings remain provisional. The existing unit file
+`test_motor_authority.py` is focused code coverage, **not a new
+diagnostic framework**; no operator execution result has been
+claimed.
 
-**MCU watchdog binding (current follow-up):** the firmware initializes
-its communications watchdog OFF at boot. When signed motor ingress is
-configured, the bridge now requires a positive MCU watchdog timeout
-no greater than 500 ms, listens for the MCU's
-`ok set_watchdog_ms` acknowledgment, and treats absence of that
-ACK as unhealthy motor transport. Crucially, the periodic
-`keepalive` may refresh this MCU watchdog **only while the signed
-motor authority is ARMED, its control-loop tick is recent, and its
-last accepted signed controller command is younger than 250 ms**.
-On a fault, timeout, replay, expired session or shutdown the
-authority stops refreshing keepalives, so an MCU still running the
-configured watchdog has a separate opportunity to stop persistent
-wheel commands. This preserves the legacy keyless telemetry bridge
-behavior. The existing focused unit test covers heartbeat expiry.
-
-A successful `ok set_watchdog_ms` reply proves **configuration
-acknowledgment only**. It does not prove that a particular
-`set_wheels 0 0 0 0` stopped all wheels; the existing
-`ok set_wheels` protocol has no unique sequence or physical
-feedback. The bridge does not yet verify independent motor disable,
-physical stopping, or emergency-stop hardware.
-
-The remaining implementation blockers are **trusted physical
-interlock acquisition and measured sensor/controller ownership**,
-followed by a real MCU STOP/ACK and fail-safe stop behavior at
-the physical interface. This work belongs in the same focused
-motor-control workstream, not another TF test campaign.
-Do not remove the M22D raw-string allowlist or run
-`robot.launch.py` to bypass physical protection.
-
+---
 
 ROS 2 Jazzy serial bridge for Leroy's MCU. It owns hardware
 telemetry and is the intended future actuator interface, but **M22D removes
