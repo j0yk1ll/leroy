@@ -385,6 +385,8 @@ class LeroyBridgeNode(Node):
                     with self._serial_lock:
                         self._transport_fault.set()
                         self._stop_event.set()
+                        if getattr(self, '_motor_authority', None) is not None:
+                            self._motor_authority.stop()
                     self.get_logger().error(
                         f'Terminal MCU read fault; CDC inhibited until '
                         f'bridge restart: {exc}'
@@ -412,6 +414,8 @@ class LeroyBridgeNode(Node):
                 # sensor clock into the same VIO or odometry session.
                 self._clock_fault = True
                 self._stop_event.set()
+                if getattr(self, '_motor_authority', None) is not None:
+                    self._motor_authority.stop()
                 self._send_command('set_wheels 0 0 0 0')
                 self.get_logger().error(
                     f'MCU clock synchronization fault: {exc}; '
