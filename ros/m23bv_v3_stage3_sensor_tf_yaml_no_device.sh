@@ -48,14 +48,33 @@ mkdir -p "$ROS_LOG_DIR" "$ROS_HOME"
 test -w "$ROS_LOG_DIR" && test -w "$ROS_HOME"
 echo STAGE3_SENSOR_TF_LAUNCH_LOG_DIR=EPHEMERAL_CONTAINER_TMPFS
 . /opt/ros/jazzy/setup.sh
+# The immutable V3 sensor image has ROS Jazzy, but leroy_description was
+# deliberately never installed there. To test the *source* launch's normal
+# ament lookup without rebuilding or modifying the pinned image, emulate
+# ONLY the package index and installed YAML in this container's /tmp tmpfs.
+# This ephemeral fixture never starts an executable or changes ROS packages.
+test_prefix=/tmp/leroy-description-source-fixture
+mkdir -p "$test_prefix/share/ament_index/resource_index/packages" \
+         "$test_prefix/share/leroy_description/config"
+: > "$test_prefix/share/ament_index/resource_index/packages/leroy_description"
+cp /tmp/sensor_mounts.yaml "$test_prefix/share/leroy_description/config/sensor_mounts.yaml"
+export AMENT_PREFIX_PATH="$test_prefix:$AMENT_PREFIX_PATH"
+echo STAGE3_SENSOR_TF_AMENT_INDEX=EPHEMERAL_SOURCE_FIXTURE_NO_INSTALL
 python3 -B - <<PY
 import importlib.util
 import math
 from pathlib import Path
 import tempfile
 import yaml
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
 from launch_ros.actions import Node
+
+source_yaml = Path("/tmp/sensor_mounts.yaml")
+package_share = Path(get_package_share_directory("leroy_description"))
+assert package_share == Path("/tmp/leroy-description-source-fixture/share/leroy_description")
+assert (package_share / "config/sensor_mounts.yaml").read_bytes() == source_yaml.read_bytes()
+print("STAGE3_SENSOR_TF_PACKAGE_LOOKUP=PASS_EPHEMERAL_AMENT_INDEX_ONLY")
 
 module_path = "/tmp/description.launch.py"
 compile(Path(module_path).read_text(), module_path, "exec")
