@@ -76,6 +76,43 @@ class MotorAuthorityTest(unittest.TestCase):
         self.assertEqual(len(d.wheel_pwm), 4)
         self.assertTrue(all(abs(v) <= HARD_PWM_CEILING for v in d.wheel_pwm))
 
+    def test_single_use_serial_handoff_cannot_be_replayed(self):
+        self.arm()
+        self.t += 100_000_000
+        d = self.authority.step(
+            motion=self.motion(), now_ns=self.t, health=GOOD_HEALTH,
+            **INTERLOCKS)
+        self.assertTrue(d.nonzero_candidate)
+        first = self.authority.consume_serial_payload(
+            d, now_ns=self.t + 10_000_000)
+        self.assertEqual(first, (d.packet + "\n").encode("ascii"))
+        self.assertIsNone(self.authority.consume_serial_payload(
+            d, now_ns=self.t + 20_000_000))
+
+    def test_stale_or_forged_serial_handoff_rejected(self):
+        from dataclasses import replace
+        self.arm()
+        self.t += 100_000_000
+        d = self.authority.step(
+            motion=self.motion(), now_ns=self.t, health=GOOD_HEALTH,
+            **INTERLOCKS)
+        forged = replace(d)
+        self.assertIsNone(self.authority.consume_serial_payload(
+            forged, now_ns=self.t + 1_000_000))
+        self.assertIsNone(self.authority.consume_serial_payload(
+            d, now_ns=self.t + 101_000_000))
+        self.assertEqual(self.authority.state, "LATCHED")
+
+    def test_stop_invalidates_pending_serial_handoff(self):
+        self.arm()
+        self.t += 100_000_000
+        d = self.authority.step(
+            motion=self.motion(), now_ns=self.t, health=GOOD_HEALTH,
+            **INTERLOCKS)
+        self.authority.stop()
+        self.assertIsNone(self.authority.consume_serial_payload(
+            d, now_ns=self.t + 1_000_000))
+
     def test_without_physical_interlock_no_rearm(self):
         guards = dict(INTERLOCKS, estop_released=False)
         d = self.authority.rearm(
