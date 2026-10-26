@@ -250,6 +250,22 @@ class MotorAuthority:
             return None
         return (decision.packet + "\n").encode("ascii")
 
+    def heartbeat_allowed(self, *, now_ns):
+        """Whether an MCU keepalive may extend an ACTIVE motion session.
+
+        Heartbeats are not safe merely because the bridge process is alive:
+        both the command and authority evaluation must remain fresh.
+        Never extend stale motion using IMU/encoder telemetry alone.
+        """
+        return (
+            self.state == "ARMED"
+            and type(now_ns) is int
+            and self._last_tick_ns is not None
+            and self._last_command_ns is not None
+            and 0 <= now_ns - self._last_tick_ns <= MAX_TICK_GAP_NS
+            and 0 <= now_ns - self._last_command_ns < MAX_COMMAND_AGE_NS
+        )
+
     def stop(self):
         """Permanently revoke this session (not an MCU STOP acknowledgement)."""
         return self._fault("EXPLICIT_SHUTDOWN", terminal=True)
