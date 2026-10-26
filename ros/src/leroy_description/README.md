@@ -97,3 +97,29 @@ configured TF edges against their old values. It also validates a
 temporary YAML override and deliberate invalid configurations.
 A PASS does not establish physical sensor centers, camera–IMU phase,
 XRSLAM tracking or Nav2 readiness.
+
+## Live static TF integration test (separate gate)
+
+The source-only YAML/action test is **operator PASS**, but did not
+start `tf2_ros` executables. To validate actual ROS `/tf_static`
+publication without robot devices, Stage 3 adds:
+
+```bash
+# From repository root:
+bash -n ros/m23bv_v3_stage3_sensor_tf_integration_no_device.sh
+python3 -B -c 'import ast; from pathlib import Path; ast.parse(Path("ros/m23bv_v3_stage3_sensor_tf_live_verify.py").read_text())'
+bash ros/m23bv_v3_stage3_sensor_tf_integration_no_device.sh
+```
+
+This test installs the `leroy_description` source package **only**
+into an isolated rootless Podman container's ephemeral `/tmp` workspace
+with no network and no device mappings, launches all six standard
+static publishers, and independently verifies the actual
+transient-local `/tf_static` messages, parent/child frame IDs,
+positions, rotations and concurrent DDS writer count. Finally it
+checks bounded clean shutdown. It is **not yet operator executed**;
+see `ros/M23BV_V3_STAGE3_FULLSTACK_DIAGNOSTIC.md` for the exact
+acceptance markers and scope.
+
+No firmware, physical calibration, new robot image, MCU, camera,
+Nav2 activation or motor operation is part of this test.
