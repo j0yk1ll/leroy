@@ -1,6 +1,6 @@
 # Stage 3: XRSLAM Camera–IMU Calibration Provenance
 
-## Sensor geometry is configured in YAML — no CAD audit
+## Sensor geometry is configured in YAML
 
 Hardware-specific fixed sensor transforms now have a single editable
 configuration file:
@@ -11,8 +11,7 @@ The canonical `leroy.urdf.xacro` **consumes** that YAML. Existing
 IMU/camera positions and pitches were migrated without changing
 their numeric values. The package installs the YAML file, and the
 standard ROS optical-axis conventions remain in Xacro.
-No FreeCAD inspection, imported CAD positions or repeated measurements
-are required to edit the configuration.
+No hardware measurements are needed simply to edit the configuration.
 
 The values still have `status: provisional`; editing them does not
 establish validated physical sensor centers or temporal alignment.
@@ -36,7 +35,7 @@ recovered from tracked sources without inventing measurements.
 
 | Quantity | Already established source | Scope and current authority |
 | --- | --- | --- |
-| Robot coordinate directions | `ros/src/leroy_description/config/sensor_mounts.yaml` supplies the first three mounting transforms; Xacro supplies the conventional optical-frame and legacy-alias joints: +X forward, +Y left, +Z up | Axis convention **DEFINED**; the physical chassis landmark chosen as the `base_link` origin is **not explicitly identified in the current checked-in URDF/README** |
+| Robot coordinate directions | `ros/src/leroy_description/urdf/leroy.urdf.xacro`: +X forward, +Y left, +Z up; sensor mounts loaded from YAML | Axis convention **DEFINED**; the physical chassis landmark chosen as the `base_link` origin is **not explicitly identified in the current checked-in URDF/README** |
 | IMU axes on assembled robot | `firmware/include/imu.h` and `firmware/src/imu.c`: forward=−ICM X, left=−ICM Y, up=+ICM Z, CCW yaw=+ICM gyro Z; gyro roll/pitch signs inverted, yaw unchanged | **ALREADY DEFINED AND IMPLEMENTED** in `imu_read_robot()`; `/imu/data_raw` contains robot-frame acceleration/gyro values from the MCU. **Do not apply another 180° sensor-axis correction in the ROS TF** |
 | IMU center translation in current TF | `ros/src/leroy_description/config/sensor_mounts.yaml`: +95 mm X, −95 mm Y, 0 mm Z (expanded by Xacro) | Existing parameter; its own source explicitly marks this geometry **PROVISIONAL**, including unknown physical height. Not independently certified as the IMU die/sensing center |
 | Front camera orientation and frame axes | Mount pitch +30° in `sensor_mounts.yaml`; conventional optical frame +X right, +Y down, +Z forward and `camera_optical_frame` alias in Xacro | Existing defined TF *model*, but physical 30° mount angle still explicitly **PROVISIONAL** |
@@ -151,7 +150,7 @@ IMU stream were actually observed, but XRSLAM remained
 
 ## Current geometric values (YAML input, Xacro output)
 
-`ros/src/leroy_description/urdf/leroy.urdf.xacro`:
+`ros/src/leroy_description/config/sensor_mounts.yaml` supplies the mounting transforms; Xacro supplies the conventional optical-frame and legacy-alias joints:
 
 | Relationship | xyz metres | rpy radians | Confidence |
 | --- | --- | --- | --- |
@@ -160,10 +159,10 @@ IMU stream were actually observed, but XRSLAM remained
 | `front_camera_link -> front_camera_optical_frame` | `0 0 0` | `-1.5707963267948966 0 -1.5707963267948966` | Formal ROS optical-axis convention, not a mounting survey |
 | `front_camera_optical_frame -> camera_optical_frame` | `0 0 0` | `0 0 0` | Legacy frame ID alias |
 
-**Do not update the URDF just because these values exist or because
-the ROS TF tree is connected.** Camera and IMU are distinct physical
-packages, and the front camera has no measured translational offset
-in this URDF.
+**Edit the YAML for mounting changes, not duplicate values in the Xacro.**
+The camera and IMU are distinct packages, and the front camera's
+zero translation is still a placeholder, not a validated optical-center
+measurement.
 
 ## Current no-device configuration check
 
@@ -190,8 +189,8 @@ its expected success markers as a claim about the new geometry.
 For normal geometry updates, edit the `mounts.imu`,
 `mounts.front_camera` and `mounts.workspace_camera` entries in
 `sensor_mounts.yaml`: each has `xyz` metres and `rpy` radians
-in the defined robot base frame. No CAD extraction or duplicate
-numeric editing of Xacro is necessary.
+in the defined robot base frame. No duplicate numeric editing of
+Xacro is necessary.
 
 For current Stage 3 validation, retain `status: provisional`.
 A YAML value is a **configuration**, not proof that the base-link
