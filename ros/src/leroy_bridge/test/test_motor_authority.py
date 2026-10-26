@@ -96,7 +96,7 @@ class MotorAuthorityTest(unittest.TestCase):
         self.assertEqual(
             self.authority.consume_serial_payload(
                 decision, now_ns=self.t + 1_000_000),
-            b"set_wheels 0 0 0 0\\n")
+            b"set_wheels 0 0 0 0\n")
         self.assertIsNone(
             self.authority.consume_serial_payload(
                 decision, now_ns=self.t + 2_000_000))
