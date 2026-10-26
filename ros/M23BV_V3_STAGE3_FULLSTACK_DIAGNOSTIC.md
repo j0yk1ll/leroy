@@ -816,3 +816,40 @@ STAGE3_SENSOR_TF_PACKAGE_LOOKUP=PASS_EPHEMERAL_AMENT_INDEX_ONLY
 The real runtime package install/startup and live TF publication remain
 **NOT TESTED**. A future deployment validation will require a separate
 reviewed image/package build; the accepted pinned images are unchanged.
+
+## Stage 3 YAML TF test — nested shell-quote failure (syntax corrected, retest pending)
+
+The operator attempted the follow-up source-fixture validation and
+reported both `bash -n` and runtime errors:
+
+```text
+ros/m23bv_v3_stage3_sensor_tf_yaml_no_device.sh: line 158:
+unexpected EOF while looking for matching \`'\`
+STAGE3_SENSOR_TF_PINNED_SENSOR_IMAGE=f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c
+STAGE3_SENSOR_TF_LAUNCH_LOG_DIR=EPHEMERAL_CONTAINER_TMPFS
+cp: cannot stat '/tmp/sensor_mounts.yaml': No such file or directory
+```
+
+**Root cause:** The old wrapper used `podman ... /bin/bash -c '...'`
+to inline a lengthy Bash/Python program. The later package-fixture
+comments contained apostrophes (such as `launch's`,
+`container's`) that prematurely terminated the host Bash
+single-quoted argument. That explains why both shell parsing and the
+expected container YAML path were disrupted. The `cp` error is not
+evidence that the geometry file disappeared from Git.
+
+**Correction:** The wrapper now uses `podman run --interactive
+... --entrypoint /bin/bash ... -s` with a **literally quoted outer
+stdin heredoc** and a separately quoted inner Python heredoc.
+Apostrophes in comments and Python strings no longer participate in
+host shell quoting. The pinned image ID, rootless/read-only/zero-device/
+network-none Podman settings, /tmp logging and temporary ament-index
+fixture, six TF checks, YAML override, negative safety checks and
+final PASS/NOT_AUTHORIZED markers are otherwise unchanged.
+
+The revised script's heredoc boundaries and isolation flags were
+source-reviewed; a standalone Bash heredoc pattern was syntax-tested,
+but the exact new file has **not yet been executed on the operator
+host**. Do not mark the full no-device test PASS until the operator's
+`bash -n` and full test both succeed. No physical hardware, ROS
+node, new sensor container image or motor access is authorized.
