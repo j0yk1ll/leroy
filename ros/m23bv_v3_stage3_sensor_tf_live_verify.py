@@ -221,7 +221,8 @@ def check_actual_tf():
             if errors or unexpected:
                 raise RuntimeError("BAD_TF_DATA:" +
                                    ",".join(errors + sorted(unexpected)))
-            publishers = max(publishers, sub.get_publisher_count())
+            # Require six CURRENT DDS writers, not a historic maximum.
+            publishers = sub.get_publisher_count()
             if len(received) == 6 and publishers == 6:
                 if settled_at is None:
                     settled_at = time.monotonic()
