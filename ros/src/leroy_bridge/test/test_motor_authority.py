@@ -7,6 +7,10 @@ from leroy_bridge.authorized_session import (
 from leroy_bridge.motor_authority import (
     MotorAuthority, ZERO_WHEELS, HARD_PWM_CEILING,
 )
+from leroy_bridge.motor_signed_ingress import (
+    MotorInputRejected, parse_signed_envelope,
+)
+from leroy_bridge.authorized_session import MotionEnvelope
 
 GOOD_HEALTH = {
     "odom_fresh": True,
@@ -75,6 +79,24 @@ class MotorAuthorityTest(unittest.TestCase):
         self.assertTrue(d.packet.startswith("set_wheels "))
         self.assertEqual(len(d.wheel_pwm), 4)
         self.assertTrue(all(abs(v) <= HARD_PWM_CEILING for v in d.wheel_pwm))
+
+    def test_signed_ros_json_schema_and_duplicate_key_guard(self):
+        import json
+        from dataclasses import asdict
+
+        raw = json.dumps(asdict(self.motion()))
+        decoded = parse_signed_envelope(raw, MotionEnvelope)
+        self.assertEqual(decoded.session_id, self.verifier.session_id)
+        self.assertEqual(decoded.vx, 0.04)
+        self.assertTrue(self.verifier.verify_motion(
+            decoded, now_ns=self.t)[0])
+        for invalid in (
+            raw[:-1] + ', "vx": 0.04}',
+            raw.replace('"vx": 0.04', '"vx": 1'),
+            raw.replace('"vx": 0.04', '"vx": NaN'),
+        ):
+            with self.assertRaises(MotorInputRejected):
+                parse_signed_envelope(invalid, MotionEnvelope)
 
     def test_single_use_serial_handoff_cannot_be_replayed(self):
         self.arm()
