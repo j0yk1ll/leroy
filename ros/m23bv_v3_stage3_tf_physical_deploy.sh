@@ -37,6 +37,8 @@ parent="${LEROY_STAGE3_TF_DDS_PARENT:-}"
 [[ "$parent" != leroy-stage3-tf-only ]] || fail BAD_PARENT
 [[ "$(podman inspect "$parent" --format '{{.State.Running}}')" == true ]] ||
   fail SENSOR_PARENT_NOT_RUNNING
+parent_id="$(podman inspect "$parent" --format '{{.Id}}')" ||
+  fail PARENT_ID_INSPECT
 parent_image="$(podman inspect "$parent" --format '{{.Image}}')" ||
   fail PARENT_INSPECT
 parent_image="${parent_image#sha256:}"
@@ -83,11 +85,14 @@ podman run --rm "${common[@]}" "$image_id" \
     fail PREEXISTING_TF_OR_BRIDGE
 [[ "$(podman inspect "$parent" --format '{{.State.Running}}')" == true ]] ||
   fail PARENT_STOPPED_AFTER_PREFLIGHT
+[[ "$(podman inspect "$parent" --format '{{.Id}}')" == "$parent_id" ]] ||
+  fail SENSOR_PARENT_REPLACED
 
 owned=0
 cleanup() {
   trap - EXIT INT TERM
-  if [[ "$owned" == 1 ]]; then
+  if [[ "$owned" == 1 ]] &&
+     [[ "$(podman inspect "$name" --format '{{.Id}}' 2>/dev/null || true)" == "$sidecar_id" ]]; then
     podman stop --time 12 "$name" >/dev/null 2>&1 || true
     podman rm -f "$name" >/dev/null 2>&1 || true
   fi
@@ -95,11 +100,13 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-owned=1
-podman run --rm --detach --name "$name" --stop-signal SIGINT \
+sidecar_id="$(podman run --rm --detach --name "$name" --stop-signal SIGINT \
   "${common[@]}" "$image_id" \
-  -c 'set -e; . /usr/local/bin/leroy-stage3-tf-runtime-env; exec ros2 launch leroy_description description.launch.py' \
-  >/dev/null || fail TF_ONLY_SIDECAR_START
+  -c 'set -e; . /usr/local/bin/leroy-stage3-tf-runtime-env; exec ros2 launch leroy_description description.launch.py')" ||
+  fail TF_ONLY_SIDECAR_START
+owned=1
+[[ "$(podman inspect "$name" --format '{{.Id}}')" == "$sidecar_id" ]] ||
+  fail SIDECAR_OWNERSHIP_DRIFT
 [[ "$(podman inspect "$name" --format '{{.State.Running}}')" == true ]] ||
   fail TF_ONLY_SIDECAR_EARLY_EXIT
 
@@ -108,6 +115,8 @@ podman exec "$name" /bin/bash -c \
     fail TF_ONLY_DDS_POSTFLIGHT
 [[ "$(podman inspect "$parent" --format '{{.State.Running}}')" == true ]] ||
   fail SENSOR_PARENT_STOPPED
+[[ "$(podman inspect "$parent" --format '{{.Id}}')" == "$parent_id" ]] ||
+  fail SENSOR_PARENT_REPLACED
 [[ "$(podman inspect "$name" --format '{{.State.Running}}')" == true ]] ||
   fail TF_SIDECAR_STOPPED
 owned=0
