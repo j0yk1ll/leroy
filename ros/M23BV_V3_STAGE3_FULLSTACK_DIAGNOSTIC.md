@@ -1,5 +1,97 @@
 # M23BV V3 Stage 3 — full-stack diagnostic integration (draft)
 
+## NEXT: additive candidate in Leroy's actual XRSLAM runtime — NOT YET TESTED
+
+The accepted YAML source test and the **real** six-writer `/tf_static`
+integration in the sensor test image are both **operator PASS**.
+The installed sensor test workspace was temporary, however; it did
+not update the older `leroy_description` inside the current runtime
+images. The next gate explicitly addresses that deployment boundary.
+
+The current normal `ros/Dockerfile` builds `leroy_description` from
+the source context, and `leroy_bringup/launch/robot.launch.py` includes
+`leroy_description/launch/description.launch.py`. But existing
+immutable runtime images contain an older description and the normal
+Leroy robot entrypoint can start camera and **motor-capable bridge**
+components. **Do not replace an accepted runtime image or invoke
+`ros/exec.sh` or `ros2 launch leroy_bringup robot.launch.py` as part
+of this TF-only validation.**
+
+The new Stage 3 **source-only, separately tagged candidate** adds
+`leroy_description` above the original runtime underlay in the
+**full XRSLAM-capable Leroy image**, preserving original packages and
+their existing tags:
+
+- `ros/Dockerfile.stage3-tf-runtime-candidate`: offline additive
+  derivative of the operator's locally pinned
+  `localhost/leroy-ros:xrslam` image, SHA256 image ID
+  `20f9cf399ef331dda4aca093182787f8d622aa297b2d8fbcf730541a6f1cd43a`.
+  Only four byte-pinned description inputs are copied (CMake,
+  package.xml, YAML and launch); no URDF. A separate installed ament
+  overlay lives under `/opt/leroy_stage3_tf_ws/install`. Original
+  `/leroy_ws/install` packages, bridge, DepthART and XRSLAM are
+  left intact. The candidate default command is **inert**.
+- `ros/m23bv_v3_stage3_tf_runtime_env.sh`: must be **sourced**, never
+  run as the default robot entrypoint. Sources standard Jazzy and
+  existing runtime workspace, then prepends the new ament overlay.
+- `ros/m23bv_v3_stage3_tf_runtime_candidate_verify.py`: resolves
+  `leroy_description` to that overlay, checks installed YAML/launch
+  bytes, confirms inherited `leroy_bringup`, `leroy_bridge`,
+  `leroy_depthart`, `leroy_xrslam` packages and that bringup
+  includes `leroy_description`, without executing bringup.
+  It reuses the **unchanged, previously operator-accepted**
+  `m23bv_v3_stage3_sensor_tf_live_verify.py` observer against the
+  candidate overlay for six real `/tf_static` transforms,
+  quaternions, DDS writer count and controlled shutdown.
+- `ros/m23bv_v3_stage3_tf_runtime_candidate_no_device.sh`: exact-base
+  image ID and source-blob checks, isolated rootless Podman offline
+  build with `--network none` and no pull, **distinct
+  source-content-addressed candidate image tag**, and
+  read-only/no-devices/no-host-network runtime validation with the
+  default robot startup bypassed. All source mounts are read-only.
+  The optional new candidate image remains in local rootless Podman
+  storage; the accepted parent image is never overwritten.
+
+Run from the repository root:
+
+```bash
+git pull --ff-only
+bash -n ros/m23bv_v3_stage3_tf_runtime_candidate_no_device.sh
+bash -n ros/m23bv_v3_stage3_tf_runtime_env.sh
+python3 -B -c 'import ast; from pathlib import Path; ast.parse(Path("ros/m23bv_v3_stage3_tf_runtime_candidate_verify.py").read_text())'
+bash ros/m23bv_v3_stage3_tf_runtime_candidate_no_device.sh
+```
+
+This creates and tests an **independently tagged local candidate**,
+not a host-installed or activated robot runtime. An existing candidate
+may be reused only if its provenance labels match the exact checked-in
+source blob fingerprint and parent image pin.
+
+Expected outcome, **not yet operator-observed**:
+
+```text
+STAGE3_TF_RUNTIME_PINNED_XRSLAM_IMAGE=20f9cf399ef331dda4aca093182787f8d622aa297b2d8fbcf730541a6f1cd43a
+STAGE3_TF_RUNTIME_SOURCE_OVERLAY=PASS_FULL_RUNTIME_SELECTED
+STAGE3_TF_RUNTIME_OVERLAY=PASS_NEW_YAML_DESCRIPTION_RESOLVED
+STAGE3_TF_RUNTIME_STACK=PASS_BRINGUP_BRIDGE_DEPTHART_XRSLAM_RETAINED
+STAGE3_TF_RUNTIME_BRINGUP=NOT_LAUNCHED
+STAGE3_SENSOR_TF_INTEGRATION_TF_STATIC=PASS_SIX_REAL_EDGES
+STAGE3_SENSOR_TF_INTEGRATION_PUBLISHERS=PASS_SIX_DISTINCT_DDS_WRITERS
+STAGE3_SENSOR_TF_INTEGRATION_SHUTDOWN=PASS
+STAGE3_TF_RUNTIME_LIVE_TF=PASS_SIX_EDGES_IN_FULL_RUNTIME_IMAGE
+STAGE3_TF_RUNTIME_CONTAINER_DEVICES=NONE
+STAGE3_TF_RUNTIME=PASS_CANDIDATE_REAL_TF_NO_DEVICE
+STAGE3_TF_RUNTIME_ACTIVE_ROBOT=NOT_DEPLOYED
+```
+
+**No live robot switch-over or camera/STM32/MCU/bridge operation is
+authorized or needed** for this gate. Even after it passes, enabling
+the overlay in the active normal `leroy-entrypoint` and deploying to
+the physical robot would be a separate, explicit, safety-reviewed
+step. Frame positions, camera-IMU timing, XRSLAM odometry and Nav2
+motion readiness remain provisional/unvalidated. PR #154 stays draft.
+
+
 ## Current acceptance: installed ROS static TF and actual /tf_static — OPERATOR PASS
 
 The operator executed the **separate live ROS 2 no-device integration**
