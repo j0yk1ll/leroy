@@ -597,6 +597,12 @@ class LeroyBridgeNode(Node):
         with self._serial_lock:
             if self._transport_fault.is_set():
                 return False
+            if (type(command) is str and command == 'keepalive'
+                    and self._motor_authority is not None
+                    and (not self._motor_cdc.healthy
+                         or not self._motor_authority.heartbeat_allowed(
+                             now_ns=time.monotonic_ns()))):
+                return False
             if is_stop:
                 payload = self._motor_cdc.stop(now_ns=time.monotonic_ns())
             elif authority is not None:
