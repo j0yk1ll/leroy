@@ -85,6 +85,15 @@ claimed.
 
 ---
 
+## Historical bridge background (before PR #156)
+
+The sections below preserve the previous M22D/M22G diagnostic and
+motor-inhibit history. Where they say nonzero motion, MCU firmware or
+signed ingress has not been implemented, they describe the **prior
+baseline**, not the new opt-in PR #156 source described above.
+The newly implemented hardware/software path has **not** been
+physically deployed or accepted.
+
 ROS 2 Jazzy serial bridge for Leroy's MCU. It owns hardware
 telemetry and is the intended future actuator interface, but **M22D removes
 the raw `/cmd_vel` subscription and inhibits ALL nonzero wheel commands**.
