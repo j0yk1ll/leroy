@@ -16,10 +16,10 @@ WATCHDOG_MS = 120
 WHEELS = {"fl": 0, "fr": 1, "rl": 2, "rr": 3}
 
 
-def _request(mcu, command, expected):
+def _request(mcu, command, expected, *, ack_timeout_s=0.25):
     mcu.write((command + "\n").encode("ascii"))
     mcu.flush()
-    deadline = time.monotonic() + 0.25
+    deadline = time.monotonic() + ack_timeout_s
     while time.monotonic() < deadline:
         line = mcu.readline().decode("ascii", errors="replace").strip()
         if not line:
@@ -74,7 +74,7 @@ def main(args=None):
         raise RuntimeError("MCU uint32 sequence range unavailable")
     pwm = [0, 0, 0, 0]
     pwm[WHEELS[opts.wheel]] = opts.pwm
-    print(f"Wheel={opts.wheel} duty={opts.pwm}/255 duration<=60ms")
+    print(f"Wheel={opts.wheel} duty={opts.pwm}/255 commanded pulse target 60ms")
     try:
         # POSIX exclusive advisory lock: ensure ROS bridge already stopped.
         with serial.Serial(opts.port, baudrate=115200, timeout=0.025,
@@ -86,14 +86,21 @@ def main(args=None):
                          f"ok stop_wheels_tx seq={seq}")
                 _request(mcu, f"set_watchdog_ms {WATCHDOG_MS}",
                          "ok set_watchdog_ms")
+                pulse_started = time.monotonic()
                 _request(
                     mcu,
                     f"set_wheels_tx {seq+1} " + " ".join(map(str, pwm)),
                     f"ok set_wheels_tx seq={seq+1}",
+                    ack_timeout_s=0.040,
                 )
-                # Never send keepalive. MCU watchdog zeros outputs after
-                # 120 ms if the handler runs but our stop cannot be sent.
-                time.sleep(PULSE_SECONDS)
+                # Never send keepalive. Bound the host-requested pulse
+                # from BEFORE the wheel packet, not after waiting for ACK.
+                # MCU watchdog (120ms) protects a stalled host only while
+                # its main loop remains responsive. The hardwired cutoff
+                # remains essential.
+                remaining = PULSE_SECONDS - (time.monotonic() - pulse_started)
+                if remaining > 0:
+                    time.sleep(remaining)
                 _request(mcu, f"stop_wheels_tx {seq+2}",
                          f"ok stop_wheels_tx seq={seq+2}")
                 print("MCU_STOP_ACK=PASS; physical stopping not measured")
