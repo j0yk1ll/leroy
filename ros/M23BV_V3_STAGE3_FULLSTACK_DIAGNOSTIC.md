@@ -902,3 +902,81 @@ but the exact new file has **not yet been executed on the operator
 host**. Do not mark the full no-device test PASS until the operator's
 `bash -n` and full test both succeed. No physical hardware, ROS
 node, new sensor container image or motor access is authorized.
+
+## Next Stage 3 integration gate: install package + observe real /tf_static (NOT YET RUN)
+
+The earlier direct-YAML source-only test **PASSED**. Its result established
+six correct static-TF *launch actions*, not actual ROS node execution or
+DDS publication. This separate optional gate exercises that missing
+runtime behavior, with no robot devices exposed.
+
+New source-only files (Stage 3 draft branch):
+
+- \`ros/m23bv_v3_stage3_sensor_tf_integration_no_device.sh\` — guarded
+  rootless Podman runner, no host devices, network or writable source binds.
+- \`ros/m23bv_v3_stage3_sensor_tf_live_verify.py\` — starts the installed
+  ROS 2 launch, subscribes transient-local /tf_static, verifies all six
+  parent/child edges, translations and quaternions, requires six current
+  DDS publisher writers, and supervises bounded launch shutdown.
+
+The runner checks exact source blobs (not the whole worktree, since
+unrelated local deletions must be preserved) and the existing pinned
+sensor image identity
+\`f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c\`.
+The container has \`--read-only\`, \`--network none\`, private IPC/PID
+namespaces, all capabilities dropped, \`no-new-privileges\`, no mapped
+camera/MCU/serial, and only two **read-only** bind mounts:
+\`leroy_description\` source and the test observer script.
+
+Inside the container alone, the current package is copied into an
+ephemeral 384 MiB \`/tmp\` tmpfs workspace and installed there using
+\`colcon build --packages-select leroy_description\`. It is **not**
+installed onto the host, and the immutable sensor image is **not**
+rebuilt, modified, retagged or deployed. ROS 2 Jazzy is sourced, with
+domain 170, localhost-only discovery and Fast DDS in the container's
+isolated network namespace.
+
+The observer verifies byte identity between the ephemeral installed
+YAML/launch files and checked-in source, then starts
+\`ros2 launch leroy_description description.launch.py\`. It uses a
+TRANSIENT_LOCAL / RELIABLE subscriber to read the actual \`/tf_static\`
+messages and compares all six publisher outputs to the known provisional
+source frame tree, including quaternion rotation (q and -q are equivalent).
+An absent, extra, duplicate-owner, mis-rotated or mis-translated frame,
+insufficient publisher count, startup failure or unsuccessful shutdown
+blocks acceptance. On exit it sends SIGINT to the isolated launch
+process group, with bounded TERM/KILL fallback; escalation does not
+count as clean acceptance. No move, record or serial action exists.
+
+From the repository root (the operator's current shell):
+
+\`\`\`bash
+git pull --ff-only
+bash -n ros/m23bv_v3_stage3_sensor_tf_integration_no_device.sh
+python3 -B -c 'import ast; from pathlib import Path; ast.parse(Path("ros/m23bv_v3_stage3_sensor_tf_live_verify.py").read_text())'
+bash ros/m23bv_v3_stage3_sensor_tf_integration_no_device.sh
+\`\`\`
+
+Or from \`ros/\`, omit the \`ros/\` prefix. Do **not** run the old
+source-only test again on unchanged source.
+
+Expected, **not yet operator-observed**:
+
+\`\`\`text
+STAGE3_SENSOR_TF_INTEGRATION_BUILD=PASS_EPHEMERAL_PACKAGE_INSTALL
+STAGE3_SENSOR_TF_INTEGRATION_INSTALLED_PACKAGE=PASS_NEW_SOURCE_BUILD_AND_BYTE_PARITY
+STAGE3_SENSOR_TF_INTEGRATION_TF_STATIC=PASS_SIX_REAL_EDGES
+STAGE3_SENSOR_TF_INTEGRATION_TRANSLATIONS_AND_QUATERNIONS=PASS
+STAGE3_SENSOR_TF_INTEGRATION_PUBLISHERS=PASS_SIX_DISTINCT_DDS_WRITERS
+STAGE3_SENSOR_TF_INTEGRATION_FRAME_OWNERSHIP=PASS_EXACT_CHILDREN_AND_PARENTS
+STAGE3_SENSOR_TF_INTEGRATION_SHUTDOWN=PASS
+STAGE3_SENSOR_TF_INTEGRATION_REAL_NODES=PASS_SIX_STANDARD_STATIC_TF_PUBLISHERS
+STAGE3_SENSOR_TF_INTEGRATION_CONTAINER_DEVICES=NONE
+STAGE3_SENSOR_TF_INTEGRATION=PASS_REAL_TF_STATIC_NO_DEVICE
+\`\`\`
+
+Success would validate real, isolated ROS 2 static sensor TF
+publication from a freshly installed **ephemeral** description package.
+It does **not** validate sensor mounting measurements, camera-IMU
+temporal phase, live robot runtime images, XRSLAM metric odometry,
+Nav2 activation, MCU safety, motion or control. Keep PR #154 draft.
