@@ -659,7 +659,11 @@ static void process_command(char *line)
         } else {
             g_motor_tx_seen = true;
             g_motor_last_tx = seq;
-            platform_set_wheels(fl, fr, rl, rr);
+            if (fl == 0 && fr == 0 && rl == 0 && rr == 0) {
+                platform_disable();
+            } else {
+                platform_set_wheels(fl, fr, rl, rr);
+            }
             refresh_activity();
             usb_serial_write("ok set_wheels_tx seq=");
             usb_serial_write_u32(seq);
@@ -739,6 +743,10 @@ static void process_command(char *line)
     if (strings_equal(command, "set_watchdog_ms")) {
         if (!parse_u32(argument, &value) || value > WATCHDOG_MAX_MS) {
             usb_serial_write_line("error set_watchdog_ms expects 0..60000");
+        } else if (g_motor_tx_seen && anything_moving() &&
+                   (value == 0U ||
+                    value > SIGNED_WHEEL_WATCHDOG_MAX_MS)) {
+            usb_serial_write_line("error signed_motor_watchdog_cannot_weaken");
         } else {
             g_watchdog_ms = value;
             refresh_activity();
