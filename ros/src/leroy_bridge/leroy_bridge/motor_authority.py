@@ -122,6 +122,8 @@ class MotorAuthority:
               motor_rails_verified=False, transport_healthy=False,
               clock_healthy=False, bridge_running=False,
               single_controller=False):
+        if self.state == "TERMINAL":
+            return _zero(self.state, self.reason)
         time_fault = self._time(now_ns)
         if time_fault:
             return time_fault
