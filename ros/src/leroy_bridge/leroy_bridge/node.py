@@ -149,6 +149,12 @@ class LeroyBridgeNode(Node):
         # are not an authorized actuator interface. No alternative motion
         # ingress is enabled in this milestone.
 
+        # The signed MotorAuthority handoff is now recognized by the sole
+        # CDC writer. This deployment has no trusted hardware interlock
+        # provider or key custody yet; production physical release remains
+        # structurally unavailable (not a user-togglable ROS parameter).
+        self._motor_authority = None
+        self._motor_hardware_release_verified = False
         self._serial_lock = threading.Lock()
         self._transport_fault = threading.Event()
         self._clock_mapper = McuClock(self)
@@ -304,10 +310,26 @@ class LeroyBridgeNode(Node):
         )
 
     def _send_command(self, command: str) -> bool:
+        # Raw strings ALWAYS take the unchanged M22D zero-only allowlist.
+        # A non-string command must be the exact identity-bound one-shot
+        # MotorAuthority decision, with independent verified hardware
+        # release. No ROS message or arbitrary PWM string can bypass it.
+        authority = None
         try:
-            payload = command_to_bytes(command)
+            if type(command) is str:
+                payload = command_to_bytes(command)
+            else:
+                authority = getattr(self, '_motor_authority', None)
+                release = getattr(
+                    self, '_motor_hardware_release_verified', False)
+                if authority is None or release is not True:
+                    raise CommandRejected(
+                        'physical motor authority release unavailable')
+                # Consume only inside the serial lock, immediately before
+                # the one actual .write(), to avoid stale queued duties.
+                payload = None
         except CommandRejected as exc:
-            self.get_logger().error(f'M22D blocked unsafe CDC command: {exc}')
+            self.get_logger().error(f'Motor CDC command rejected: {exc}')
             return False
         # M22G: once a serial write/flush/short-write/read error occurs,
         # this process cannot resume CDC writes, even for a STOP packet.
@@ -317,6 +339,14 @@ class LeroyBridgeNode(Node):
         with self._serial_lock:
             if self._transport_fault.is_set():
                 return False
+            if authority is not None:
+                payload = authority.consume_serial_payload(
+                    command, now_ns=time.monotonic_ns())
+                if payload is None:
+                    self.get_logger().error(
+                        'Motor CDC command rejected: spent, forged or '
+                        'expired authority handoff')
+                    return False
             try:
                 written = self._serial.write(payload)
                 if written != len(payload):
@@ -327,6 +357,8 @@ class LeroyBridgeNode(Node):
                     OSError) as exc:
                 self._transport_fault.set()
                 self._stop_event.set()
+                if getattr(self, '_motor_authority', None) is not None:
+                    self._motor_authority.stop()
                 self.get_logger().error(
                     f'Terminal MCU transport fault; CDC inhibited until '
                     f'bridge restart: {exc}'
@@ -588,6 +620,9 @@ class LeroyBridgeNode(Node):
             self._tf_broadcaster.sendTransform(transform)
 
     def destroy_node(self):
+        # Revoke any outstanding motor decision before serial teardown.
+        if getattr(self, '_motor_authority', None) is not None:
+            self._motor_authority.stop()
         # Stop asynchronous telemetry before ROS context teardown.
         # After a transport fault the zero/stream-disable writes below
         # are intentionally refused by _send_command. This does NOT
