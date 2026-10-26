@@ -558,6 +558,17 @@ class LeroyBridgeNode(Node):
                         and command != f'set_watchdog_ms {self._watchdog_ms}'):
                     raise CommandRejected(
                         'cannot weaken signed-session MCU watchdog')
+                if getattr(self, '_motor_authority', None) is not None:
+                    if (command == 'keepalive'
+                            and (not self._motor_watchdog_ack.is_set()
+                                 or not self._motor_cdc.healthy
+                                 or not self._motor_authority.heartbeat_allowed(
+                                     now_ns=time.monotonic_ns()))):
+                        raise CommandRejected('signed motion heartbeat stale')
+                    if (command.startswith('set_watchdog_ms ')
+                            and self._motor_watchdog_ack.is_set()):
+                        raise CommandRejected(
+                            'signed session MCU watchdog is already configured')
                 payload = command_to_bytes(command)
             elif command is _MOTOR_STOP:
                 # STOP may be transmitted after the motion session latches.
@@ -684,10 +695,11 @@ class LeroyBridgeNode(Node):
             except ClockSyncError as exc:
                 # Fail closed. Never silently re-anchor a rebooted/stepped
                 # sensor clock into the same VIO or odometry session.
-                self._clock_fault = True
-                self._stop_event.set()
-                if getattr(self, '_motor_authority', None) is not None:
-                    self._motor_authority.stop()
+                with self._serial_lock:
+                    self._clock_fault = True
+                    self._stop_event.set()
+                    if getattr(self, '_motor_authority', None) is not None:
+                        self._motor_authority.stop()
                 self._send_command('set_wheels 0 0 0 0')
                 self.get_logger().error(
                     f'MCU clock synchronization fault: {exc}; '
@@ -706,7 +718,8 @@ class LeroyBridgeNode(Node):
         if self._motor_cdc is not None and self._motor_cdc.receive(
                 line, now_ns=time.monotonic_ns()):
             if not self._motor_cdc.healthy:
-                self._motor_authority.stop()
+                with self._serial_lock:
+                    self._motor_authority.stop()
             return
         if line == 'ok set_watchdog_ms':
             # MCU accepted the timeout; this is NOT a stop acknowledgement.
@@ -720,12 +733,19 @@ class LeroyBridgeNode(Node):
             return
         if line == 'event watchdog_stop':
             if self._motor_authority is not None:
-                self._motor_authority.stop()
-                self._motor_cdc.abort('MCU_WATCHDOG_STOP')
+                with self._serial_lock:
+                    self._motor_authority.stop()
+                    self._motor_cdc.abort('MCU_WATCHDOG_STOP')
             self.get_logger().warning(
                 'MCU reported watchdog stop; signed motor session revoked')
             return
         if line.startswith('error '):
+            if (self._motor_authority is not None
+                    and (line.startswith('error set_wheels_tx')
+                         or line.startswith('error stop_wheels_tx'))):
+                with self._serial_lock:
+                    self._motor_authority.stop()
+                    self._motor_cdc.abort('MCU_REJECTED_MOTOR_TRANSACTION')
             self.get_logger().error(f'MCU: {line}')
             return
         # Command acknowledgements are intentionally quiet; they would be very
