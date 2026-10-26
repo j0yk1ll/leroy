@@ -980,3 +980,47 @@ publication from a freshly installed **ephemeral** description package.
 It does **not** validate sensor mounting measurements, camera-IMU
 temporal phase, live robot runtime images, XRSLAM metric odometry,
 Nav2 activation, MCU safety, motion or control. Keep PR #154 draft.
+
+## Real /tf_static integration attempt — ROS Jazzy environment sourcing blocked, corrected source only
+
+The operator ran the new isolated live-TF integration helper and reported:
+
+```text
+STAGE3_SENSOR_TF_INTEGRATION_PINNED_SENSOR_IMAGE=f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c
+/opt/ros/jazzy/setup.sh: line 124: AMENT_TRACE_SETUP_FILES: unbound variable
+STAGE3_SENSOR_TF_INTEGRATION=BLOCKED_CONTAINER_BUILD_OR_RUNTIME_TEST
+```
+
+**Interpretation:** The test exited before `colcon build` and before
+starting any `tf2_ros` nodes. There is no result for installation, live
+`/tf_static`, shutdown, or geometry calibration. The pinned image and
+zero-device isolation were verified, but runtime TF is **not validated**.
+
+**Narrow fix:** The container Bash runner begins in `set -Eeuo pipefail`
+strict mode. ROS Jazzy's environment setup references optional
+environment variables such as `AMENT_TRACE_SETUP_FILES` while Bash
+`nounset` is active. The script now uses `set +u` **only while
+sourcing** the pinned image's `/opt/ros/jazzy/setup.sh` and, later,
+the temporary colcon-installed `local_setup.sh`, then immediately
+restores `set -u`. `errexit` and `pipefail` remain active throughout.
+The updated test prints
+`STAGE3_SENSOR_TF_INTEGRATION_ROS_SETUP=PASS_NOUNSET_RESTORED`
+and
+`STAGE3_SENSOR_TF_INTEGRATION_LOCAL_SETUP=PASS_NOUNSET_RESTORED`
+after those two phases respectively.
+
+No production package, launch file, sensor YAML, hardware interface,
+image, read-only repository mount, or motion authorization changed.
+
+Next operator retry from the repository root:
+
+```bash
+git pull --ff-only
+bash -n ros/m23bv_v3_stage3_sensor_tf_integration_no_device.sh
+python3 -B -c 'import ast; from pathlib import Path; ast.parse(Path("ros/m23bv_v3_stage3_sensor_tf_live_verify.py").read_text())'
+bash ros/m23bv_v3_stage3_sensor_tf_integration_no_device.sh
+```
+
+The final `STAGE3_SENSOR_TF_INTEGRATION=PASS_REAL_TF_STATIC_NO_DEVICE`
+remains **NOT YET OBSERVED**. The earlier source-only YAML test
+remains accepted and should not be repeated on unchanged code.
