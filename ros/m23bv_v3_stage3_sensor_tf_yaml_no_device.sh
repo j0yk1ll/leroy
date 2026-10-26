@@ -30,11 +30,23 @@ echo "STAGE3_SENSOR_TF_PINNED_SENSOR_IMAGE=$actual"
 podman run --rm --pull=never --network none --ipc private --pid private \
   --read-only --cap-drop all --security-opt no-new-privileges \
   --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+  --env ROS_LOG_DIR=/tmp/leroy-ros-launch-logs \
+  --env ROS_HOME=/tmp/leroy-ros-home \
   --mount type=bind,src="$PWD/src/leroy_description/config/sensor_mounts.yaml",dst=/tmp/sensor_mounts.yaml,readonly \
   --mount type=bind,src="$PWD/src/leroy_description/launch/description.launch.py",dst=/tmp/description.launch.py,readonly \
   --entrypoint /bin/bash "$image" -c '
 set -eo pipefail
 test ! -e /dev/video2 && test ! -e /dev/ttyACM0
+# ROS 2 Jazzy launch constructs a logger even for an unexecuted Node
+# action. Constrain that harmless output to our existing ephemeral /tmp
+# tmpfs; never write /root/.ros/log or create files on the host.
+case "$ROS_LOG_DIR:$ROS_HOME" in
+  /tmp/leroy-ros-launch-logs:/tmp/leroy-ros-home) ;;
+  *) echo STAGE3_SENSOR_TF=BLOCKED_UNSAFE_LOG_DESTINATION >&2; exit 2 ;;
+esac
+mkdir -p "$ROS_LOG_DIR" "$ROS_HOME"
+test -w "$ROS_LOG_DIR" && test -w "$ROS_HOME"
+echo STAGE3_SENSOR_TF_LAUNCH_LOG_DIR=EPHEMERAL_CONTAINER_TMPFS
 . /opt/ros/jazzy/setup.sh
 python3 -B - <<PY
 import importlib.util
