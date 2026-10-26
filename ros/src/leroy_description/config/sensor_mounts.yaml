@@ -1,0 +1,32 @@
+# Leroy robot sensor mounting configuration.
+#
+# Single editable source for fixed, ROBOT-ALIGNED sensor mount geometry
+# consumed by leroy_description/urdf/leroy.urdf.xacro.
+#
+# Frame convention: base_link +X forward, +Y left, +Z up.
+# xyz in METRES, rpy in RADIANS (roll, pitch, yaw).
+#
+# IMPORTANT: values below preserve the existing URDF exactly and remain
+# PROVISIONAL where called out. They are NOT validated physical sensor
+# centres, camera/IMU phase calibration or permission to enable VIO/Nav2.
+#
+# The STM32 publishes ALREADY ROTATED robot-frame gyro/accel samples:
+# forward=-ICM X, left=-ICM Y, up=+ICM Z. Do NOT apply that 180-degree
+# physical IMU package rotation here as well. Current imu_link rotation
+# is identity for this pre-rotated ROS message frame.
+#
+# The fixed front_camera_link -> front_camera_optical_frame conversion
+# (ROS optical axis convention) stays in Xacro, not this hardware profile.
+
+status: provisional
+
+mounts:
+  imu:
+    xyz: [0.095, -0.095, 0.0]  # +95 mm forward, -95 mm left (95 mm right)
+    rpy: [0.0, 0.0, 0.0]       # messages already robot-axis-aligned
+  front_camera:
+    xyz: [0.0, 0.0, 0.0]     # PLACEHOLDER, not measured optical centre
+    rpy: [0.0, 0.5235987755982988, 0.0]   # +30 deg mounting pitch
+  workspace_camera:
+    xyz: [0.0, 0.0, 0.0]     # PLACEHOLDER
+    rpy: [0.0, 1.0471975511965976, 0.0]  # +60 deg mounting pitch
