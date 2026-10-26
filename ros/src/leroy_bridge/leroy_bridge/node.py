@@ -476,6 +476,7 @@ class LeroyBridgeNode(Node):
         # MotorAuthority decision, with independent verified hardware
         # release. No ROS message or arbitrary PWM string can bypass it.
         authority = None
+        is_stop = False
         try:
             if type(command) is str:
                 # No later in-process call may silently lengthen or
@@ -486,6 +487,12 @@ class LeroyBridgeNode(Node):
                     raise CommandRejected(
                         'cannot weaken signed-session MCU watchdog')
                 payload = command_to_bytes(command)
+            elif command is _MOTOR_STOP:
+                # STOP may be transmitted after the motion session latches.
+                is_stop = True
+                if self._motor_cdc is None:
+                    raise CommandRejected('MCU stop protocol unavailable')
+                payload = None
             else:
                 authority = getattr(self, '_motor_authority', None)
                 release = getattr(
@@ -507,14 +514,22 @@ class LeroyBridgeNode(Node):
         with self._serial_lock:
             if self._transport_fault.is_set():
                 return False
-            if authority is not None:
-                payload = authority.consume_serial_payload(
+            if is_stop:
+                payload = self._motor_cdc.stop(now_ns=time.monotonic_ns())
+            elif authority is not None:
+                # The signed decision alone cannot supply arbitrary serial
+                # bytes. Its identity-bound one-time payload must match the
+                # exact PWM tuple before the MCU transaction is constructed.
+                candidate = authority.consume_serial_payload(
                     command, now_ns=time.monotonic_ns())
-                if payload is None:
-                    self.get_logger().error(
-                        'Motor CDC command rejected: spent, forged or '
-                        'expired authority handoff')
-                    return False
+                if candidate == (command.packet + '\n').encode('ascii'):
+                    payload = self._motor_cdc.wheels(
+                        command.wheel_pwm, now_ns=time.monotonic_ns())
+            if payload is None:
+                self.get_logger().error(
+                    'Motor CDC packet blocked: invalid/spent decision, '
+                    'unacknowledged transaction or exhausted sequence')
+                return False
             try:
                 written = self._serial.write(payload)
                 if written != len(payload):
