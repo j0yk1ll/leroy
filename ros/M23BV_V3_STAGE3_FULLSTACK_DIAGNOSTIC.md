@@ -1,5 +1,93 @@
 # M23BV V3 Stage 3 — full-stack diagnostic integration (draft)
 
+## Physical host rollout: TF-only sidecar — SOURCE PREPARED, NOT RUN
+
+The operator considers the previously accepted full XRSLAM-runtime
+candidate ready for the physical rover. **Only a TF-only DDS deployment
+is prepared here.** It does not authorize replacing the normal
+`leroy-entrypoint` image, launching `leroy_bringup/robot.launch.py`
+(which includes `leroy_bridge` unconditionally), opening the STM32,
+motor power, camera access, recording, odometry or navigation.
+
+The new guarded files are:
+
+- `ros/m23bv_v3_stage3_tf_physical_deploy.sh` — optional,
+  foreground, explicit operator-consent physical-host deployment of a
+  **device-free TF-only sidecar**. Requires exactly the operator-tested
+  full-runtime candidate image ID
+  `9985c05cfcd5d9774b64b790c6f5c1b39c29f989d7ace6dca4e341f5f511841d`
+  and an **already running and independently authorized**
+  Stage 3 sensor container based on pinned sensor image ID
+  `f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c`,
+  with Podman network mode `none` and IPC mode `shareable`.
+- `ros/m23bv_v3_stage3_tf_physical_graph_probe.py` —
+  conservative DDS duplicate-publisher safety preflight and
+  live postflight; rejects any pre-existing `/tf_static` writer,
+  a visible robot bridge or legacy robot_state_publisher node,
+  and any postflight frame, quaternion, translation or six-writer
+  mismatch. It reads expected frame values from the already
+  validated installed `leroy_description` YAML via the launcher.
+
+**Important:** This does not start, authorize, attach devices to or
+alter the existing sensor parent. If no accepted **running sensor
+DDS parent** exists, this physical TF sidecar deployment blocks.
+Do not launch a camera or MCU session just to bypass that gate.
+
+From the physical host's repository root, first identify the
+pre-existing approved sensor-only parent (if any):
+
+```bash
+git pull --ff-only
+podman ps --format '{{.Names}}  {{.Image}}'
+bash -n ros/m23bv_v3_stage3_tf_physical_deploy.sh
+python3 -B -c 'import ast; from pathlib import Path; ast.parse(Path("ros/m23bv_v3_stage3_tf_physical_graph_probe.py").read_text())'
+```
+
+Only when the operator has independently verified the parent is the
+accepted sensor-only session, chassis is secured, motor-power rails
+are disconnected and E-stop is tested, specify the **actual**
+container name (not a fabricated example) and run:
+
+```bash
+export LEROY_STAGE3_TF_DDS_PARENT=THE_VERIFIED_RUNNING_SENSOR_CONTAINER
+bash ros/m23bv_v3_stage3_tf_physical_deploy.sh
+```
+
+The script demands a fresh exact
+`DEPLOY_TF_ONLY` response on the local operator tty. It starts
+**only** `ros2 launch leroy_description description.launch.py` in
+a new container `leroy-stage3-tf-only` sharing the parent's
+isolated network/IPC namespace, with **no** `--device`, host
+network, MCU, motors, bridge, XRSLAM, Nav2 or camera startup.
+The sidecar will expose the six static transforms only within
+that selected DDS namespace. It does not make the active robot
+runtime image a new default. On failed preflight or postflight,
+the script must stop/remove only the sidecar it owns.
+
+Successful physical-host markers, **NOT YET OBSERVED**:
+
+```text
+STAGE3_TF_DEPLOY_GRAPH_PREFLIGHT=PASS_NO_EXISTING_STATIC_TF_OR_BRIDGE
+STAGE3_TF_DEPLOY_GRAPH_POSTFLIGHT=PASS_SIX_PUBLISHERS_SIX_CORRECT_FRAMES
+STAGE3_TF_DEPLOY=PASS_PHYSICAL_HOST_TF_ONLY_SIDECAR
+STAGE3_TF_DEPLOY_SIDECAR_DEVICE_MAPPINGS=NONE
+STAGE3_TF_DEPLOY_ACTIVE_ROBOT_BRINGUP=NOT_STARTED
+```
+
+**Rollback:** `podman stop leroy-stage3-tf-only`.
+The container is started with `--rm` and is removed after stop.
+Stopping it does **not** stop or modify the parent sensor container.
+If the parent stops or its DDS graph changes, stop the TF-only
+sidecar and re-evaluate before restarting.
+
+**All previous no-device source, six-writer integration and full
+XRSLAM-runtime candidate acceptance remains PASS.** This is a NEW
+physical-host rollout gate, not yet tested. The six mount transforms
+remain `status: provisional`; camera/IMU metric calibration,
+time phase, XRSLAM odometry, `map`/`odom` TF and Nav2/motion
+authorization remain gated. PR #154 remains draft.
+
+
 ## Current acceptance: full XRSLAM-runtime YAML static TF candidate — OPERATOR PASS
 
 The operator completed the **offline build and no-device runtime test**
