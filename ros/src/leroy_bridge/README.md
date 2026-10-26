@@ -51,7 +51,39 @@ suite:
   continuously fresh; lost controller input or fault stops keepalives.
   This is separate from the required independent electrical cutoff.
 
-### Operator configuration, intentionally absent
+### First attended wheel pulse without E-stop GPIO telemetry
+
+A **hardwired cutoff upstream of the motor fuse block can be physically
+independent without providing a readable GPIO status line**. Do not invent
+or force GPIO true values into the automatic ROS motor authority. The
+unprovisioned production ROS bridge remains fail-closed.
+
+For one attended, wheels-lifted bench commissioning pulse, the ROS bridge
+MUST first be stopped so there is only one USB CDC controller. Run
+`python3 -m leroy_bridge.motor_bench_pulse --port /dev/ttyACM0
+--wheel fl --pwm 18` from the repo with
+`PYTHONPATH=$PWD/ros/src/leroy_bridge` on a host with Python pyserial.
+The script refuses noninteractive execution, insists on an explicit operator
+confirmation of mechanical support and a *verified working hardwired
+motor-supply cutoff*, and sends one sequence-numbered nonzero packet to
+one wheel only (maximum ±24/255 duty, 60 ms). It first requests MCU
+driver disable, configures the 120 ms firmware watchdog with an exact
+ACK, never sends keepalive, and requests an exact sequence-matched STOP
+ACK in both normal and exception paths. Failure or absent ACK is a stop
+condition; independent power cutoff is always the final safeguard.
+USB may continue powering MCU logic after motor cutoff opens.
+
+This is **not** signed ROS/Nav2 actuation, not a bypass for unverified
+autonomous readiness, and not evidence that wheels physically stopped.
+The MCU watchdog zeroes commanded outputs only while MCU main loop
+runs; the separate hardware cutoff is essential. Check the motor-rail
+voltage with the cutoff operated *while the laptop USB is connected*,
+ensure the wheel cannot reach the floor or an operator, and only then
+run the one-shot pulse. The script can be run with motor supply
+disconnected first as a communication/protocol rehearsal. It never
+configures the production authority's E-stop or rail inputs.
+
+## Operator configuration, intentionally absent
 
 **No default robot activation, image switch, GPIO pin guess or
 firmware flash is part of this PR.** Normal `leroy_bridge.yaml` has
