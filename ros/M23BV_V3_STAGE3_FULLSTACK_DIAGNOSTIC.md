@@ -1,5 +1,53 @@
 # M23BV V3 Stage 3 — full-stack diagnostic integration (draft)
 
+## Current full-runtime candidate build: Colcon CLI mismatch fixed, RETEST PENDING
+
+The operator's first **new full XRSLAM-runtime candidate** build reached
+the pinned image `20f9cf399ef331dda4aca093182787f8d622aa297b2d8fbcf730541a6f1cd43a`
+and began building distinct candidate
+`localhost/leroy-ros:stage3-yaml-tf-8c6fee3034c0ff0f`. The build
+stopped before installing the overlay or starting any ROS nodes:
+
+```text
+colcon build: error: argument --packages-select: unrecognized argument: --allow-overriding
+STAGE3_TF_RUNTIME=BLOCKED_OFFLINE_CANDIDATE_BUILD
+```
+
+The pinned XRSLAM image's installed Colcon does not support the optional
+`--allow-overriding` CLI argument. The command now uses the supported
+`--packages-select leroy_description --merge-install` combination;
+the ament overlay is still installed to its separate prefix and the
+subsequent exact `ros2 pkg prefix leroy_description` check must succeed
+before publication checks run. No production source, accepted runtime
+image, camera, MCU or motor interface changed.
+
+The builder's OCI-format `SHELL is not persisted` messages were
+**warnings**, not the failure. Bash is only required for that
+Dockerfile's RUN steps; the candidate runtime launcher explicitly uses
+Bash, and the default command remains inert.
+
+The candidate tag is derived from a hash of the checked-in inputs, so
+the corrected Dockerfile automatically selects a **new distinct
+candidate tag**; no cleanup or replacement of the previous
+partially built image layers is needed. The earlier *source-only* and
+*sensor-image live TF* tests remain operator PASS, but this **full
+XRSLAM-runtime image candidate is NOT YET validated**.
+
+Retry from repository root:
+
+```bash
+git pull --ff-only && \
+bash -n ros/m23bv_v3_stage3_tf_runtime_candidate_no_device.sh && \
+bash -n ros/m23bv_v3_stage3_tf_runtime_env.sh && \
+python3 -B -c 'import ast; from pathlib import Path; ast.parse(Path("ros/m23bv_v3_stage3_tf_runtime_candidate_verify.py").read_text())' && \
+bash ros/m23bv_v3_stage3_tf_runtime_candidate_no_device.sh
+```
+
+Do not launch normal `leroy_bringup`, open MCU serial, power motors,
+change the accepted image tags, or treat this correction as a test
+PASS before an actual successful operator run.
+
+
 ## NEXT: additive candidate in Leroy's actual XRSLAM runtime — NOT YET TESTED
 
 The accepted YAML source test and the **real** six-writer `/tf_static`
