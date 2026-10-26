@@ -60,8 +60,9 @@ class MotorCdcProtocol:
         return self._make("set_wheels_tx", pwm, now_ns)
 
     def stop(self, *, now_ns):
-        # A stop must be possible even after a motion ACK fault, but not
-        # while another unacknowledged command remains in flight.
+        # A stop preempts an unacknowledged wheel command. Its own
+        # sequence-specific ACK is still mandatory; earlier ACKs cannot
+        # satisfy the stop request.
         return self._make("stop_wheels_tx", None, now_ns)
 
     def receive(self, line, *, now_ns):
