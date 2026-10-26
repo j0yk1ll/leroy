@@ -739,3 +739,33 @@ source inputs.
 
 XRSLAM offset 0.0 s, pose validity, map TF and real Nav2 goals remain
 gated; no MCU or motor access is authorized.
+
+## Stage 3 YAML static TF host test — launch log tmpfs correction
+
+The operator's first no-device run reported:
+```text
+STAGE3_SENSOR_TF_FRAME_TREE=PASS_SIX_UNCHANGED_STATIC_EDGES
+STAGE3_SENSOR_TF_IMU=PASS_ALREADY_ROBOT_ALIGNED
+STAGE3_SENSOR_TF_OPTICAL_CONVENTIONS=PASS
+OSError: [Errno 30] Read-only file system: '/root/.ros/log'
+STAGE3_SENSOR_TF=BLOCKED_VALIDATION_FAILED
+```
+
+This is a **test-container logging destination issue**, not a TF
+geometry mismatch. Constructing a Jazzy `launch_ros.actions.Node`
+creates a launch logger even though the test never starts the node.
+The rootless container is deliberately read-only and had no writable
+`/root/.ros/log`.
+
+The test now sets `ROS_LOG_DIR=/tmp/leroy-ros-launch-logs` and
+`ROS_HOME=/tmp/leroy-ros-home` inside the same 64 MiB
+**ephemeral container `/tmp` tmpfs** before importing the launch,
+and guards those paths. There are no new host mounts, exposed
+devices, capabilities, ROS nodes, network connections or motion.
+
+A successful retry must show the new
+`STAGE3_SENSOR_TF_LAUNCH_LOG_DIR=EPHEMERAL_CONTAINER_TMPFS`
+marker, the publisher/action and override/invalid-config PASS markers,
+and only then
+`STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE`.
+Do not declare the previously blocked run as a PASS.
