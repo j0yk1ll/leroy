@@ -135,3 +135,39 @@ for the exact acceptance markers, original stdout and limitations.
 
 No firmware, physical calibration, new robot image, MCU, camera,
 Nav2 activation or motor operation is part of this test.
+
+## Stage 3 actual Leroy runtime candidate (separate from accepted tests)
+
+The accepted sensor-image source-only and live-`/tf_static` tests do
+**not** automatically update the installed description in the existing
+normal Leroy/XRSLAM runtime. A separate additive candidate is now
+defined in `ros/Dockerfile.stage3-tf-runtime-candidate`.
+
+It derives **only** from the exact pinned local
+`localhost/leroy-ros:xrslam` full-runtime image, copies the four
+validated description inputs and installs a new
+`/opt/leroy_stage3_tf_ws/install` ament overlay. All older
+`/leroy_ws/install` packages remain intact. Sourcing the
+`/usr/local/bin/leroy-stage3-tf-runtime-env` helper selects the
+overlay. The candidate's default command is inert and **does not
+launch camera, bridge, XRSLAM, Nav2 or motors**.
+
+The guarded host candidate builder/test is:
+
+```bash
+# From repository root:
+git pull --ff-only
+bash -n ros/m23bv_v3_stage3_tf_runtime_candidate_no_device.sh
+bash -n ros/m23bv_v3_stage3_tf_runtime_env.sh
+python3 -B -c 'import ast; from pathlib import Path; ast.parse(Path("ros/m23bv_v3_stage3_tf_runtime_candidate_verify.py").read_text())'
+bash ros/m23bv_v3_stage3_tf_runtime_candidate_no_device.sh
+```
+
+The test checks inherited runtime packages, installed-description
+overlay precedence, six **live** static TF DDS transforms and bounded
+cleanup using the previously accepted observer. It builds a
+separately tagged local image offline; it does **not** deploy or
+activate the physical robot runtime or replace any accepted image.
+**Candidate build and runtime verification not yet operator-run.**
+See `ros/M23BV_V3_STAGE3_FULLSTACK_DIAGNOSTIC.md` for the
+precise expected acceptance markers and unresolved calibration gates.
