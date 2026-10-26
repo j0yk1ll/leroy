@@ -670,3 +670,33 @@ V3 integration suffers a camera epoch shift. Absolute exposure phase,
 camera–IMU time offset and physical mounting geometry remain
 unmeasured, independent of which installed overlay wins. No sensors
 or serial are opened by this check.
+
+## YAML-configured sensor transforms (supersedes CAD audit proposal)
+
+Leroy's hardware-specific fixed IMU, front-camera and workspace-camera
+mounting coordinates are now editable in one YAML file:
+
+`ros/src/leroy_description/config/sensor_mounts.yaml`
+
+`leroy.urdf.xacro` consumes these values; the description package
+installs the YAML. The previous numbers were migrated without changing
+their values: IMU (+0.095, -0.095, 0.0) m, zero robot-aligned
+IMU-link rotation; front camera +30° pitch with currently zero
+translation; workspace camera +60° pitch with currently zero
+translation. These are **configured but provisional**. The camera
+optical-frame axis-conversion joints are ROS conventions and remain
+in Xacro; the physical IMU chip-axis mapping is already applied
+before the MCU publishes the robot-aligned IMU messages.
+
+The new isolated no-device source test is
+`bash ./m23bv_v3_stage3_sensor_mounts_yaml_no_device.sh`,
+from `ros/` on the Stage 3 branch. It validates that Xacro expansion
+matches the YAML and that changing a value in a **temporary YAML
+copy** changes the generated transform. This candidate is **not yet
+operator-tested**. The old YAML-less provenance check remains pinned
+to its historical Xacro source and will intentionally block after
+this new source revision; prior physical acceptance is unaffected.
+
+No CAD-based extraction, additional MCU access, camera recording,
+sensor-rig motion, pose validation, Nav2 activation or motor control
+is authorized by this change.
