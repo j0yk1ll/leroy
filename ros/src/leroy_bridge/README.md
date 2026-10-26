@@ -98,8 +98,10 @@ XRSLAM; enabling it does **not** happen automatically after tracking loss.
 
 ## M22D actuator ingress locked (software-only)
 
-The bridge intentionally creates **no `/cmd_vel` subscription** and
-does not have a new alternative motion subscriber. Its unique
+The bridge intentionally creates **no raw `/cmd_vel` subscription**.
+The new PR #156 signed-only proposal/rearm topics (documented above)
+are absent without protected keys and cannot authorize physical motion
+without separate interlock inputs. Its unique
 `_send_command` serial-writer path calls the ROS-free
 `leroy_bridge.command_ingress.command_to_bytes` validator BEFORE
 any serial I/O. It admits only exact `set_wheels 0 0 0 0`,
