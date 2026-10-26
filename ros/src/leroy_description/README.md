@@ -1,5 +1,17 @@
 # leroy_description — YAML-configured sensor TF
 
+## Current validation result
+
+**Operator PASS:** `STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE`.
+In the pinned, network-isolated container without devices, the
+YAML was validated against all six previous static TF edges,
+`tf2_ros` action objects were successfully created (but not
+started), a temporary 1-mm YAML edit altered the publisher arguments,
+and invalid settings failed closed. No full image rebuild occurred.
+There has **not** yet been a real `/tf_static` publisher runtime
+test. The active physical hardware remains untouched.
+
+
 This package **does not use URDF or Xacro**. A small ROS 2 launch file
 reads one YAML and starts only six standard
 `tf2_ros/static_transform_publisher` processes to publish fixed
