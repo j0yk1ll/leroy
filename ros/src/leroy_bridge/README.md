@@ -62,6 +62,28 @@ PYTHONPATH="$PWD/src/leroy_bridge" PYTHONDONTWRITEBYTECODE=1 \
   python3 -m unittest discover -s src/leroy_bridge/test -p test_motor_authority.py -v
 ```
 
+**MCU watchdog binding (current follow-up):** the firmware initializes
+its communications watchdog OFF at boot. When signed motor ingress is
+configured, the bridge now requires a positive MCU watchdog timeout
+no greater than 500 ms, listens for the MCU's
+`ok set_watchdog_ms` acknowledgment, and treats absence of that
+ACK as unhealthy motor transport. Crucially, the periodic
+`keepalive` may refresh this MCU watchdog **only while the signed
+motor authority is ARMED, its control-loop tick is recent, and its
+last accepted signed controller command is younger than 250 ms**.
+On a fault, timeout, replay, expired session or shutdown the
+authority stops refreshing keepalives, so an MCU still running the
+configured watchdog has a separate opportunity to stop persistent
+wheel commands. This preserves the legacy keyless telemetry bridge
+behavior. The existing focused unit test covers heartbeat expiry.
+
+A successful `ok set_watchdog_ms` reply proves **configuration
+acknowledgment only**. It does not prove that a particular
+`set_wheels 0 0 0 0` stopped all wheels; the existing
+`ok set_wheels` protocol has no unique sequence or physical
+feedback. The bridge does not yet verify independent motor disable,
+physical stopping, or emergency-stop hardware.
+
 The remaining implementation blockers are **trusted physical
 interlock acquisition and measured sensor/controller ownership**,
 followed by a real MCU STOP/ACK and fail-safe stop behavior at
