@@ -159,6 +159,22 @@ class MotorAuthorityTest(unittest.TestCase):
         self.assertEqual((rejected.state, rejected.packet),
                          ("LATCHED", ZERO_WHEELS))
 
+    def test_keepalive_expires_without_fresh_signed_motion(self):
+        self.arm()
+        self.t += 100_000_000
+        d = self.authority.step(
+            motion=self.motion(), now_ns=self.t, health=GOOD_HEALTH,
+            **INTERLOCKS)
+        self.assertTrue(d.nonzero_candidate)
+        self.assertTrue(self.authority.heartbeat_allowed(
+            now_ns=self.t + 50_000_000))
+        self.assertFalse(self.authority.heartbeat_allowed(
+            now_ns=self.t + 250_000_000))
+        self.t += 100_000_000
+        self.authority.stop()
+        self.assertFalse(self.authority.heartbeat_allowed(
+            now_ns=self.t))
+
     def test_stalled_authority_loop_latches(self):
         self.arm()
         self.t += 300_000_000
