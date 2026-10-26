@@ -178,6 +178,8 @@ class LeroyBridgeNode(Node):
         self._clock_mapper = McuClock(self)
         self._clock_fault = False
         self._stop_event = threading.Event()
+        # Firmware boots with watchdog DISABLED. Trust only MCU ACK.
+        self._motor_watchdog_ack = threading.Event()
         # Validate optional signer custody BEFORE opening real MCU CDC.
         self._configure_signed_motor_ingress()
         self._last_imu_seq: Optional[int] = None
@@ -213,7 +215,10 @@ class LeroyBridgeNode(Node):
         )
         self._reader.start()
 
-        self._send_command(f'set_watchdog_ms {self._watchdog_ms}')
+        watchdog_write_ok = self._send_command(
+            f'set_watchdog_ms {self._watchdog_ms}')
+        if not watchdog_write_ok and self._motor_authority is not None:
+            self._motor_authority.stop()
         self._send_command(f'set_imu_stream_hz {self._imu_stream_hz}')
         self._send_command(f'set_encoder_stream_hz {self._encoder_stream_hz}')
 
@@ -273,6 +278,11 @@ class LeroyBridgeNode(Node):
             return
         if not self._kinematics_configured():
             raise ValueError('motor authority requires configured geometry')
+        # A signed motor session must configure a short MCU timeout.
+        if not 1 <= self._watchdog_ms <= 500:
+            raise ValueError('signed motor authority requires watchdog <=500 ms')
+        if self._keepalive_period_s > 0.10:
+            raise ValueError('signed motor authority requires keepalive <=100 ms')
         motion_key = read_protected_key(motion_path)
         operator_key = read_protected_key(operator_path)
         verifier = SessionVerifier(
@@ -313,7 +323,9 @@ class LeroyBridgeNode(Node):
             health={key: False for key in HEALTH_KEYS},
             estop_released=False,
             motor_rails_verified=False,
-            transport_healthy=not self._transport_fault.is_set(),
+            transport_healthy=(
+                not self._transport_fault.is_set()
+                and self._motor_watchdog_ack.is_set()),
             clock_healthy=not self._clock_fault,
             bridge_running=not self._stop_event.is_set(),
             single_controller=False,
@@ -502,9 +514,17 @@ class LeroyBridgeNode(Node):
         return True
 
     def _send_keepalive(self) -> None:
-        # On a clock fault, withhold keepalives so the MCU's independent
-        # watchdog stops motion even if the immediate stop packet is lost.
-        if self._clock_fault or self._transport_fault.is_set():
+        # MCU watchdog accepts any keepalive, even when control is stale.
+        # Once a motor authority exists, only a fresh signed ARMED session
+        # can extend motion. The keyless M22D telemetry bridge is unchanged.
+        if (self._clock_fault or self._transport_fault.is_set()
+                or self._stop_event.is_set()):
+            return
+        authority = getattr(self, '_motor_authority', None)
+        if authority is not None and (
+                not self._motor_watchdog_ack.is_set()
+                or not authority.heartbeat_allowed(
+                    now_ns=time.monotonic_ns())):
             return
         self._send_command('keepalive')
 
@@ -566,6 +586,10 @@ class LeroyBridgeNode(Node):
         return {key: int(value) for key, value in _KEY_VALUE_RE.findall(line)}
 
     def _handle_line(self, line: str) -> None:
+        if line == 'ok set_watchdog_ms':
+            # MCU accepted the timeout; this is NOT a stop acknowledgement.
+            self._motor_watchdog_ack.set()
+            return
         if line.startswith('telemetry imu '):
             self._publish_imu(self._fields(line))
             return
@@ -573,7 +597,10 @@ class LeroyBridgeNode(Node):
             self._publish_encoders(self._fields(line))
             return
         if line == 'event watchdog_stop':
-            self.get_logger().warning('MCU watchdog stopped the platform')
+            if self._motor_authority is not None:
+                self._motor_authority.stop()
+            self.get_logger().warning(
+                'MCU reported watchdog stop; signed motor session revoked')
             return
         if line.startswith('error '):
             self.get_logger().error(f'MCU: {line}')
