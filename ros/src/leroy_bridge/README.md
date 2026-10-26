@@ -12,14 +12,30 @@ The evaluator latches sensor/clock/transport/command faults, rejects
 replay and stalls, and never automatically rearms. The PWM ceiling
 is an upper software limit, not measured physical speed calibration.
 
-**Physical movement is still disabled**: no live ROS motion
-subscription, trusted sensor/interlock adapters, key provisioning,
-or MCU serial release is installed. The existing `M22D` production
-`command_ingress.command_to_bytes` still rejects every nonzero wheel
-packet, even when an authority candidate is generated. The authority
-core's packet is not a motor-stop ACK, physical E-stop or a deployment
-permission. No motor, firmware, startup image or camera process is
-changed in this milestone.
+**Bridge integration (single serial writer):** The production
+`LeroyBridgeNode._send_command` now accepts *an in-process decision
+object*, in addition to its existing string commands. Raw strings
+still go through the unchanged zero-only M22D validator. The new
+`MotorAuthority.consume_serial_payload` recognizes **only the exact
+one-use object** minted from a signed, accepted motion, for at most
+100 ms, and only inside the bridge's existing sole CDC writer
+lock. Forged/copied, stale, replayed and stop-revoked decisions cannot
+be serialized. Bridge serial read/write/flush, clock faults and
+shutdown revoke any pending authority. The existing single
+`self._serial.write` call is unchanged.
+
+**Physical movement is still disabled:** The normal bridge sets
+`_motor_authority=None` and
+`_motor_hardware_release_verified=False` before opening serial,
+and no ROS publisher or config parameter can release either value.
+There is **no** trusted physical interlock source, authenticated
+operator/controller key provisioning, accepted physical MCU STOP/ACK,
+or signed-controller ROS ingress yet. The conditional nonzero CDC
+path is therefore *not reachable from the normal robot runtime*.
+This commit is a functional in-process handoff, **not** permission
+to power motors or deploy `robot.launch.py`. A Python software
+gate alone cannot replace independent physical e-stop protection.
+No firmware, startup image or camera process changed.
 
 One focused pure-Python test, with no ROS, Podman or device access:
 
@@ -29,11 +45,12 @@ PYTHONPATH="$PWD/src/leroy_bridge" PYTHONDONTWRITEBYTECODE=1 \
   python3 -m unittest discover -s src/leroy_bridge/test -p test_motor_authority.py -v
 ```
 
-Next implementation work is to connect trusted controller commands,
-authenticated operator arming, verified physical interlocks and the
-bridge's **sole serial writer** under one revocable authority. Do not
-remove `M22D` or run normal `robot.launch.py` merely to bypass the
-remaining physical safety boundary.
+Next implementation work is **not another TF/ROS diagnostic**:
+connect signed controller/rearm ROS ingress, secure key custody and
+measured health plus an independent physical interlock provider
+before making the internal serial handoff reachable. Do not
+remove the M22D raw-string allowlist or run `robot.launch.py`
+to bypass remaining physical safety.
 
 
 ROS 2 Jazzy serial bridge for Leroy's MCU. It owns hardware
