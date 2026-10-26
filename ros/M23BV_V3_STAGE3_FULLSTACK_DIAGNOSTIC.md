@@ -1,5 +1,54 @@
 # M23BV V3 Stage 3 — full-stack diagnostic integration (draft)
 
+## Current acceptance: direct YAML static TF source test — OPERATOR PASS
+
+The operator's latest zero-device test of the pinned, source-only
+`m23bv_v3_stage3_sensor_tf_yaml_no_device.sh` completed successfully.
+**The historical blocked attempts and their fixes are documented below,
+but they are now superseded by this observed terminal PASS.**
+
+```text
+STAGE3_SENSOR_TF_PINNED_SENSOR_IMAGE=f43950b27ab86763acf6402afa1bd454275a9758459f6e7be373e35a9dd4089c
+STAGE3_SENSOR_TF_LAUNCH_LOG_DIR=EPHEMERAL_CONTAINER_TMPFS
+STAGE3_SENSOR_TF_AMENT_INDEX=EPHEMERAL_SOURCE_FIXTURE_NO_INSTALL
+STAGE3_SENSOR_TF_PACKAGE_LOOKUP=PASS_EPHEMERAL_AMENT_INDEX_ONLY
+STAGE3_SENSOR_TF_FRAME_TREE=PASS_SIX_UNCHANGED_STATIC_EDGES
+STAGE3_SENSOR_TF_IMU=PASS_ALREADY_ROBOT_ALIGNED
+STAGE3_SENSOR_TF_OPTICAL_CONVENTIONS=PASS
+STAGE3_SENSOR_TF_PUBLISHERS=PASS_SIX_STANDARD_TF2_ACTIONS_NOT_STARTED
+STAGE3_SENSOR_TF_YAML_OVERRIDE=PASS_DIRECTLY_CHANGES_PUBLISHER_ARGS
+STAGE3_SENSOR_TF_INVALID_CONFIG=PASS_FAIL_CLOSED
+STAGE3_SENSOR_TF_CONTAINER_DEVICES=NONE
+STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE
+STAGE3_SENSOR_TF_REAL_NODES=NOT_LAUNCHED
+STAGE3_SENSOR_TF_RUNNING_IMAGE=UNCHANGED
+STAGE3_SENSOR_TF_GEOMETRY_CALIBRATION=PROVISIONAL
+STAGE3_SENSOR_TF_MCU_RECORDING_MOTION=NOT_AUTHORIZED
+```
+
+**Accepted:** source YAML parsing and validation; unchanged six static
+sensor frame edges; robot-aligned IMU and optical conventions;
+creation of six standard `tf2_ros` launch `Node` action objects;
+temporary YAML 1-mm override propagation; rejection of malformed
+and unsafe configurations. The launch actions were **constructed,
+not executed**. The ament index was an ephemeral source fixture,
+**not an installed package**.
+
+**Not accepted:** installing this source revision into a ROS runtime;
+running real `static_transform_publisher` processes or observing actual
+`/tf_static` messages; physical calibration, camera–IMU absolute
+phase, XRSLAM metric odometry, Nav2 activation, physical MCU/USB
+access, motor power/motion, or any new sensor recording. Preserve
+the accepted immutable image and historic physical diagnostic gates.
+
+No repeat of this unchanged source-only test is needed.
+The next distinct integration gate, if pursued, is a
+**separate no-device package installation and actual `/tf_static`
+publication test**, in an isolated environment with
+no `--device` mappings, motor bridge or physical sensor access.
+It must not be confused with this accepted source-only test.
+
+
 **Status: source-only diagnostic candidate.** Stack parent: PR #153 at
 `93a399fe0b9b0572d389d4c5139f092f4423ceb1`. Does not modify,
 merge, or replace any accepted Stage 1/2A/2B source or branches.
