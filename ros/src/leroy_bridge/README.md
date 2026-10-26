@@ -1,3 +1,52 @@
+## Attended ROS manual pulse commissioning (wheel-lifted only)
+
+The separate `leroy_motor_manual_commission` executable uses ROS 2 for
+**requested-PWM/status telemetry**, but accepts motion input **only from local
+/dev/tty**, never from ROS `/cmd_vel` or a remote subscriber. It opens the
+STM32 CDC exclusively and **must be run instead of `leroy_bridge_node`**.
+Do not run the bridge and this tool together. This is a discrete one-shot
+pulse interface, not continuous teleoperation, collision avoidance or a
+replacement for the production signed authority.
+
+After building and sourcing the Jazzy workspace, on the laptop, with all
+wheels securely suspended and the independent cutoff physically proven to
+interrupt motor rails even while USB powers the MCU:
+
+```bash
+ros2 run leroy_bridge leroy_motor_manual_commission -- \
+  --port /dev/ttyACM0 --pwm 24 --duration-ms 150 \
+  --wheel-polarities +1,+1,+1,+1
+```
+
+The four signs are **only provisional placeholders** until wheel-rotation
+directions have been observed and recorded individually; do not infer that
+these values produce the correct physical forward direction. The program
+requires exact interactive `MANUAL_PULSE_READY` confirmation. Press SPACE,
+then within 500 ms a single direction key: `w/s` forward/back, `a/d`
+strafe left/right, `q/e` rotate CCW/CW; `x` requests sequenced STOP and
+Ctrl-C exits. Every accepted key triggers at most one <=150 ms pulse
+(max ±32/255 PWM); held keys do not provide continuous motion. MCU watchdog
+is pulse duration +100 ms, motor acceleration is bounded using the firmware
+ramp, and no keepalive is emitted. MCU STOP ACK does not verify physical
+stopping. The operator must stay at the physical cutoff.
+
+This stage deliberately requires no encoders, XRSLAM or DepthART. It does
+**not** make floor driving collision-safe. Before floor driving, confirm
+actual wheel polarity and kinematics, residual coasting, cutoff performance,
+floor clearance, a genuinely supervised controller, and additional obstacle
+protection. Status topics `/leroy/manual/requested_pwm` and
+`/leroy/manual/status` describe **requests**, not measured wheel duty or
+physical stop. The normal production bridge/config is unchanged.
+
+For host-only tests:
+
+```bash
+cd ros
+PYTHONPATH="$PWD/src/leroy_bridge" PYTHONDONTWRITEBYTECODE=1 \
+  python3 -m unittest discover -s src/leroy_bridge/test \
+    -p test_motor_manual_commission.py -v
+```
+
 # leroy_bridge
 
 ## PR #156 — complete software motor-control path (NOT hardware-commissioned)
