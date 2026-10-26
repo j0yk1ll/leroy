@@ -13,6 +13,10 @@
 
 #define COMMAND_BUFFER_SIZE 128U
 #define WATCHDOG_MAX_MS 60000U
+/* Signed bridge motion protocol: bounded duty and MCU watchdog.
+ * These are SOFTWARE constraints, not a physical motor power cut. */
+#define SIGNED_WHEEL_PWM_MAX 64
+#define SIGNED_WHEEL_WATCHDOG_MAX_MS 500U
 #define IMU_STREAM_MIN_TX_FREE 320U
 #define IMU_STREAM_BASE_US 1000000U
 #define ENCODER_STREAM_MIN_TX_FREE 192U
@@ -21,6 +25,8 @@
 static uint32_t g_watchdog_ms;
 static uint32_t g_last_activity_ms;
 static bool g_watchdog_reported;
+static bool g_motor_tx_seen;
+static uint32_t g_motor_last_tx;
 
 static uint32_t g_imu_stream_hz;
 static uint32_t g_imu_stream_period_us;
@@ -471,6 +477,37 @@ static void print_status(void)
     usb_serial_write("\r\n");
 }
 
+static bool parse_motor_tx(char *tail, uint32_t *seq,
+                           int16_t *fl, int16_t *fr,
+                           int16_t *rl, int16_t *rr)
+{
+    if (tail == NULL) {
+        return false;
+    }
+    char *cursor = tail;
+    const char *raw_seq = next_argument(&cursor);
+    if (!parse_u32(raw_seq, seq)) {
+        return false;
+    }
+    int32_t values[4];
+    for (unsigned i = 0U; i < 4U; ++i) {
+        char *token = next_argument(&cursor);
+        if (!parse_i32(token, &values[i]) ||
+            values[i] < -SIGNED_WHEEL_PWM_MAX ||
+            values[i] > SIGNED_WHEEL_PWM_MAX) {
+            return false;
+        }
+    }
+    if (next_argument(&cursor) != NULL) {
+        return false;
+    }
+    *fl = (int16_t)values[0];
+    *fr = (int16_t)values[1];
+    *rl = (int16_t)values[2];
+    *rr = (int16_t)values[3];
+    return true;
+}
+
 static void print_help(void)
 {
     usb_serial_write_line("commands:");
@@ -487,7 +524,9 @@ static void print_help(void)
     usb_serial_write_line("  stop_all");
     usb_serial_write_line("  set_platform_speed <0..255>");
     usb_serial_write_line("  set_platform_ramp <1..255>");
-    usb_serial_write_line("  set_wheels <fl:-255..255> <fr:-255..255> <rl:-255..255> <rr:-255..255>");
+    usb_serial_write_line("  set_wheels 0 0 0 0 (legacy emergency zero only)");
+    usb_serial_write_line("  set_wheels_tx <seq:u32> <fl:-64..64> <fr:-64..64> <rl:-64..64> <rr:-64..64>");
+    usb_serial_write_line("  stop_wheels_tx <seq:u32>");
     usb_serial_write_line("  set_manipulator_speed <1..5000>");
     usb_serial_write_line("  set_manipulator_acceleration <1..10000>");
     usb_serial_write_line("  set_manipulator_dir_invert <0|1>");
@@ -515,6 +554,17 @@ static void process_command(char *line)
     char *command = split_command(line, &argument);
 
     if (command == NULL || *command == '\0') {
+        return;
+    }
+
+    /* Legacy open-loop patterns cannot bypass signed bridge ownership. */
+    if (strings_equal(command, "move_platform_forward") ||
+        strings_equal(command, "move_platform_backward") ||
+        strings_equal(command, "move_platform_left") ||
+        strings_equal(command, "move_platform_right") ||
+        strings_equal(command, "rotate_platform_cw") ||
+        strings_equal(command, "rotate_platform_ccw")) {
+        usb_serial_write_line("error legacy_motor_motion_disabled");
         return;
     }
 
@@ -615,6 +665,45 @@ static void process_command(char *line)
         return;
     }
 
+    if (strings_equal(command, "stop_wheels_tx")) {
+        uint32_t seq = 0U;
+        if (!parse_u32(argument, &seq)) {
+            usb_serial_write_line("error stop_wheels_tx invalid_sequence");
+            return;
+        }
+        /* Stopping is unconditional, even with a stale sequence.
+         * Explicitly disable wheel driver enables, not just zero duty. */
+        platform_disable();
+        if (!g_motor_tx_seen || seq > g_motor_last_tx) {
+            g_motor_last_tx = seq;
+            g_motor_tx_seen = true;
+        }
+        usb_serial_write("ok stop_wheels_tx seq=");
+        usb_serial_write_u32(seq);
+        usb_serial_write("\r\n");
+        return;
+    }
+    if (strings_equal(command, "set_wheels_tx")) {
+        uint32_t seq = 0U;
+        int16_t fl = 0, fr = 0, rl = 0, rr = 0;
+        if (!parse_motor_tx(argument, &seq, &fl, &fr, &rl, &rr)) {
+            usb_serial_write_line("error set_wheels_tx invalid_arguments");
+        } else if (g_watchdog_ms == 0U ||
+                   g_watchdog_ms > SIGNED_WHEEL_WATCHDOG_MAX_MS) {
+            usb_serial_write_line("error set_wheels_tx watchdog_not_bounded");
+        } else if (g_motor_tx_seen && seq <= g_motor_last_tx) {
+            usb_serial_write_line("error set_wheels_tx stale_sequence");
+        } else {
+            g_motor_tx_seen = true;
+            g_motor_last_tx = seq;
+            platform_set_wheels(fl, fr, rl, rr);
+            refresh_activity();
+            usb_serial_write("ok set_wheels_tx seq=");
+            usb_serial_write_u32(seq);
+            usb_serial_write("\r\n");
+        }
+        return;
+    }
     if (strings_equal(command, "set_wheels")) {
         int16_t fl = 0;
         int16_t fr = 0;
@@ -622,8 +711,10 @@ static void process_command(char *line)
         int16_t rr = 0;
         if (!parse_wheel_arguments(argument, &fl, &fr, &rl, &rr)) {
             usb_serial_write_line("error set_wheels expects fl fr rl rr in -255..255");
+        } else if (fl != 0 || fr != 0 || rl != 0 || rr != 0) {
+            usb_serial_write_line("error legacy_nonzero_wheels_disabled");
         } else {
-            platform_set_wheels(fl, fr, rl, rr);
+            platform_disable();
             refresh_activity();
             usb_serial_write_line("ok set_wheels");
         }
@@ -780,6 +871,8 @@ void command_init(void)
     g_watchdog_ms = 0;
     g_last_activity_ms = millis();
     g_watchdog_reported = false;
+    g_motor_tx_seen = false;
+    g_motor_last_tx = 0U;
 
     g_imu_stream_hz = 0U;
     g_imu_stream_period_us = 0U;
