@@ -111,14 +111,17 @@ class LaunchLogs:
 
 
 def remaining_in_group(group):
-    """Ignore zombies; only live processes mean cleanup is incomplete."""
-    scan = subprocess.run(["ps", "-e", "-o", "pgid=,stat="],
-                          text=True, capture_output=True, check=True)
-    for row in scan.stdout.splitlines():
-        fields = row.split()
-        if len(fields) >= 2 and fields[0].isdigit():
-            if int(fields[0]) == group and not fields[1].startswith("Z"):
+    """Inspect our private Linux PID namespace; avoid a procps dependency."""
+    for item in Path("/proc").iterdir():
+        if not item.name.isdigit():
+            continue
+        try:
+            # /proc/PID/stat fields after ')': state, parent_pid, pgrp, ...
+            suffix = (item / "stat").read_text().rsplit(") ", 1)[1].split()
+            if int(suffix[2]) == group and suffix[0] != "Z":
                 return True
+        except (OSError, ValueError, IndexError):
+            continue  # Process disappeared during inspection.
     return False
 
 
