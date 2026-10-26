@@ -74,12 +74,18 @@ class MotorAuthority:
         self._last_tick_ns = None
         self._rearm_started_ns = None
         self._last_command_ns = None
+        # Identity-bound, one-use handoff to the sole bridge serial writer.
+        # There is no public constructor for a valid pending command.
+        self._pending_decision = None
+        self._pending_created_ns = None
 
     def _fault(self, reason, *, terminal=False):
         self.state = "TERMINAL" if terminal else "LATCHED"
         self.reason = reason
         self._rearm_started_ns = None
         self._last_command_ns = None
+        self._pending_decision = None
+        self._pending_created_ns = None
         return _zero(self.state, reason)
 
     @staticmethod
@@ -124,6 +130,8 @@ class MotorAuthority:
               single_controller=False):
         if self.state == "TERMINAL":
             return _zero(self.state, self.reason)
+        self._pending_decision = None
+        self._pending_created_ns = None
         time_fault = self._time(now_ns)
         if time_fault:
             return time_fault
@@ -151,6 +159,10 @@ class MotorAuthority:
              motor_rails_verified=False, transport_healthy=False,
              clock_healthy=False, bridge_running=False,
              single_controller=False):
+        # Every evaluation invalidates the previous serial handoff,
+        # including evaluations returning ZERO or rejecting input.
+        self._pending_decision = None
+        self._pending_created_ns = None
         if self.state == "TERMINAL":
             return _zero(self.state, self.reason)
         time_fault = self._time(now_ns)
@@ -199,9 +211,44 @@ class MotorAuthority:
             return self._fault("WHEEL_CONVERSION_INVALID")
         self._last_command_ns = now_ns
         packet = "set_wheels " + " ".join(str(v) for v in wheels)
-        return MotorDecision(
+        decision = MotorDecision(
             "ARMED", "FRESH_SIGNED_CONTROLLER_COMMAND",
             tuple(wheels), packet, any(v != 0 for v in wheels))
+        self._pending_decision = decision
+        self._pending_created_ns = now_ns
+        return decision
+
+    def consume_serial_payload(self, decision, *, now_ns):
+        """Consume the exact fresh decision ONE time for bridge CDC I/O.
+
+        No ROS message, signed envelope, tuple of wheel duties, or
+        caller-constructed MotorDecision can authorize a serial write.
+        The bridge must consume this inside its existing sole writer.
+        """
+        if (self.state != "ARMED"
+                or type(decision) is not MotorDecision
+                or decision is not self._pending_decision):
+            return None
+        issued = self._pending_created_ns
+        # Consume before further validation to prevent replay and racing.
+        self._pending_decision = None
+        self._pending_created_ns = None
+        if (type(now_ns) is not int or issued is None
+                or not issued <= now_ns <= issued + 100_000_000):
+            self._fault("EXPIRED_SERIAL_HANDOFF")
+            return None
+        if (decision.state != "ARMED"
+                or decision.reason != "FRESH_SIGNED_CONTROLLER_COMMAND"
+                or len(decision.wheel_pwm) != 4
+                or any(type(v) is not int or abs(v) > self._max_pwm
+                       for v in decision.wheel_pwm)
+                or decision.nonzero_candidate != any(
+                    v != 0 for v in decision.wheel_pwm)
+                or decision.packet != "set_wheels " + " ".join(
+                    str(v) for v in decision.wheel_pwm)):
+            self._fault("INVALID_SERIAL_HANDOFF")
+            return None
+        return (decision.packet + "\n").encode("ascii")
 
     def stop(self):
         """Permanently revoke this session (not an MCU STOP acknowledgement)."""
