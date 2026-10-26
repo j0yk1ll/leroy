@@ -2,14 +2,26 @@
 
 ## Current validation result
 
-**Operator PASS:** `STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE`.
-In the pinned, network-isolated container without devices, the
-YAML was validated against all six previous static TF edges,
-`tf2_ros` action objects were successfully created (but not
-started), a temporary 1-mm YAML edit altered the publisher arguments,
-and invalid settings failed closed. No full image rebuild occurred.
-There has **not** yet been a real `/tf_static` publisher runtime
-test. The active physical hardware remains untouched.
+**Operator PASS — two distinct gates:** the source-only YAML
+validation reported `STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE`.
+The subsequent isolated integration test built and installed the
+current description package inside a temporary rootless container and
+launched six actual static TF publishers. The independent ROS observer
+verified all six `/tf_static` edges, translations, quaternions, six
+concurrent DDS writers and clean shutdown:
+
+```text
+STAGE3_SENSOR_TF_INTEGRATION_TF_STATIC=PASS_SIX_REAL_EDGES
+STAGE3_SENSOR_TF_INTEGRATION_TRANSLATIONS_AND_QUATERNIONS=PASS
+STAGE3_SENSOR_TF_INTEGRATION_PUBLISHERS=PASS_SIX_DISTINCT_DDS_WRITERS
+STAGE3_SENSOR_TF_INTEGRATION_SHUTDOWN=PASS
+STAGE3_SENSOR_TF_INTEGRATION=PASS_REAL_TF_STATIC_NO_DEVICE
+```
+
+Both tests used the pinned sensor image with **no physical devices or
+host network access**. The real robot runtime image has not been
+updated; geometry and sensor synchronisation remain provisional.
+No source test or integration test repeat is needed on unchanged code.
 
 
 This package **does not use URDF or Xacro**. A small ROS 2 launch file
@@ -117,9 +129,9 @@ with no network and no device mappings, launches all six standard
 static publishers, and independently verifies the actual
 transient-local `/tf_static` messages, parent/child frame IDs,
 positions, rotations and concurrent DDS writer count. Finally it
-checks bounded clean shutdown. It is **not yet operator executed**;
-see `ros/M23BV_V3_STAGE3_FULLSTACK_DIAGNOSTIC.md` for the exact
-acceptance markers and scope.
+checks bounded clean shutdown. **Operator integration PASS has been
+observed**; see `ros/M23BV_V3_STAGE3_FULLSTACK_DIAGNOSTIC.md`
+for the exact acceptance markers, original stdout and limitations.
 
 No firmware, physical calibration, new robot image, MCU, camera,
 Nav2 activation or motor operation is part of this test.
