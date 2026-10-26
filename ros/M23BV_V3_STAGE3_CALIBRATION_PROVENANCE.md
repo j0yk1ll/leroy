@@ -1,30 +1,32 @@
 # Stage 3: XRSLAM Camera–IMU Calibration Provenance
 
-## Sensor geometry is configured in YAML
+## Sensor geometry is configured in YAML without URDF
 
 Hardware-specific fixed sensor transforms now have a single editable
 configuration file:
 
 `ros/src/leroy_description/config/sensor_mounts.yaml`
 
-The canonical `leroy.urdf.xacro` **consumes** that YAML. Existing
-IMU/camera positions and pitches were migrated without changing
-their numeric values. The package installs the YAML file, and the
-standard ROS optical-axis conventions remain in Xacro.
+The `leroy_description/launch/description.launch.py` launcher reads
+the YAML **directly** and starts six standard `tf2_ros` static-transform
+publishers. The URDF/Xacro and `robot_state_publisher` have been removed
+from this source candidate. All six frame-edge values, including the
+optical-axis convention and camera compatibility alias, are now in
+YAML. The previously configured numeric values are unchanged.
 No hardware measurements are needed simply to edit the configuration.
 
 The values still have `status: provisional`; editing them does not
 establish validated physical sensor centers or temporal alignment.
 The next source-level acceptance check is
-`bash ./m23bv_v3_stage3_sensor_mounts_yaml_no_device.sh`, which uses
+`bash ./m23bv_v3_stage3_sensor_tf_yaml_no_device.sh`, which uses
 a pinned network-isolated rootless container with **no devices** to
-expand Xacro and compare resulting transforms to YAML.
+check six static TF publisher actions against the previous frame tree
+without starting them.
 
-The earlier camera/IMU provenance runner is revision-pinned to the
-*prior* literal-Xacro source blob. Its successful operator output is
-retained as historical evidence, not a validation of the new
-YAML-driven source. Do not weaken old source pins to claim an old
-physical trial covered the new description.
+The older camera/IMU provenance runner pins the historical URDF source
+and will intentionally BLOCK on this new branch because URDF was removed.
+Its previously observed result remains historical evidence, not a claim
+that the new static TF publisher has run on actual sensor hardware.
 
 ## Existing Leroy frame definitions and calibration history — reuse, do not re-ask
 
@@ -35,10 +37,10 @@ recovered from tracked sources without inventing measurements.
 
 | Quantity | Already established source | Scope and current authority |
 | --- | --- | --- |
-| Robot coordinate directions | `ros/src/leroy_description/urdf/leroy.urdf.xacro`: +X forward, +Y left, +Z up; sensor mounts loaded from YAML | Axis convention **DEFINED**; the physical chassis landmark chosen as the `base_link` origin is **not explicitly identified in the current checked-in URDF/README** |
+| Robot coordinate directions | `sensor_mounts.yaml`: +X forward, +Y left, +Z up; launch fixes parent/child frame IDs | Axis convention **DEFINED**; the physical base origin is not separately surveyed here |
 | IMU axes on assembled robot | `firmware/include/imu.h` and `firmware/src/imu.c`: forward=−ICM X, left=−ICM Y, up=+ICM Z, CCW yaw=+ICM gyro Z; gyro roll/pitch signs inverted, yaw unchanged | **ALREADY DEFINED AND IMPLEMENTED** in `imu_read_robot()`; `/imu/data_raw` contains robot-frame acceleration/gyro values from the MCU. **Do not apply another 180° sensor-axis correction in the ROS TF** |
-| IMU center translation in current TF | `ros/src/leroy_description/config/sensor_mounts.yaml`: +95 mm X, −95 mm Y, 0 mm Z (expanded by Xacro) | Existing parameter; its own source explicitly marks this geometry **PROVISIONAL**, including unknown physical height. Not independently certified as the IMU die/sensing center |
-| Front camera orientation and frame axes | Mount pitch +30° in `sensor_mounts.yaml`; conventional optical frame +X right, +Y down, +Z forward and `camera_optical_frame` alias in Xacro | Existing defined TF *model*, but physical 30° mount angle still explicitly **PROVISIONAL** |
+| IMU center translation in current TF | `ros/src/leroy_description/config/sensor_mounts.yaml`: +95 mm X, −95 mm Y, 0 mm Z (published as static TF by launch) | Existing parameter; its own source explicitly marks this geometry **PROVISIONAL**, including unknown physical height. Not independently certified as the IMU die/sensing center |
+| Front camera orientation and frame axes | Mount pitch +30° in `sensor_mounts.yaml`; conventional optical frame +X right, +Y down, +Z forward and `camera_optical_frame` alias in YAML | Existing defined TF *model*, but physical 30° mount angle still explicitly **PROVISIONAL** |
 | Camera optical center translation | `sensor_mounts.yaml`: (0, 0, 0) m | Existing value is an explicitly documented **zero placeholder**, not an assertion that the optical center is at the base origin |
 | Workspace camera | `sensor_mounts.yaml`: +60° pitch, zero translation | **PROVISIONAL**, not the front camera used by Stage 3 VIO |
 | Wheels/nominal chassis geometry | `ros/src/leroy_bridge/config/leroy_bridge.yaml`: radius=20 mm, half-wheelbase=180 mm, half-track=275 mm | Existing kinematic configuration; **does not independently identify the physical `base_link` reference point** or validate camera/IMU mounting |
@@ -54,8 +56,8 @@ script produced it: sign convention, source timestamp semantics, runtime
 mapping and repeatability are distinct verification gates.
 
 **Configured, not calibrated:** update YAML directly when the physical
-mounting configuration changes; the Xacro itself should not repeat
-hardware-specific numbers. The present positions and angles remain
+mounting configuration changes; static TF node arguments are generated
+from this YAML, not a second numeric configuration. The present positions and angles remain
 provisional. Keep XRSLAM pose and Nav2 motion disabled until calibration
 is actually verified. No motion, recording, camera or MCU serial
 access is authorized.
@@ -148,9 +150,11 @@ The deployed diagnostic XRSLAM launch uses a clearly **provisional**
 IMU stream were actually observed, but XRSLAM remained
 `initializing`.
 
-## Current geometric values (YAML input, Xacro output)
+## Current geometric values (YAML input, TF2 static publishers)
 
-`ros/src/leroy_description/config/sensor_mounts.yaml` supplies the mounting transforms; Xacro supplies the conventional optical-frame and legacy-alias joints:
+`ros/src/leroy_description/config/sensor_mounts.yaml` supplies all six
+fixed transforms, including the conventional optical frames and alias.
+The launcher fixes the frame names and topology:
 
 | Relationship | xyz metres | rpy radians | Confidence |
 | --- | --- | --- | --- |
@@ -159,7 +163,7 @@ IMU stream were actually observed, but XRSLAM remained
 | `front_camera_link -> front_camera_optical_frame` | `0 0 0` | `-1.5707963267948966 0 -1.5707963267948966` | Formal ROS optical-axis convention, not a mounting survey |
 | `front_camera_optical_frame -> camera_optical_frame` | `0 0 0` | `0 0 0` | Legacy frame ID alias |
 
-**Edit the YAML for mounting changes, not duplicate values in the Xacro.**
+**Edit only the YAML for static sensor transform values.**
 The camera and IMU are distinct packages, and the front camera's
 zero translation is still a placeholder, not a validated optical-center
 measurement.
@@ -169,19 +173,20 @@ measurement.
 From `ros/`, after updating the Stage 3 branch:
 
 ```bash
-bash ./m23bv_v3_stage3_sensor_mounts_yaml_no_device.sh
+bash ./m23bv_v3_stage3_sensor_tf_yaml_no_device.sh
 ```
 
-This reads the checked-in YAML and Xacro, then expands them inside
-the existing immutable V3 sensor image. It verifies the configured
-fixed joints and proves that changing a **temporary** YAML value
-changes the generated URDF. It never starts ROS nodes, opens video or
-MCU devices, records data or moves the robot.
+This imports the new YAML-driven launch in the existing immutable
+V3 sensor image and checks the six expected `tf2_ros` static publisher
+actions without starting them. It proves that changing a **temporary**
+YAML value changes the corresponding CLI transform arguments and that
+unsafe frame settings are rejected. It never opens video/MCU devices,
+records data or moves the robot.
 
 The earlier `m23bv_v3_stage3_calibration_provenance_host.sh` is
-kept for the **original, now superseded source revision**. Its
-historical result was PASS; its exact old URDF Git blob check will
-correctly BLOCK after this intentional YAML refactor. Do not use
+retained for the **original, superseded source revision**. Its
+historical result was PASS; the old URDF Git blob check correctly
+BLOCKS after removal of URDF/Xacro. Do not use
 its expected success markers as a claim about the new geometry.
 
 ## Configured values and unresolved calibration
@@ -189,8 +194,8 @@ its expected success markers as a claim about the new geometry.
 For normal geometry updates, edit the `mounts.imu`,
 `mounts.front_camera` and `mounts.workspace_camera` entries in
 `sensor_mounts.yaml`: each has `xyz` metres and `rpy` radians
-in the defined robot base frame. No duplicate numeric editing of
-Xacro is necessary.
+in the defined robot base frame. No URDF or duplicate transform
+configuration is necessary.
 
 For current Stage 3 validation, retain `status: provisional`.
 A YAML value is a **configuration**, not proof that the base-link
