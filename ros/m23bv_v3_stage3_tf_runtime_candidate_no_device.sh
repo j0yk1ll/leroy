@@ -19,7 +19,7 @@ inputs=(
   src/leroy_description/config/sensor_mounts.yaml
   src/leroy_description/launch/description.launch.py
 )
-for file in ${inputs[@]}; do
+for file in "${inputs[@]}"; do
   [[ -f "$file" && ! -L "$file" ]] || fail SOURCE_MISSING
   [[ "$(git hash-object "$file")" == "$(git rev-parse "HEAD:ros/$file")" ]] ||
     fail SOURCE_DRIFT
@@ -42,7 +42,7 @@ echo "STAGE3_TF_RUNTIME_PINNED_XRSLAM_IMAGE=$got"
 # sensor, XRSLAM, Nav2 or normal Leroy runtime tag. Ignore unrelated local
 # worktree deletions, since they are not copied by this build recipe.
 source_key="$(
-  for file in ${inputs[@]}; do
+  for file in "${inputs[@]}"; do
     printf '%s %s\n' "$file" "$(git rev-parse "HEAD:ros/$file")"
   done | sha256sum | cut -d' ' -f1
 )"
@@ -91,8 +91,7 @@ podman run --rm --interactive --pull=never \
   --env XDG_CACHE_HOME=/tmp/leroy-tf-runtime-cache \
   --mount type=bind,src="$PWD/m23bv_v3_stage3_tf_runtime_candidate_verify.py",dst=/opt/leroy_tf_runtime_verify.py,readonly \
   --mount type=bind,src="$PWD/m23bv_v3_stage3_sensor_tf_live_verify.py",dst=/opt/leroy_tf_live_verify.py,readonly \
-  --entrypoint /bin/bash "$tag" -s <<'LEROY_STAGE3_TF_RUNTIME_CONTAINER' ||
-  fail CANDIDATE_LIVE_TF_VERIFICATION
+  --entrypoint /bin/bash "$tag" -s <<'LEROY_STAGE3_TF_RUNTIME_CONTAINER' || fail CANDIDATE_LIVE_TF_VERIFICATION
 set -Eeuo pipefail
 shopt -s nullglob
 for dev in /dev/video* /dev/ttyACM* /dev/ttyUSB*; do
