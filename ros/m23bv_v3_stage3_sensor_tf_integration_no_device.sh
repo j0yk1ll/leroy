@@ -47,8 +47,7 @@ podman run --rm --interactive --pull=never --network none \
   --env RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   --mount type=bind,src="$PWD/src/leroy_description",dst=/opt/leroy_tf_source,readonly \
   --mount type=bind,src="$PWD/m23bv_v3_stage3_sensor_tf_live_verify.py",dst=/opt/leroy_tf_live_verify.py,readonly \
-  --entrypoint /bin/bash "$sensor" -s <<'LEROY_TF_INTEGRATION_CONTAINER' ||
-  fail CONTAINER_BUILD_OR_RUNTIME_TEST
+  --entrypoint /bin/bash "$sensor" -s <<'LEROY_TF_INTEGRATION_CONTAINER' || fail CONTAINER_BUILD_OR_RUNTIME_TEST
 set -Eeuo pipefail
 shopt -s nullglob
 for device in /dev/video* /dev/ttyACM* /dev/ttyUSB*; do
