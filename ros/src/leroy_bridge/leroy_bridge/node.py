@@ -11,10 +11,11 @@ from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy,
 )
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Imu
-from std_msgs.msg import String
+from nav_msgs.msg import Odometry, OccupancyGrid
+from sensor_msgs.msg import Imu, Image
+from std_msgs.msg import String, Bool
 from tf2_ros import TransformBroadcaster
+from tf2_msgs.msg import TFMessage
 from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
@@ -26,6 +27,8 @@ from leroy_bridge.authorized_session import (
 )
 from leroy_bridge.motor_authority import MotorAuthority, HEALTH_KEYS
 from leroy_bridge.motor_cdc_protocol import MotorCdcProtocol
+from leroy_bridge.motor_sensor_health import MotorSensorHealth
+from leroy_bridge.motor_gpio_feedback import PhysicalMotorFeedback
 from leroy_bridge.motor_signed_ingress import (
     MotorInputRejected, parse_signed_envelope, read_protected_key,
 )
@@ -99,6 +102,17 @@ class LeroyBridgeNode(Node):
             descriptor=ParameterDescriptor(read_only=True))
         self.declare_parameter(
             'motor_operator_key_file', '',
+            descriptor=ParameterDescriptor(read_only=True))
+        # Read-only FEEDBACK from an independent external motor cutoff.
+        # No GPIO line IDs are invented: unconfigured means no motor release.
+        self.declare_parameter(
+            'motor_gpio_chip', '',
+            descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter(
+            'motor_estop_feedback_offset', -1,
+            descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter(
+            'motor_power_feedback_offset', -1,
             descriptor=ParameterDescriptor(read_only=True))
 
         # Encoder/odometry calibration. The right-side encoders are currently
@@ -176,6 +190,8 @@ class LeroyBridgeNode(Node):
         self._motor_authority = None
         self._motor_cdc = None
         self._motor_stop_requested = False
+        self._motor_feedback = None
+        self._motor_health = None
         self._motor_hardware_release_verified = False
         self._serial_lock = threading.Lock()
         self._transport_fault = threading.Event()
@@ -299,6 +315,36 @@ class LeroyBridgeNode(Node):
             pwm_per_rad_s=float(self._wheel_velocity_to_pwm_gain),
             max_pwm=int(self._max_pwm))
         self._motor_cdc = MotorCdcProtocol()
+        self._motor_health = MotorSensorHealth()
+        chip = self.get_parameter('motor_gpio_chip').value
+        estop_offset = self.get_parameter(
+            'motor_estop_feedback_offset').value
+        power_offset = self.get_parameter(
+            'motor_power_feedback_offset').value
+        if chip or estop_offset != -1 or power_offset != -1:
+            self._motor_feedback = PhysicalMotorFeedback(
+                chip, estop_offset, power_offset)
+        # Only real, typed source messages can advance a motor health gate.
+        observer_qos = QoSProfile(
+            depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        status_qos = QoSProfile(
+            depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=ReliabilityPolicy.RELIABLE)
+        self._motor_status_sub = self.create_subscription(
+            String, '/xrslam/tracking_status',
+            self._motor_health.tracking_state, status_qos)
+        self._motor_valid_sub = self.create_subscription(
+            Bool, '/xrslam/localization_valid',
+            self._motor_health.localization_state, status_qos)
+        self._motor_odom_sub = self.create_subscription(
+            Odometry, '/odom', self._motor_health.odom, observer_qos)
+        self._motor_depth_sub = self.create_subscription(
+            Image, '/depthart/depth', self._motor_health.depth, observer_qos)
+        self._motor_tf_sub = self.create_subscription(
+            TFMessage, '/tf', self._motor_health.dynamic_tf, observer_qos)
+        self._motor_costmap_sub = self.create_subscription(
+            OccupancyGrid, '/local_costmap/costmap',
+            self._motor_health.costmap, observer_qos)
         self._motor_session_pub = self.create_publisher(
             String, '/leroy/motor/session_id',
             QoSProfile(
