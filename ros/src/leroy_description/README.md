@@ -192,3 +192,23 @@ candidate was **not deployed**, and normal robot bringup was **not
 started**. There is no need to repeat these tests on unchanged code.
 See `ros/M23BV_V3_STAGE3_FULLSTACK_DIAGNOSTIC.md` for scope
 and remaining calibration/deployment gates.
+
+## Physical host (optional, TF only; not yet operator-run)
+
+The accepted full XRSLAM-runtime candidate is **not the active robot
+image**. A separately guarded `ros/m23bv_v3_stage3_tf_physical_deploy.sh`
+can run the six static TF publishers as a **device-free sidecar**
+inside an already-approved, running Stage 3 sensor container's
+isolated DDS namespace. It requires that parent's exact accepted
+image ID and refuses any existing `/tf_static` publishers or
+visible bridge/legacy URDF node. The script prompts
+`DEPLOY_TF_ONLY` after explicit physical motor-rail/E-stop checks.
+The operator supplies `LEROY_STAGE3_TF_DDS_PARENT` with the real
+running sensor parent name. No camera/MCU device mapping or
+normal robot bringup is performed.
+
+Successful deployment has **not** been observed; see
+`ros/M23BV_V3_STAGE3_FULLSTACK_DIAGNOSTIC.md` for the
+preflight, operator prompt, expected markers, conditions and
+`podman stop leroy-stage3-tf-only` rollback. This does not permit
+metric VIO/odometry, Nav2 goals or motor power.
