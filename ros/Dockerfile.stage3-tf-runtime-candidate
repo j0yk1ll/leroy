@@ -4,6 +4,9 @@
 ARG STAGE3_TF_XRSLAM_BASE=localhost/leroy-ros:xrslam
 FROM ${STAGE3_TF_XRSLAM_BASE}
 
+# The environment helper is intentionally Bash-only; never source from dash.
+SHELL ["/bin/bash", "-c"]
+
 # Preserve /leroy_ws, XRSLAM, DepthART, bridge and existing image layers.
 # Overlay leroy_description with the NEW YAML-only version; do not modify
 # the older ament package in the inherited underlay.
