@@ -24,6 +24,7 @@ setup(
             'leroy_bridge_node = leroy_bridge.node:main',
             'leroy_motor_controller_signer = leroy_bridge.motor_signer:main_controller',
             'leroy_motor_operator_grant = leroy_bridge.motor_signer:main_operator',
+            'leroy_motor_provision_keys = leroy_bridge.motor_key_provision:main',
         ],
     },
 )
