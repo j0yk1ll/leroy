@@ -10,7 +10,14 @@ SHELL ["/bin/bash", "-c"]
 # Preserve /leroy_ws, XRSLAM, DepthART, bridge and existing image layers.
 # Overlay leroy_description with the NEW YAML-only version; do not modify
 # the older ament package in the inherited underlay.
-COPY src/leroy_description/ /opt/leroy_stage3_tf_ws/src/leroy_description/
+# Copy ONLY the four checked-in, byte-pinned inputs: never accidentally
+# package an untracked URDF, cache or working-tree residue.
+COPY src/leroy_description/CMakeLists.txt src/leroy_description/package.xml \
+    /opt/leroy_stage3_tf_ws/src/leroy_description/
+COPY src/leroy_description/launch/description.launch.py \
+    /opt/leroy_stage3_tf_ws/src/leroy_description/launch/description.launch.py
+COPY src/leroy_description/config/sensor_mounts.yaml \
+    /opt/leroy_stage3_tf_ws/src/leroy_description/config/sensor_mounts.yaml
 COPY m23bv_v3_stage3_tf_runtime_env.sh /usr/local/bin/leroy-stage3-tf-runtime-env
 
 RUN . /opt/ros/jazzy/setup.sh \
