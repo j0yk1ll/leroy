@@ -27,14 +27,14 @@ actual="$(printf '%s' "$actual" | sed 's/^sha256://')"
 [[ "$actual" == "$expected" ]] || fail IMAGE_ID_DRIFT
 echo "STAGE3_SENSOR_TF_PINNED_SENSOR_IMAGE=$actual"
 
-podman run --rm --pull=never --network none --ipc private --pid private \
+podman run --rm --interactive --pull=never --network none --ipc private --pid private \
   --read-only --cap-drop all --security-opt no-new-privileges \
   --tmpfs /tmp:rw,nosuid,nodev,size=64m \
   --env ROS_LOG_DIR=/tmp/leroy-ros-launch-logs \
   --env ROS_HOME=/tmp/leroy-ros-home \
   --mount type=bind,src="$PWD/src/leroy_description/config/sensor_mounts.yaml",dst=/tmp/sensor_mounts.yaml,readonly \
   --mount type=bind,src="$PWD/src/leroy_description/launch/description.launch.py",dst=/tmp/description.launch.py,readonly \
-  --entrypoint /bin/bash "$image" -c '
+  --entrypoint /bin/bash "$image" -s <<'LEROY_SENSOR_TF_CONTAINER' || fail VALIDATION_FAILED
 set -eo pipefail
 test ! -e /dev/video2 && test ! -e /dev/ttyACM0
 # ROS 2 Jazzy launch constructs a logger even for an unexecuted Node
@@ -60,7 +60,7 @@ mkdir -p "$test_prefix/share/ament_index/resource_index/packages" \
 cp /tmp/sensor_mounts.yaml "$test_prefix/share/leroy_description/config/sensor_mounts.yaml"
 export AMENT_PREFIX_PATH="$test_prefix:$AMENT_PREFIX_PATH"
 echo STAGE3_SENSOR_TF_AMENT_INDEX=EPHEMERAL_SOURCE_FIXTURE_NO_INSTALL
-python3 -B - <<PY
+python3 -B - <<'LEROY_SENSOR_TF_PYTHON'
 import importlib.util
 import math
 from pathlib import Path
@@ -153,9 +153,9 @@ with tempfile.TemporaryDirectory(dir="/tmp") as temp:
     broken["mounts"]["imu"]["xyz"][0] = float("nan")
     reject(broken, "nonfinite")
     print("STAGE3_SENSOR_TF_INVALID_CONFIG=PASS_FAIL_CLOSED")
-PY
+LEROY_SENSOR_TF_PYTHON
 echo STAGE3_SENSOR_TF_CONTAINER_DEVICES=NONE
-' || fail VALIDATION_FAILED
+LEROY_SENSOR_TF_CONTAINER
 
 echo STAGE3_SENSOR_TF=PASS_YAML_STATIC_TF_NO_DEVICE
 echo STAGE3_SENSOR_TF_REAL_NODES=NOT_LAUNCHED
