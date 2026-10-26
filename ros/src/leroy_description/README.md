@@ -1,83 +1,87 @@
-# leroy_description
+# leroy_description — YAML-configured sensor TF
 
-Canonical fixed sensor geometry for Leroy, published once via
-`robot_state_publisher`. The bridge and XRSLAM must not publish
-duplicate static sensor transforms.
+This package **does not use URDF or Xacro**. A small ROS 2 launch file
+reads one YAML and starts only six standard
+`tf2_ros/static_transform_publisher` processes to publish fixed
+sensor transforms on `/tf_static`.
 
-**Edit the hardware values in one file:**
-`config/sensor_mounts.yaml`.
-`urdf/leroy.urdf.xacro` loads that YAML and provides the frame structure
-and fixed ROS optical-axis conversions. `CMakeLists.txt` installs the
-configuration along with the launch and URDF files.
+## Edit sensor mounting coordinates here
 
-The YAML defines three physical mounting transforms, in **metres**
-(`xyz`) and **radians** (`rpy`):
+`ros/src/leroy_description/config/sensor_mounts.yaml`
 
 - `mounts.imu`: `base_link -> imu_link`
 - `mounts.front_camera`: `base_link -> front_camera_link`
 - `mounts.workspace_camera`: `base_link -> workspace_camera_link`
+- `fixed_frames.front_camera_optical`:
+  `front_camera_link -> front_camera_optical_frame`
+- `fixed_frames.camera_optical_alias`:
+  `front_camera_optical_frame -> camera_optical_frame`
+- `fixed_frames.workspace_camera_optical`:
+  `workspace_camera_link -> workspace_camera_optical_frame`
 
-Coordinates are +X forward, +Y left, +Z up. The original provisional
-values were **preserved exactly**: IMU position (+0.095, −0.095, 0) m
-with identity frame rotation; front camera pitch 30° and translation
-(0, 0, 0) m; workspace camera pitch 60° and translation (0, 0, 0) m.
-The two zero camera translations and IMU height are placeholders,
-not measured sensor centers. The `status: provisional` field records
-this; it is not a runtime permission flag.
+YAML units: `xyz` **metres**; `rpy` **radians**, in roll/pitch/yaw
+order. `base_link` is +X forward, +Y left, +Z up.
+Optical frames follow ROS +X right, +Y down, +Z forward. All six
+transform values, including the optical-frame conventions, are visible
+in the YAML; frame IDs and topology are fixed by the launcher to avoid
+accidental map/odom authority or duplicate children.
 
-The published IMU accel/gyro messages are already rotated by the
-MCU into robot-aligned axes, using the mounting profile
-`forward = −ICM X`, `left = −ICM Y`, `up = +ICM Z`.
-The **ROS `imu_link` rotation stays identity**; do not rotate the
-sensor package axes a second time in this YAML. PR #155 separately
-centralizes the firmware's chip-axis profile; it does not change the
-physical IMU translation configured here.
+The values were migrated **without numeric changes** from the previous
+Xacro: IMU (+95, −95, 0) mm with identity robot-frame orientation,
+front camera provisional +30° pitch and zero translation, workspace
+camera provisional +60° pitch and zero translation. This is a source
+configuration migration, **not calibration acceptance**. The YAML
+currently records `status: provisional` and the launch refuses other
+status labels rather than pretending a setting confers permission.
 
-The fixed TF tree is:
+`/imu/data_raw` is already robot-aligned by MCU firmware
+(forward=−ICM X, left=−ICM Y, up=+ICM Z). **Keep
+`mounts.imu.rpy=[0,0,0]`**; the loader rejects a second sensor-package
+rotation. Changing a physical IMU chip mounting requires reviewing the
+separate firmware profile (draft PR #155), not applying duplicate
+rotations in ROS.
 
-```text
-base_link
-├── imu_link
-├── front_camera_link
-│   └── front_camera_optical_frame
-│       └── camera_optical_frame
-└── workspace_camera_link
-    └── workspace_camera_optical_frame
-```
+## Launch and ownership
 
-Optical frames follow ROS's +X right, +Y down, +Z forward convention.
-Their fixed -90°/-90° conversion remains in Xacro rather than YAML,
-because that is a coordinate convention and not a hardware-specific
-mounting measurement. The legacy `camera_optical_frame` alias
-retains identity translation/rotation.
-
-To inspect the configured robot frame tree on a **reviewed isolated ROS
-system only**, the normal launch remains:
+The existing launch entry point is unchanged:
 
 ```bash
 ros2 launch leroy_description description.launch.py
 ```
 
-To override the default configuration when evaluating Xacro, use the
-Xacro argument `sensor_mounts_file:=/absolute/path/to/mounts.yaml`.
-Editing YAML or changing its path only affects a ROS description built
-or launched with that configuration. **Existing immutable containers
-and accepted physical V3 tests do not change automatically.**
-
-For the next *no-device* verification of the source configuration
-in the pinned sensor image (from the repository `ros/` directory),
-run:
+An optional configuration override uses:
 
 ```bash
-bash ./m23bv_v3_stage3_sensor_mounts_yaml_no_device.sh
+ros2 launch leroy_description description.launch.py \
+  sensor_mounts_file:=/absolute/path/to/sensor_mounts.yaml
 ```
 
-This check sources no hardware, runs Xacro and validates the generated
-TF origins match the YAML, then changes one value in a **temporary
-container-only YAML copy** and proves it changes the generated URDF.
-It does not launch ROS nodes or publish TF. Do not enable XRSLAM pose,
-map TF, real Nav2, MCU, recording or motor control; camera–IMU
-temporal phase and sensor-center extrinsics are still unvalidated.
+The launch is included by Leroy bringup and by the Stage 3 XRSLAM
+diagnostic. **Start exactly one publisher per child frame** and never
+run the earlier `robot_state_publisher`/URDF TF owner simultaneously;
+the two mechanisms would duplicate `/tf_static` authority.
+No `odom -> base_link` or `map -> odom` is published here.
 
-No static `odom -> base_link` or fake identity `map -> odom`
-belongs in this package.
+The source-only migration does NOT update already-built immutable
+Podman sensor or XRSLAM images. Actual runtime adoption requires a
+separately reviewed package build/install path. Do not alter the
+accepted Stage 3 physical runner, flash the MCU, or enable pose,
+Nav2 goals, recording or motor output as part of this conversion.
+
+To verify the new source without accessing hardware, from either
+directory run:
+
+```bash
+# Repository root:
+bash ros/m23bv_v3_stage3_sensor_tf_yaml_no_device.sh
+
+# Alternatively inside ros/:
+bash ./m23bv_v3_stage3_sensor_tf_yaml_no_device.sh
+```
+
+This isolated test uses the pinned existing ROS Jazzy image to parse
+YAML, import the launch without starting nodes, and compare the six
+configured TF edges against their old values. It also validates a
+temporary YAML override and deliberate invalid configurations.
+A PASS does not establish physical sensor centers, camera–IMU phase,
+XRSLAM tracking or Nav2 readiness.
