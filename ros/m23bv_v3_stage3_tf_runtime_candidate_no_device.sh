@@ -72,6 +72,11 @@ fi
 candidate_id="$(podman image inspect "$tag" --format '{{.Id}}')" ||
   fail CANDIDATE_IMAGE_INSPECT
 echo "STAGE3_TF_RUNTIME_CANDIDATE_IMAGE_ID=$candidate_id"
+default_cmd="$(podman image inspect "$tag" --format '{{json .Config.Cmd}}')" ||
+  fail CANDIDATE_CMD_INSPECT
+[[ "$default_cmd" == *STAGE3_TF_RUNTIME_CANDIDATE=INERT_NO_AUTOMATIC_ROBOT_BRINGUP* ]] ||
+  fail CANDIDATE_DEFAULT_ROBOT_STARTUP_UNSAFE
+echo STAGE3_TF_RUNTIME_CANDIDATE_DEFAULT=PASS_INERT_NO_ROBOT_BRINGUP
 [[ "$(podman image inspect "$base" --format '{{.Id}}' | sed 's/^sha256://')" == "$base_id" ]] ||
   fail BASE_MUTATED
 
