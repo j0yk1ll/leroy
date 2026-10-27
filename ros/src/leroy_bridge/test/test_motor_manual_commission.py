@@ -1,7 +1,8 @@
 """Focused commissioning protocol tests: no motor or ROS device."""
 import unittest
 from leroy_bridge.motor_manual_commission import (
-    OneShotEnable, ManualPulseProtocol, DIRECTIONS, MAX_PWM, wheel_polarities,
+    OneShotEnable, ManualPulseProtocol, DIRECTIONS, MAX_PWM, SIGNED_PWM_MAX,
+    wheel_polarities,
 )
 
 class FakeMcu:
@@ -56,7 +57,8 @@ class ManualTests(unittest.TestCase):
         proto = ManualPulseProtocol(mcu, first_sequence=200, pulse_ms=20)
         proto.configure()
         with self.assertRaises(RuntimeError):
-            proto.pulse((MAX_PWM, -MAX_PWM, MAX_PWM, -MAX_PWM))
+            proto.pulse((SIGNED_PWM_MAX, -SIGNED_PWM_MAX,
+                         SIGNED_PWM_MAX, -SIGNED_PWM_MAX))
         self.assertEqual(mcu.commands[-1], "stop_wheels_tx 203")
         self.assertTrue(proto.faulted)
         with self.assertRaises(RuntimeError):
@@ -66,7 +68,8 @@ class ManualTests(unittest.TestCase):
         mcu = FakeMcu()
         proto = ManualPulseProtocol(mcu, first_sequence=50, pulse_ms=20)
         proto.configure()
-        for values in ((0, 0, 0, 0), (MAX_PWM+1, 0, 0, 0),
+        for values in ((0, 0, 0, 0), (SIGNED_PWM_MAX + 1, 0, 0, 0),
+                       (MAX_PWM+1, 0, 0, 0),
                        (1, 2, 3), [1, 1, 1, 1]):
             with self.assertRaises(ValueError):
                 proto.pulse(values)
