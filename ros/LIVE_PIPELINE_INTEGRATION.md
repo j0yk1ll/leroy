@@ -132,6 +132,32 @@ uses the existing `leroy_nav2_costmap_fixture` executable with its experimental
 callback-group cleanup behavior. That workaround is not yet proven on the
 new real-data build.
 
+### TF regular-file install fix (after Stage 2 initial camera/costmap fixes)
+
+A subsequent run failed before any camera startup with
+`BLOCKED_SENSOR_TF_CONFIG_NOT_REGULAR_FILE`. The launch was using an
+installed sensor mount YAML created as a **symlink** by Colcon
+`--symlink-install`. The loader intentionally rejects symlinks; changing
+that validation would weaken the existing configuration checks.
+
+The Stage 2 Dockerfile now copies the checked-in
+`src/leroy_description/config/sensor_mounts.yaml` into the image as the
+regular file `/etc/leroy/sensor_mounts.yaml`, checks it is not a symlink
+and matches the source, and the Stage 2 launch passes its path through the
+existing `sensor_mounts_file` launch argument. No TF data, physical
+mount claims, or motor permissions were changed.
+
+The original `leroy-live-perception` container was observed still holding
+`/dev/video2` during this run. Stop that container before starting Stage 2:
+
+```bash
+podman stop leroy-live-perception
+fuser -v /dev/video2 || true
+```
+
+After `git pull --ff-only`, rebuild `leroy-ros:costmap` from
+`Dockerfile.live-costmap` and rerun the existing Stage 2 procedure.
+
 ### Startup failure fixes and camera ownership
 
 The first live Stage 2 run exposed three distinct facts:
