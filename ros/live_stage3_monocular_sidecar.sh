@@ -23,6 +23,11 @@ sidecar=leroy-live-xrslam
 # metadata and application messages. Never join the host IPC namespace.
 [[ "$(podman inspect --format '{{.HostConfig.IpcMode}}' "$parent")" == shareable ]] ||
     fail COSTMAP_PARENT_IPC_NOT_SHAREABLE_RECREATE_WITH_IPC_SHAREABLE
+# Sharing IPC while leaving PID namespaces disjoint can give same numeric
+# process IDs to distinct Fast DDS SHM participants. Join only this already
+# isolated parent's PID namespace; never the host PID namespace.
+[[ "$(podman inspect --format '{{.HostConfig.PidMode}}' "$parent")" != host ]] ||
+    fail COSTMAP_PARENT_HOST_PID_MODE_DISALLOWED
 parent_env="$(podman inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$parent")"
 for requirement in     ROS_DOMAIN_ID=170     ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST     LEROY_LIVE_PERCEPTION_ONLY=1     LEROY_LIVE_COSTMAP_DIAGNOSTIC=1
 do
@@ -41,13 +46,15 @@ done
 printf '%s\n'   'Leroy Stage 3: reuse existing real camera + Nav2 diagnostic costmap.'   'XRSLAM monocular joins isolated DDS graph with NO device mapping.'   'No IMU, MCU/serial access, motor bridge, odometry authorization, map TF,'   'navigation goals or physical motion. Metric localization NOT validated.'   'Camera and TF calibrations remain provisional.'
 printf 'LIVE_STAGE3_XRSLAM=STARTING_MONOCULAR_DIAGNOSTIC_ONLY\n'
 
-# Share the existing isolated parent's network AND IPC namespace. Fast DDS
-# sees participants as on one host because the network stack matches, and
-# may otherwise select inaccessible SHM / data-sharing transport.
-# Do NOT share the host network or host IPC namespace, and do not start
+# Share ONLY the existing isolated parent's network, IPC, and PID
+# namespaces. Fast DDS detects same-host network participants and selects
+# shared memory. Shared IPC without shared PID can result in collisions
+# between identical numeric PIDs in the two containers.
+# Never join host network, host IPC or host PID, and do not start
 # another camera, DepthART, or static TF publisher.
 exec podman run --rm -it --pull=never --name "$sidecar" \
-    --network "container:$parent" --ipc "container:$parent" --pid private \
+    --network "container:$parent" --ipc "container:$parent" \
+    --pid "container:$parent" \
     --read-only --cap-drop=all --security-opt=no-new-privileges \
     --tmpfs /tmp:rw,nosuid,nodev,size=256m \
     --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_monocular_diag.yaml,dst=/opt/leroy_stage3_slam.yaml,readonly" \
