@@ -1,3 +1,28 @@
+## Supervised hold-mode PWM calibration
+
+The `--keyboard-device /dev/input/eventN` hold mode retains the original
+32/255 default, but now accepts an explicit `--pwm` setting up to 64/255,
+matching the existing STM32 `set_wheels_tx` firmware ceiling. No firmware
+change, watchdog extension, production authorization change or encoder/SLAM
+dependency is needed. At 64/255, duty is only 25% of full-scale, and PWM
+duty is **not** a verified speed, torque or motor current limit.
+
+Do not diagnose loaded wheel stall by immediately commanding maximum duty.
+First check that the wheels turn in their expected directions on supports,
+then measure supply voltage and motor current under load. A stationary motor
+can draw high stall current; check motor/driver temperatures and cut power
+on binding or electrical faults. For brief, carefully controlled trials
+with the cutoff operator present, start at 40, then 48, then 56 and at most
+64 (one step at a time, only after release-to-STOP is measured at each step).
+Do not run autonomous or obstacle approach tests, or assume the supported
+PWM range guarantees successful floor travel. If 64 cannot overcome static
+friction, inspect supply droop, current limiting, gearing, roller alignment
+and the robot mass instead of bypassing the MCU limit.
+
+Example change to the previous command: `--pwm 48`.
+Use the same tested `/dev/input/event2` keyboard and
+`--group-add keep-groups` Podman group mapping.
+
 ## Attended ROS manual pulse commissioning (wheel-lifted only)
 
 The separate `leroy_motor_manual_commission` executable uses ROS 2 for
