@@ -1,4 +1,4 @@
-# Leroy: live end-to-end integration, provisional depth (Stage 1)
+# Leroy: live end-to-end integration, provisional depth (Stages 1–3)
 
 Goal: connect the **real** front camera, rectifier, CPU DepthART model and
 existing depth-to-PointCloud2 ROS adapter without synthetic messages.
@@ -94,6 +94,97 @@ podman run --rm --network none --entrypoint bash \
         -p test_live_pipeline_contract.py -v
   '
 ```
+
+## Observed Stage 2 result — PASS (2026-10-27)
+
+The operator successfully completed the isolated, real camera DepthART
+to Nav2 rolling costmap integration. A corrected two-stage Nav2
+`ObstacleLayer` height filter was verified live without motor access:
+
+```text
+Original layer Z bounds: min=0.0 max=2.0
+Changed layer Z bounds:  min=-3.0 max=3.0
+LIVE_DEPTH_COSTMAP_GRAPH=READY required_publishers_verified
+LIVE_DEPTH_COSTMAP=PASS real_optical_clouds=3 costmap_grids=3 cloud_age_last_s=0.697 lethal_cells=true unknown_cells=true frame=base_link
+LIVE_DEPTH_COSTMAP_NOTE=provisional_TF_marks_unclassified_surfaces_not_for_motion
+```
+
+The fix is committed in `live_diagnostic_costmap.yaml`. The real
+point-cloud-to-Nav2 costmap route is proved. This is NOT physical obstacle
+classification: provisional camera pitch, missing floor datum, sample depth
+uncertainty, fixed diagnostic footprint and stale-layer persistence remain.
+No robot motor power, odometry localization or autonomous motion is
+authorized by this result.
+
+## Stage 3: run XRSLAM monocular alongside the already working live costmap
+
+This stage is about **concurrent application integration**. The historical
+Stage 3 physical VIO experiment already proved real camera and STM32 IMU
+messages were submitted to native XRSLAM, but localization stayed
+`initializing`. It did NOT establish validated metric odometry. See
+`M23BV_V3_STAGE3_VIO_EVIDENCE.md`. Do not repeat motor-capable
+serial/IMU physical work simply to test concurrent camera subscription.
+
+Prerequisites: Stage 2 `leroy-live-costmap` still running, isolated
+`--network none`, with camera and costmap publishing, and motor-driver
+power disconnected. Also require the existing previously built
+`localhost/leroy-ros:xrslam` image. Check locally:
+
+```bash
+podman ps --filter name=leroy-live-costmap
+podman image exists localhost/leroy-ros:xrslam
+```
+
+Terminal 3, from the checked-out `ros/` directory:
+
+```bash
+bash ./live_stage3_monocular_sidecar.sh
+```
+
+This guarded script starts ONLY one new `leroy_xrslam_node` in a
+read-only, **device-free** container sharing the parent's isolated DDS
+network/IPC. It reuses existing /camera/image_rect, CameraInfo and the
+single six-owner /tf_static tree without mapping camera or MCU to the
+sidecar or launching another static TF publisher. The normalized upstream
+EuRoC tuning is **UNCALIBRATED**. The ROS adapter runs
+`monocular`, `pose_convention_validated=false` and
+`enable_map_tf=false`. Do not lift these restrictions to make a
+stationary monocular estimator publish metric odometry.
+
+In a fourth terminal, read the latched XRSLAM results through the already
+isolated parent graph:
+
+```bash
+podman exec leroy-live-costmap bash -lc '
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  ros2 node list | grep -Fx /leroy_xrslam
+  ros2 topic info /camera/image_rect --verbose
+  ros2 topic echo /xrslam/tracking_status std_msgs/msg/String \
+    --once --qos-durability transient_local
+  ros2 topic echo /xrslam/localization_valid std_msgs/msg/Bool \
+    --once --qos-durability transient_local
+'
+```
+
+Expected initial state `waiting_calibration` or `initializing`;
+`localization_valid` must remain `false`. In the XRSLAM sidecar terminal
+the native adapter should log `Submitted N camera frames to XRSLAM`
+with `N > 0`. Also reconfirm the existing Stage 2 costmap remains live
+(e.g. rerun `live_costmap_probe` in the parent). Only with all these
+independent observations is the **concurrent graph** integrated.
+XRSLAM native camera submission is NOT successful tracking. No `/odom`
+messages or `odom -> base_link` TF should be emitted at this stage.
+
+Stop the sidecar with Ctrl+C. This does not stop Stage 2's camera or
+costmap. If the local XRSLAM image is absent or has incompatible ROS
+middleware, the script blocks; investigate rather than replacing
+calibration with defaults or mapping the MCU into the new container.
+
+Next integration: incorporate the **already accepted real IMU publishing
+path** under its separate physical-hardware guard, and then validate
+tracking/pose direction before Nav2 planner/controller outputs can use
+odometry. Merely showing the XRSLAM package running doesn't validate pose.
 
 ## Stage 2: real DepthART points into a Nav2 diagnostic costmap
 
