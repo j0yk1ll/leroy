@@ -32,6 +32,21 @@ class LiveCostmapStaticTest(unittest.TestCase):
         self.assertIs(type(parsed["height"]), int)
         self.assertGreater(parsed["width"], 0)
         self.assertGreater(parsed["height"], 0)
+        # Jazzy applies a source ObservationBuffer Z filter AND a second
+        # layer-wide ObstacleLayer Z filter before marking cells. A default
+        # 0..2 m layer filter discards negative-Z projected camera points.
+        layer = parsed["obstacle_layer"]
+        source = layer["raw_depth_surfaces"]
+        self.assertIs(type(layer["min_obstacle_height"]), float)
+        self.assertIs(type(layer["max_obstacle_height"]), float)
+        self.assertEqual(layer["min_obstacle_height"], -3.0)
+        self.assertEqual(layer["max_obstacle_height"], 3.0)
+        self.assertLessEqual(layer["min_obstacle_height"],
+                             source["min_obstacle_height"])
+        self.assertGreaterEqual(layer["max_obstacle_height"],
+                                source["max_obstacle_height"])
+        self.assertTrue(source["marking"])
+        self.assertFalse(source["clearing"])
         self.assertIn("topic: /leroy_nav2/diagnostics/raw_depth_points",
                       config)
         self.assertIn("global_frame: base_link", config)
