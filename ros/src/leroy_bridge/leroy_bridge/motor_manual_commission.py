@@ -117,6 +117,7 @@ class ManualPulseProtocol:
         self.pulse_ms = pulse_ms
         self.faulted = False
         self.high_pwm_enabled = high_pwm_enabled
+        self.ramp_step = 8 if high_pwm_enabled else RAMP_STEP
 
     def _transaction(self, command, expected, timeout_s=0.25):
         try:
@@ -160,7 +161,7 @@ class ManualPulseProtocol:
         self.stop()  # First action after USB attach must request STOP.
         self._transaction(f"set_watchdog_ms {self.pulse_ms + WATCHDOG_MARGIN_MS}",
                           "ok set_watchdog_ms")
-        self._transaction(f"set_platform_ramp {RAMP_STEP}",
+        self._transaction(f"set_platform_ramp {self.ramp_step}",
                           "ok set_platform_ramp")
 
     def drive(self, wheel_pwm):
