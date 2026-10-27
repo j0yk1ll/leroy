@@ -26,10 +26,11 @@ def _guard(_context, *args, **kwargs):
     return []
 
 
-def _include(package, launch_file):
-    return IncludeLaunchDescription(PythonLaunchDescriptionSource(
-        os.path.join(get_package_share_directory(package),
-                     "launch", launch_file)))
+def _include(package, launch_file, *, launch_arguments=None):
+    return IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(
+            get_package_share_directory(package), "launch", launch_file)),
+        launch_arguments=(launch_arguments or {}).items())
 
 
 def generate_launch_description():
@@ -39,7 +40,14 @@ def generate_launch_description():
         _include("leroy_nav2_perception", "live_depth_pipeline.launch.py"),
         # Physical mount figures in sensor_mounts.yaml are PROVISIONAL.
         # Use them ONLY to exercise Nav2 TF routing with real sensor messages.
-        _include("leroy_description", "description.launch.py"),
+        # Colcon --symlink-install makes the installed config a symlink,
+        # but description.load_sensor_transforms correctly refuses symlinks.
+        # Pass the immutable-at-build COPY as a real regular file instead.
+        _include(
+            "leroy_description", "description.launch.py",
+            launch_arguments={
+                "sensor_mounts_file": "/etc/leroy/sensor_mounts.yaml",
+            }),
         Node(
             package="leroy_nav2_costmap_fixture",
             executable="costmap_fixture",
