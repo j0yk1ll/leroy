@@ -132,6 +132,34 @@ uses the existing `leroy_nav2_costmap_fixture` executable with its experimental
 callback-group cleanup behavior. That workaround is not yet proven on the
 new real-data build.
 
+### After costmap lifecycle activation: DDS graph discovery behavior
+
+The operator successfully configured and activated `/costmap`, but
+`live_costmap_probe` returned `BLOCKED_UNSAFE_OR_MISSING_GRAPH`
+immediately. The first probe collapsed two independent conditions:
+a prohibited actuator graph (fail immediately) and the required sensor/
+costmap publishers not yet visible to ROS graph discovery (wait).
+
+The probe now reports:
+- `LIVE_DEPTH_COSTMAP_GRAPH=WAITING missing_publishers=[...]` while
+  approved publishers have not yet been discovered;
+- `LIVE_DEPTH_COSTMAP_GRAPH=READY required_publishers_verified` when
+  exactly one approved depth cloud publisher and costmap publisher exist;
+- `LIVE_DEPTH_COSTMAP=BLOCKED_UNSAFE_GRAPH ...` for prohibited command
+  topics, nodes, or unexpected/duplicate source identities;
+- `LIVE_DEPTH_COSTMAP=INCOMPLETE ...` if 90 seconds elapse without
+  real clouds and a real grid with lethal/unknown cells.
+
+Waiting for discovery does not bypass a missing sensor, fabricate a
+costmap or permit motion. Source identities are checked on every spin
+and are required at the exact time of PASS. The Stage 2 container build
+runs regression tests for the permitted discovery delay and immediate
+rejection of forbidden or unexpected endpoints.
+
+Rebuild the image and **recreate** (not just re-exec into) the Stage 2
+container: `podman exec` against an already running container will
+continue to execute the old probe installed in that container.
+
 ### TF regular-file install fix (after Stage 2 initial camera/costmap fixes)
 
 A subsequent run failed before any camera startup with
