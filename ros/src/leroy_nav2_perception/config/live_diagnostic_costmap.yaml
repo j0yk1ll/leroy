@@ -1,0 +1,46 @@
+# EXPERIMENTAL ONLY. Real DepthART raw optical cloud with PROVISIONAL TF.
+# Not obstacle classification, validated footprint, free-space observation,
+# safety costmap or a Nav2 hardware command source.
+# Mark every projected sampled surface, including possible floor returns.
+costmap:
+  ros__parameters:
+    use_sim_time: false
+    global_frame: base_link
+    robot_base_frame: base_link
+    update_frequency: 2.0
+    publish_frequency: 2.0
+    rolling_window: true
+    track_unknown_space: true
+    width: 8.0
+    height: 8.0
+    resolution: 0.10
+    transform_tolerance: 0.25
+    # Placeholder collision footprint - NOT measured or safety qualified.
+    footprint: "[[0.5, 0.5], [0.5, -0.5], [-0.5, -0.5], [-0.5, 0.5]]"
+    plugins: ["obstacle_layer", "inflation_layer"]
+    obstacle_layer:
+      plugin: "nav2_costmap_2d::ObstacleLayer"
+      enabled: true
+      footprint_clearing_enabled: false
+      combination_method: 1
+      observation_sources: "raw_depth_surfaces"
+      raw_depth_surfaces:
+        topic: /leroy_nav2/diagnostics/raw_depth_points
+        data_type: PointCloud2
+        marking: true
+        clearing: false
+        # Broad vertical band is INTENTIONAL: no measured floor reference.
+        # Marks represent sampled surfaces, NOT classified physical obstacles.
+        min_obstacle_height: -3.0
+        max_obstacle_height: 3.0
+        obstacle_min_range: 0.0
+        obstacle_max_range: 3.5
+        observation_persistence: 3.0
+        # No freshness enforcement in costmap; future motion gate must reject
+        # stalled DepthART separately. Absence of points never means free.
+        expected_update_rate: 0.0
+    inflation_layer:
+      plugin: "nav2_costmap_2d::InflationLayer"
+      inflation_radius: 0.8
+      cost_scaling_factor: 3.0
+    always_send_full_costmap: true
