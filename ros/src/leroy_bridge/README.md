@@ -1,3 +1,50 @@
+## Experimental high-duty mecanum commissioning (STM32 reflash required)
+
+The platform PWM uses an 8-bit duty value: **255** is maximum, and
+**256 is invalid**. The production `set_wheels_tx` MCU protocol retains
+its original strict **±64** ceiling. Supervised keyboard commissioning
+can now request up to **±255**, using a *different* MCU command named
+`set_wheels_calibration_tx` with a watchdog of **at most 200ms**.
+
+For any `--pwm` above 64, add `--experimental-high-pwm`. The keyboard
+hold is limited to **500ms per press** (release fully before the next
+press), and the MCU ramp is raised modestly to 8 duty/10ms. This is a
+calibration-only command, NOT a new production signed-authority path,
+and is **NOT obstacle-aware**. A hardware cutoff is still required.
+High duty can cause hazardous stall currents, driver overheating and
+sudden unexpected movement, especially on the ground. First check
+physical cutoff, direction, wheel support, current draw and supply
+droop. Start at 80 or 96 rather than jumping to 255; do not try
+higher values on a loaded robot without confirming motor and driver
+ratings and stopping behavior.
+
+Both the ROS image **and the STM32 firmware must be updated**. On the
+Arch host, after fetching the branch:
+
+```bash
+cd /home/kevin/Code/leroy/firmware
+make build
+# With independent motor rail cut, MCU SWD/ST-Link connected,
+# and no normal ROS bridge/commissioner process:
+make flash
+```
+
+`make` without a target also flashes; use `make build` when you only
+intend to compile. Do not flash through a live motor session.
+
+Sample high-duty flags for the otherwise unchanged Podman hold command:
+
+```bash
+--keyboard-device /dev/input/event2 \
+--sequence-state-file /leroy-state/motor_sequence \
+--pwm 96 --experimental-high-pwm \
+--wheel-polarities +1,+1,+1,+1
+```
+
+Keep the `leroy-motor-sequences` Podman volume mounted. The low-duty
+(1..64) controller retains the production `set_wheels_tx` protocol,
+and the discrete one-shot SPACE+pulse mode stays limited to 64.
+
 ## Persistent motor sequencing (required for commissioning)
 
 The STM32 rejects stale nonzero wheel transactions across USB reconnects.
