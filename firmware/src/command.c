@@ -16,6 +16,10 @@
 /* Signed bridge motion protocol: bounded duty and MCU watchdog.
  * These are SOFTWARE constraints, not a physical motor power cut. */
 #define SIGNED_WHEEL_PWM_MAX 64
+/* Local attended commissioning ONLY: firmware still rejects >64 from the
+ * production set_wheels_tx command. This path has a shorter watchdog. */
+#define COMMISSION_WHEEL_PWM_MAX 255
+#define COMMISSION_WHEEL_WATCHDOG_MAX_MS 200U
 #define SIGNED_WHEEL_WATCHDOG_MAX_MS 500U
 #define IMU_STREAM_MIN_TX_FREE 320U
 #define IMU_STREAM_BASE_US 1000000U
@@ -479,7 +483,8 @@ static void print_status(void)
 
 static bool parse_motor_tx(char *tail, uint32_t *seq,
                            int16_t *fl, int16_t *fr,
-                           int16_t *rl, int16_t *rr)
+                           int16_t *rl, int16_t *rr,
+                           uint16_t max_duty)
 {
     if (tail == NULL) {
         return false;
@@ -493,8 +498,8 @@ static bool parse_motor_tx(char *tail, uint32_t *seq,
     for (unsigned i = 0U; i < 4U; ++i) {
         char *token = next_argument(&cursor);
         if (!parse_i32(token, &values[i]) ||
-            values[i] < -SIGNED_WHEEL_PWM_MAX ||
-            values[i] > SIGNED_WHEEL_PWM_MAX) {
+            values[i] < -(int32_t)max_duty ||
+            values[i] > (int32_t)max_duty) {
             return false;
         }
     }
@@ -526,6 +531,7 @@ static void print_help(void)
     usb_serial_write_line("  set_platform_ramp <1..255>");
     usb_serial_write_line("  set_wheels 0 0 0 0 (legacy emergency zero only)");
     usb_serial_write_line("  set_wheels_tx <seq:u32> <fl:-64..64> <fr:-64..64> <rl:-64..64> <rr:-64..64>");
+    usb_serial_write_line("  set_wheels_calibration_tx <seq:u32> <fl:-255..255> <fr:-255..255> <rl:-255..255> <rr:-255..255> (short watchdog; supervised)");
     usb_serial_write_line("  stop_wheels_tx <seq:u32>");
     usb_serial_write_line("  set_manipulator_speed <1..5000>");
     usb_serial_write_line("  set_manipulator_acceleration <1..10000>");
@@ -646,16 +652,31 @@ static void process_command(char *line)
         usb_serial_write("\r\n");
         return;
     }
-    if (strings_equal(command, "set_wheels_tx")) {
+    if (strings_equal(command, "set_wheels_tx") ||
+        strings_equal(command, "set_wheels_calibration_tx")) {
+        const bool calibration = strings_equal(
+            command, "set_wheels_calibration_tx");
+        const int max_duty = calibration ? COMMISSION_WHEEL_PWM_MAX
+                                         : SIGNED_WHEEL_PWM_MAX;
+        const uint32_t max_watchdog = calibration
+            ? COMMISSION_WHEEL_WATCHDOG_MAX_MS
+            : SIGNED_WHEEL_WATCHDOG_MAX_MS;
         uint32_t seq = 0U;
         int16_t fl = 0, fr = 0, rl = 0, rr = 0;
-        if (!parse_motor_tx(argument, &seq, &fl, &fr, &rl, &rr)) {
-            usb_serial_write_line("error set_wheels_tx invalid_arguments");
+        if (!parse_motor_tx(argument, &seq, &fl, &fr, &rl, &rr,
+                            (uint16_t)max_duty)) {
+            usb_serial_write("error ");
+            usb_serial_write(command);
+            usb_serial_write_line(" invalid_arguments");
         } else if (g_watchdog_ms == 0U ||
-                   g_watchdog_ms > SIGNED_WHEEL_WATCHDOG_MAX_MS) {
-            usb_serial_write_line("error set_wheels_tx watchdog_not_bounded");
+                   g_watchdog_ms > max_watchdog) {
+            usb_serial_write("error ");
+            usb_serial_write(command);
+            usb_serial_write_line(" watchdog_not_bounded");
         } else if (g_motor_tx_seen && seq <= g_motor_last_tx) {
-            usb_serial_write_line("error set_wheels_tx stale_sequence");
+            usb_serial_write("error ");
+            usb_serial_write(command);
+            usb_serial_write_line(" stale_sequence");
         } else {
             g_motor_tx_seen = true;
             g_motor_last_tx = seq;
@@ -665,7 +686,9 @@ static void process_command(char *line)
                 platform_set_wheels(fl, fr, rl, rr);
             }
             refresh_activity();
-            usb_serial_write("ok set_wheels_tx seq=");
+            usb_serial_write("ok ");
+            usb_serial_write(command);
+            usb_serial_write(" seq=");
             usb_serial_write_u32(seq);
             usb_serial_write("\r\n");
         }
