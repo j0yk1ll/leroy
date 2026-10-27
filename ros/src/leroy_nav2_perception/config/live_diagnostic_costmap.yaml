@@ -11,8 +11,8 @@ costmap:
     publish_frequency: 2.0
     rolling_window: true
     track_unknown_space: true
-    width: 8.0
-    height: 8.0
+    width: 8
+    height: 8
     resolution: 0.10
     transform_tolerance: 0.25
     # Placeholder collision footprint - NOT measured or safety qualified.
