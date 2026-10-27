@@ -1,11 +1,16 @@
 """No-robot regressions for physical-key hold and sequenced motor updates."""
+import errno
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
 from leroy_bridge.motor_keyboard_hold import (
     HeldKeyboard, KeyboardExit, _EVENT, MAX_HOLD_NS,
 )
-from leroy_bridge.motor_manual_commission import ManualPulseProtocol, MAX_PWM
+from leroy_bridge.motor_manual_commission import (
+    ManualPulseProtocol, MotorSequenceLedger, MAX_PWM,
+)
 
 
 class FakeMcu:
@@ -102,6 +107,73 @@ class KeyboardHoldTest(unittest.TestCase):
         with patch("os.read", return_value=_EVENT.pack(0, 0, 1, 1, 1)):
             with self.assertRaises(KeyboardExit):
                 self.keyb.read(self.t)
+
+
+    def test_keyboard_ungrab_uses_integer_zero_and_closes_fd(self):
+        self.keyb._grabbed = True
+        with patch("fcntl.ioctl") as ioctl, patch("os.close") as close:
+            self.keyb.close()
+        ioctl.assert_called_once_with(987, 0x40044590, 0)
+        close.assert_called_once_with(987)
+        self.assertIsNone(self.keyb.fd)
+
+    def test_keyboard_release_error_does_not_mask_original_fault(self):
+        self.keyb._grabbed = True
+        with patch("fcntl.ioctl", side_effect=OSError(errno.EBUSY, "busy")), \
+             patch("os.close") as close:
+            self.keyb.close()
+        close.assert_called_once_with(987)
+
+
+class SequenceLedgerTest(unittest.TestCase):
+    def test_persists_across_separate_process_sessions(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "motor_seq")
+            with patch("time.time", return_value=1793098162):
+                first = MotorSequenceLedger(path)
+                self.assertEqual(first.current, 1793098162)
+                self.assertEqual(first.claim(), 1793098163)
+                self.assertEqual(first.claim(), 1793098164)
+                first.close()
+                # Clock can stay the same or move backward; file wins.
+                second = MotorSequenceLedger(path)
+                self.assertEqual(second.current, 1793098164)
+                self.assertEqual(second.claim(), 1793098165)
+                second.close()
+            with open(path, encoding="ascii") as f:
+                self.assertEqual(f.read(), "1793098165\n")
+
+    def test_exclusive_lock_and_corruption_fail_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "motor_seq")
+            first = MotorSequenceLedger(path)
+            with self.assertRaises(BlockingIOError):
+                MotorSequenceLedger(path)
+            first.close()
+            with open(path, "w", encoding="ascii") as f:
+                f.write("not a motor sequence\n")
+            with self.assertRaisesRegex(ValueError, "corrupt"):
+                MotorSequenceLedger(path)
+
+    def test_ledger_advances_before_command_and_stop(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "motor_seq")
+            mcu = FakeMcu()
+            with patch("time.time", return_value=1793098162):
+                ledger = MotorSequenceLedger(path)
+            try:
+                p = ManualPulseProtocol(
+                    mcu, first_sequence=ledger.current, pulse_ms=100,
+                    sequence_ledger=ledger)
+                p.configure()
+                p.drive((48, 48, 48, 48))
+                p.stop()
+                with open(path, encoding="ascii") as f:
+                    self.assertEqual(f.read().strip(), str(p.sequence))
+                self.assertEqual(
+                    mcu.sent[-1], f"stop_wheels_tx {p.sequence}")
+            finally:
+                ledger.close()
 
 
 class HoldCdcTest(unittest.TestCase):
