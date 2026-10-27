@@ -16,6 +16,7 @@ class LiveCostmapStaticTest(unittest.TestCase):
         self.assertIn('os.path.exists("/dev/ttyACM0")', source)
         self.assertIn('"live_depth_pipeline.launch.py"', source)
         self.assertIn('"description.launch.py"', source)
+        self.assertIn('"sensor_mounts_file": "/etc/leroy/sensor_mounts.yaml"', source)
         self.assertIn('"costmap_fixture"', source)
         for denied in ('package="leroy_bridge"',
                        'package="nav2_controller"',
@@ -46,6 +47,8 @@ class LiveCostmapStaticTest(unittest.TestCase):
         self.assertIn("COPY src/leroy_description", recipe)
         self.assertIn("--packages-select leroy_description", recipe)
         self.assertIn("static_transform_publisher", recipe)
+        self.assertIn("COPY src/leroy_description/config/sensor_mounts.yaml /etc/leroy/sensor_mounts.yaml", recipe)
+        self.assertIn("test ! -L /etc/leroy/sensor_mounts.yaml", recipe)
 
     def test_probe_fails_on_motor_topics(self):
         probe = (ROOT / "leroy_nav2_perception/live_costmap_probe.py").read_text()
