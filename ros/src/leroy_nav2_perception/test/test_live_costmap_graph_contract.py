@@ -55,6 +55,41 @@ class GraphTest(unittest.TestCase):
         g.ready_sources()
         self.assertEqual(g.status(), ("READY", "required_publishers_verified"))
 
+    def test_anonymous_dds_publisher_is_unverified_never_ready(self):
+        g = FakeGraph()
+        g.ready_sources()
+        g.endpoints[RAW] = [source(
+            "_NODE_NAME_UNKNOWN_", "sensor_msgs/msg/PointCloud2",
+            "_NODE_NAMESPACE_UNKNOWN_")]
+        state, details = g.status()
+        self.assertEqual(state, "WAITING")
+        self.assertIn("publisher_identity_unverified", details)
+        g.ready_sources()
+        self.assertEqual(g.status()[0], "READY")
+
+    def test_anonymous_source_does_not_mask_identifiable_rogue(self):
+        g = FakeGraph()
+        g.ready_sources()
+        g.endpoints[RAW] = [source(
+            "_NODE_NAME_UNKNOWN_", "sensor_msgs/msg/PointCloud2",
+            "_NODE_NAMESPACE_UNKNOWN_")]
+        g.endpoints[GRID] = [source(
+            "unexpected_grid_owner", "nav_msgs/msg/OccupancyGrid")]
+        self.assertEqual(g.status()[0], "UNSAFE")
+
+    def test_unnamed_duplicate_or_wrong_type_fails_immediately(self):
+        g = FakeGraph()
+        g.ready_sources()
+        g.endpoints[RAW].append(source(
+            "_NODE_NAME_UNKNOWN_", "sensor_msgs/msg/PointCloud2",
+            "_NODE_NAMESPACE_UNKNOWN_"))
+        self.assertEqual(g.status()[0], "UNSAFE")
+        g.ready_sources()
+        g.endpoints[RAW] = [source(
+            "_NODE_NAME_UNKNOWN_", "sensor_msgs/msg/Image",
+            "_NODE_NAMESPACE_UNKNOWN_")]
+        self.assertEqual(g.status()[0], "UNSAFE")
+
     def test_motor_topics_fail_immediately_even_during_discovery(self):
         g = FakeGraph()
         g.types["/cmd_vel"] = ["geometry_msgs/msg/Twist"]
