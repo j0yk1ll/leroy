@@ -24,7 +24,7 @@ DIRECTIONS = {
     "q": (-1, 1, -1, 1),     # counterclockwise
     "e": (1, -1, 1, -1),     # clockwise
 }
-MAX_PWM = 40                    # Software cap, not a measured safe drive duty.
+MAX_PWM = 64                    # Matches MCU's signed wheel command ceiling.
 MAX_PULSE_MS = 150
 ENABLE_WINDOW_NS = 500_000_000  # Each press of SPACE permits one direction.
 WATCHDOG_MARGIN_MS = 100
