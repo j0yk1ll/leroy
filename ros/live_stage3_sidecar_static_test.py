@@ -1,4 +1,4 @@
-"""Source-only regression: Stage 3 sidecar shares network, never donor IPC."""
+"""Stage 3 sidecar must share only the isolated parent's network and IPC."""
 import pathlib
 import unittest
 
@@ -10,13 +10,18 @@ class LiveStage3SidecarContract(unittest.TestCase):
     def setUpClass(cls):
         cls.script = (HERE / "live_stage3_monocular_sidecar.sh").read_text()
 
-    def test_private_ipc_udp_transport(self):
+    def test_parent_shareable_ipc_contract(self):
         s = self.script
-        self.assertIn('--network "container:$parent" --ipc private', s)
-        self.assertIn('FASTDDS_BUILTIN_TRANSPORTS=UDPv4', s)
+        self.assertIn("{{.HostConfig.IpcMode}}", s)
+        self.assertIn('== shareable', s)
+        self.assertIn(
+            "fail COSTMAP_PARENT_IPC_NOT_SHAREABLE_RECREATE_WITH_IPC_SHAREABLE",
+            s)
+        self.assertIn('--network "container:$parent" --ipc "container:$parent"', s)
         self.assertIn('RMW_IMPLEMENTATION=rmw_fastrtps_cpp', s)
-        self.assertNotIn('--ipc "container:$parent"', s)
+        self.assertNotIn('FASTDDS_BUILTIN_TRANSPORTS=UDPv4', s)
         self.assertNotIn('--ipc host', s)
+        self.assertNotIn('--network host', s)
 
     def test_no_hardware_or_motion_permissions(self):
         s = self.script
