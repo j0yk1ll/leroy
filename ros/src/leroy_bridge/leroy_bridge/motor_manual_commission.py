@@ -24,7 +24,7 @@ DIRECTIONS = {
     "q": (-1, 1, -1, 1),     # counterclockwise
     "e": (1, -1, 1, -1),     # clockwise
 }
-MAX_PWM = 32                    # Software limit, not physical speed evidence.
+MAX_PWM = 40                    # Software cap, not a measured safe drive duty.
 MAX_PULSE_MS = 150
 ENABLE_WINDOW_NS = 500_000_000  # Each press of SPACE permits one direction.
 WATCHDOG_MARGIN_MS = 100
@@ -108,6 +108,23 @@ class ManualPulseProtocol:
         self._transaction(f"set_platform_ramp {RAMP_STEP}",
                           "ok set_platform_ramp")
 
+    def drive(self, wheel_pwm):
+        """One bounded hold-mode update, ACKed; MCU watchdog needs refresh.
+
+        No keepalive is ever sent. Caller must STOP on key release, and MCU
+        watchdog disables wheel outputs if caller stalls/crashes.
+        """
+        if self.faulted:
+            raise RuntimeError("motor session latched after CDC fault")
+        if (type(wheel_pwm) is not tuple or len(wheel_pwm) != 4
+                or any(type(x) is not int or abs(x) > MAX_PWM for x in wheel_pwm)
+                or not any(wheel_pwm)):
+            raise ValueError("invalid bounded hold-mode PWM")
+        seq = self._next_seq()
+        self._transaction(
+            f"set_wheels_tx {seq} " + " ".join(map(str, wheel_pwm)),
+            f"ok set_wheels_tx seq={seq}", timeout_s=0.06)
+
     def pulse(self, wheel_pwm):
         if self.faulted:
             raise RuntimeError("motor session latched after CDC fault")
@@ -136,8 +153,12 @@ class ManualPulseProtocol:
 def main(args=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", default="/dev/ttyACM0")
-    parser.add_argument("--pwm", type=int, default=24)
+    parser.add_argument("--pwm", type=int, default=32)
     parser.add_argument("--duration-ms", type=int, default=150)
+    parser.add_argument(
+        "--keyboard-device", default=None,
+        help="enable hold-to-drive from grabbed Linux /dev/input/eventN "
+             "keyboard; without it use legacy SPACE+key pulses")
     parser.add_argument("--wheel-polarities", type=wheel_polarities,
                         required=True, help="explicit FL,FR,RL,RR polarity")
     opts = parser.parse_args(args)
@@ -147,6 +168,10 @@ def main(args=None):
         parser.error(f"pwm must be 1..{MAX_PWM}")
     if not 20 <= opts.duration_ms <= MAX_PULSE_MS:
         parser.error("duration-ms must be 20..150")
+
+    if opts.keyboard_device is not None:
+        from leroy_bridge.motor_keyboard_hold import run_hold
+        return run_hold(opts)
 
     import serial
     import rclpy
