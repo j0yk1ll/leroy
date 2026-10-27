@@ -46,11 +46,13 @@ class LivePipelineProbe(Node):
             m.width, m.height, m.p))
 
     def _depth(self, m):
-        age = ((self.get_clock().now().nanoseconds -
-                stamp_key(m.header.stamp)) / 1e9)
-        self._accept(lambda: self.chain.on_depth(
-            stamp_key(m.header.stamp), m.header.frame_id, m.width,
-            m.height, m.encoding, m.step, len(m.data), age))
+        def record():
+            stamp = stamp_key(m.header.stamp)
+            age = (self.get_clock().now().nanoseconds - stamp) / 1e9
+            self.chain.on_depth(
+                stamp, m.header.frame_id, m.width, m.height,
+                m.encoding, m.step, len(m.data), age)
+        self._accept(record)
 
     def _cloud(self, m):
         self._accept(lambda: self.chain.on_cloud(
@@ -92,7 +94,7 @@ def main():
             if not node.graph_ok():
                 print("LIVE_DEPTH_CHAIN=BLOCKED_UNSAFE_ROS_GRAPH", flush=True)
                 return 2
-            if len(node.chain.matched) >= TARGET_FRAMES:
+            if len(node.chain.matched) >= TARGET_FRAMES and not node.chain.faults:
                 ages = node.chain.ages
                 print("LIVE_DEPTH_CHAIN=PASS matched=" +
                       str(len(node.chain.matched)) +
