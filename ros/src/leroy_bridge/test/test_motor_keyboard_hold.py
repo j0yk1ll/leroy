@@ -121,6 +121,19 @@ class HoldCdcTest(unittest.TestCase):
             "stop_wheels_tx 104",
         ])
 
+    def test_upper_limit_matches_existing_mcu_ceiling(self):
+        self.assertEqual(MAX_PWM, 64)
+        mcu = FakeMcu()
+        p = ManualPulseProtocol(mcu, first_sequence=1100, pulse_ms=100)
+        p.configure()
+        p.drive((64, -64, 64, -64))
+        self.assertEqual(
+            mcu.sent[-1], "set_wheels_tx 1102 64 -64 64 -64")
+        with self.assertRaises(ValueError):
+            p.drive((65, 0, 0, 0))
+        self.assertEqual(len(mcu.sent), 4)
+        p.stop()
+
     def test_drive_bound_and_failure_latch(self):
         mcu = FakeMcu()
         p = ManualPulseProtocol(mcu, first_sequence=1000, pulse_ms=100)
