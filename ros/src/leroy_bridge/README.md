@@ -1,3 +1,17 @@
+## Observed A/D strafe direction on Leroy
+
+During attended motor commissioning, the operator confirmed that the
+original nominal **A** pattern moved Leroy right and **D** moved it left,
+while forward/backward movement worked correctly. The shared manual
+commissioning direction table has been calibrated by exchanging only
+the A/D vectors. This affects **both manual pulse and evdev hold modes**.
+
+Manual controls are now A=left, D=right; W/S and Q/E are unchanged.
+This does NOT silently modify firmware platform presets or production
+ROS `mecanum_twist_to_pwm` kinematics. Before production lateral driving,
+verify the robot's physical (+Y) convention and correct ROS/MCU mapping
+with measured sensor feedback separately.
+
 ## Experimental high-duty mecanum commissioning (STM32 reflash required)
 
 The platform PWM uses an 8-bit duty value: **255** is maximum, and
