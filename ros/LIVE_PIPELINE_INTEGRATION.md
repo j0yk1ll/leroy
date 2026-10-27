@@ -95,9 +95,91 @@ podman run --rm --network none --entrypoint bash \
   '
 ```
 
+## Stage 2: real DepthART points into a Nav2 diagnostic costmap
+
+Stage 1 was observed on Leroy: `LIVE_DEPTH_CHAIN=PASS matched=5`,
+`acquisition_age_mean_s=0.825`, `shape_faults=0`. Proceed with the
+actual-data costmap wiring rather than further tuning the CPU depth model.
+
+The existing ROS adapter's **validated** obstacle topic stays DISABLED.
+Stage 2 deliberately connects the already verified raw optical point cloud
+to the Nav2 `ObstacleLayer`, which transforms points into a `base_link`
+costmap using the checked-in **PROVISIONAL** fixed camera transform.
+With no measured camera extrinsics or floor plane, these are marks for sampled
+depth **surfaces**, not classified robot obstacles. The costmap does not
+clear unknown space or authorize motion; it can retain stale marks.
+
+```text
+Real camera -> DepthART -> /leroy_nav2/diagnostics/raw_depth_points
+                               | (real optical PointCloud2)
+                               +-> Nav2 ObstacleLayer (provisional TF)
+                                   -> /costmap (base_link OccupancyGrid)
+```
+
+With the manual motor controller stopped, motor-driver power disconnected,
+and the front camera device verified as `/dev/video2`, build from `ros/`:
+
+```bash
+cd /home/kevin/Code/leroy
+git pull --ff-only
+cd ros
+podman build -f Dockerfile.live-costmap -t leroy-ros:costmap .
+```
+
+This image is incremental from the Stage 1 `localhost/leroy-ros:perception`
+image; keep it available locally. It installs Nav2's costmap library, and
+uses the existing `leroy_nav2_costmap_fixture` executable with its experimental
+callback-group cleanup behavior. That workaround is not yet proven on the
+new real-data build.
+
+Terminal 1 — isolated sensor and costmap processes, no MCU serial:
+
+```bash
+podman run --rm -it --name leroy-live-costmap \
+  --network none --ipc private --pid private \
+  --group-add keep-groups --device=/dev/video2 \
+  --cap-drop=all --security-opt=no-new-privileges \
+  -e ROS_DOMAIN_ID=170 \
+  -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+  -e LEROY_LIVE_PERCEPTION_ONLY=1 \
+  -e LEROY_LIVE_COSTMAP_DIAGNOSTIC=1 \
+  --entrypoint bash localhost/leroy-ros:costmap -lc '
+    source /opt/ros/jazzy/setup.bash
+    source /leroy_ws/install/setup.bash
+    ros2 launch leroy_nav2_perception live_depth_costmap.launch.py
+  '
+```
+
+Terminal 2 — configure/activate this *diagnostic* costmap only, then
+observe actual marking of occupied and unknown cells:
+
+```bash
+podman exec leroy-live-costmap bash -lc '
+  set -e
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  ros2 lifecycle get /costmap
+  ros2 lifecycle set /costmap configure
+  ros2 lifecycle set /costmap activate
+  ros2 run leroy_nav2_perception live_costmap_probe
+'
+```
+
+Expected final label:
+`LIVE_DEPTH_COSTMAP=PASS ... lethal_cells=true unknown_cells=true ...`.
+A `PASS` means only that **real optical points** reached Nav2 and produced
+costmap marks without synthetic depth or odometry; it is NOT obstacle accuracy,
+measured floor clearance, safe planning, collision avoidance, or a motor enable.
+If `INCOMPLETE`, keep the node logs; do not inject synthetic data or mark
+the provisional camera transform validated.
+
+Terminate terminal 1 using Ctrl+C; the experimental costmap runner may
+still expose the previously observed Jazzy destructor issue. Record any
+shutdown errors rather than declaring clean lifecycle behavior.
+
 ## Remaining full-pipeline integrations (do not claim completed)
 
-1. **Actual base-frame obstacles:** measure camera extrinsics/floor, then
+1. **Calibrated base-frame obstacles:** measure camera extrinsics/floor, then
    enable `/leroy_nav2/diagnostics/obstacle_points` on live data.
    A point cloud from just one forward camera is not complete 360-degree
    protection for mecanum strafing/reversing.
