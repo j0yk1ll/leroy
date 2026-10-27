@@ -58,23 +58,55 @@ class LiveCostmapProbe(Node):
         self.unknown = -1 in m.data
         self.lethal = 100 in m.data
 
+    def graph_status(self):
+        """(state, details): unsafe is terminal; discovery-missing is not.
+
+        A missing expected publisher can be a normal DDS discovery delay.
+        Unexpected publishers, motor topics or actuator nodes inhibit
+        immediately. No missing publisher is synthesized or ignored for PASS.
+        """
+        topic_types = dict(self.get_topic_names_and_types())
+        forbidden_topics = sorted(
+            t for t in ("/cmd_vel", "/cmd_vel_nav") if t in topic_types)
+        if forbidden_topics:
+            return "UNSAFE", "forbidden_topics=" + repr(forbidden_topics)
+
+        blocked_node_names = (
+            "leroy_bridge", "controller_server", "planner_server",
+            "bt_navigator", "synthetic_depth_fixture",
+            "velocity_smoother",
+        )
+        nodes = self.get_node_names_and_namespaces()
+        forbidden_nodes = sorted(
+            ns + "/" + name for name, ns in nodes
+            if any(token in name for token in blocked_node_names))
+        if forbidden_nodes:
+            return "UNSAFE", "forbidden_nodes=" + repr(forbidden_nodes)
+
+        required = (
+            ("/leroy_nav2/diagnostics/raw_depth_points",
+             "depth_obstacles", "sensor_msgs/msg/PointCloud2"),
+            ("/costmap", "costmap", "nav_msgs/msg/OccupancyGrid"),
+        )
+        missing = []
+        for topic, expected_name, expected_type in required:
+            endpoints = self.get_publishers_info_by_topic(topic)
+            if not endpoints:
+                missing.append(topic)
+                continue
+            observed = [(e.node_namespace, e.node_name, e.topic_type)
+                        for e in endpoints]
+            if (len(endpoints) != 1
+                    or observed[0] != ("/", expected_name, expected_type)):
+                return "UNSAFE", (f"unexpected_publishers_on={topic} "
+                                  + repr(observed))
+        if missing:
+            return "WAITING", "missing_publishers=" + repr(missing)
+        return "READY", "required_publishers_verified"
+
     def graph_ok(self):
-        names = {name for name, _ in self.get_topic_names_and_types()}
-        if any(x in names for x in ("/cmd_vel", "/cmd_vel_nav")):
-            return False
-        nodes = set(self.get_node_names())
-        if any(any(blocked in n for blocked in (
-                "leroy_bridge", "controller_server", "planner_server",
-                "bt_navigator", "synthetic_depth_fixture"))
-               for n in nodes):
-            return False
-        def one_source(topic, expected):
-            publishers = self.get_publishers_info_by_topic(topic)
-            return len(publishers) == 1 and publishers[0].node_name == expected
-        return (one_source(
-                    "/leroy_nav2/diagnostics/raw_depth_points",
-                    "depth_obstacles")
-                and one_source("/costmap", "costmap"))
+        # Backward-compatible predicate for callers testing full readiness.
+        return self.graph_status()[0] == "READY"
 
 
 def main():
@@ -91,12 +123,26 @@ def main():
     node = LiveCostmapProbe()
     try:
         deadline = time.monotonic() + DURATION_S
+        previous_state = None
+        previous_detail = None
+        seen_ready = False
         while rclpy.ok() and time.monotonic() < deadline:
             rclpy.spin_once(node, timeout_sec=0.5)
-            if not node.graph_ok():
-                print("LIVE_DEPTH_COSTMAP=BLOCKED_UNSAFE_OR_MISSING_GRAPH",
+            state, detail = node.graph_status()
+            if state != previous_state or detail != previous_detail:
+                print(f"LIVE_DEPTH_COSTMAP_GRAPH={state} {detail}", flush=True)
+                previous_state, previous_detail = state, detail
+            if state == "UNSAFE":
+                print("LIVE_DEPTH_COSTMAP=BLOCKED_UNSAFE_GRAPH " + detail,
                       flush=True)
                 return 2
+            if state == "WAITING":
+                if seen_ready:
+                    print("LIVE_DEPTH_COSTMAP=BLOCKED_GRAPH_LOST " + detail,
+                          flush=True)
+                    return 2
+                continue
+            seen_ready = True
             if (node.cloud_count >= REQUIRED_CLOUDS and
                     node.grid_count > 0 and node.lethal and node.unknown):
                 print(
@@ -112,6 +158,7 @@ def main():
                       "not_for_motion", flush=True)
                 return 0
         print("LIVE_DEPTH_COSTMAP=INCOMPLETE " +
+              f"graph={previous_state} details={previous_detail} " +
               f"clouds={node.cloud_count} grids={node.grid_count} " +
               f"lethal={node.lethal} unknown={node.unknown}",
               flush=True)
