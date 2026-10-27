@@ -7,9 +7,10 @@ from unittest.mock import patch
 
 from leroy_bridge.motor_keyboard_hold import (
     HeldKeyboard, KeyboardExit, _EVENT, MAX_HOLD_NS,
+    HIGH_PWM_MAX_HOLD_NS,
 )
 from leroy_bridge.motor_manual_commission import (
-    ManualPulseProtocol, MotorSequenceLedger, MAX_PWM,
+    ManualPulseProtocol, MotorSequenceLedger, MAX_PWM, SIGNED_PWM_MAX,
 )
 
 
@@ -27,9 +28,12 @@ class FakeMcu:
 
     def readline(self):
         command = self.sent[-1]
-        if self.reject and command.startswith("set_wheels_tx"):
+        if self.reject and command.startswith(
+                ("set_wheels_tx", "set_wheels_calibration_tx")):
             return b"error set_wheels_tx rejected\r\n"
-        if command.startswith(("set_wheels_tx ", "stop_wheels_tx ")):
+        if command.startswith((
+                "set_wheels_tx ", "set_wheels_calibration_tx ",
+                "stop_wheels_tx ")):
             kind, seq = command.split()[:2]
             return f"ok {kind} seq={seq}\r\n".encode()
         if command.startswith("set_watchdog_ms "):
@@ -83,6 +87,19 @@ class KeyboardHoldTest(unittest.TestCase):
         self.assertIsNone(self.read())
         self.pressed = {"a"}
         self.assertIsNone(self.read())          # cannot jump to new direction
+        self.pressed.clear()
+        self.assertIsNone(self.read())
+        self.pressed = {"a"}
+        self.assertEqual(self.read(), "a")
+
+    def test_high_pwm_hold_expires_after_half_second(self):
+        self.keyb.max_hold_ns = HIGH_PWM_MAX_HOLD_NS
+        self.assertIsNone(self.read())
+        self.pressed = {"a"}
+        self.assertEqual(self.read(), "a")
+        self.t += HIGH_PWM_MAX_HOLD_NS + 1
+        self.assertIsNone(self.read())
+        self.assertIsNone(self.read())
         self.pressed.clear()
         self.assertIsNone(self.read())
         self.pressed = {"a"}
@@ -194,7 +211,8 @@ class HoldCdcTest(unittest.TestCase):
         ])
 
     def test_upper_limit_matches_existing_mcu_ceiling(self):
-        self.assertEqual(MAX_PWM, 64)
+        self.assertEqual(SIGNED_PWM_MAX, 64)
+        self.assertEqual(MAX_PWM, 255)
         mcu = FakeMcu()
         p = ManualPulseProtocol(mcu, first_sequence=1100, pulse_ms=100)
         p.configure()
@@ -205,6 +223,32 @@ class HoldCdcTest(unittest.TestCase):
             p.drive((65, 0, 0, 0))
         self.assertEqual(len(mcu.sent), 4)
         p.stop()
+
+    def test_opt_in_high_pwm_uses_distinct_255_command(self):
+        mcu = FakeMcu()
+        p = ManualPulseProtocol(
+            mcu, first_sequence=5000, pulse_ms=100,
+            high_pwm_enabled=True)
+        p.configure()
+        self.assertEqual(mcu.sent[2], "set_platform_ramp 8")
+        p.drive((128, -128, 255, -255))
+        self.assertEqual(
+            mcu.sent[-1],
+            "set_wheels_calibration_tx 5002 128 -128 255 -255")
+        p.drive((64, 64, 64, 64))
+        self.assertEqual(
+            mcu.sent[-1], "set_wheels_tx 5003 64 64 64 64")
+        with self.assertRaises(ValueError):
+            p.drive((256, 0, 0, 0))
+        p.stop()
+
+    def test_high_pwm_fails_without_opt_in(self):
+        mcu = FakeMcu()
+        p = ManualPulseProtocol(mcu, first_sequence=6000, pulse_ms=100)
+        p.configure()
+        with self.assertRaisesRegex(ValueError, "opt-in"):
+            p.drive((128, 128, 128, 128))
+        self.assertEqual(len(mcu.sent), 3)
 
     def test_drive_bound_and_failure_latch(self):
         mcu = FakeMcu()
