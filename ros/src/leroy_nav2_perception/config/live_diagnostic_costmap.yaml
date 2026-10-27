@@ -21,6 +21,13 @@ costmap:
     obstacle_layer:
       plugin: "nav2_costmap_2d::ObstacleLayer"
       enabled: true
+      # Nav2 ObstacleLayer filters AGAIN after the source ObservationBuffer:
+      # onInitialize() defaults the layer's Z window to [0.0, 2.0].
+      # The provisional pitched camera projects distant optical points to
+      # negative base_link Z, so that default discarded every surface mark.
+      # This broad diagnostic-only window is NOT obstacle classification.
+      min_obstacle_height: -3.0
+      max_obstacle_height: 3.0
       footprint_clearing_enabled: false
       combination_method: 1
       observation_sources: "raw_depth_surfaces"
