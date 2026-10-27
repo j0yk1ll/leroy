@@ -1,3 +1,40 @@
+## Persistent motor sequencing (required for commissioning)
+
+The STM32 rejects stale nonzero wheel transactions across USB reconnects.
+The commissioning controller therefore **requires** `--sequence-state-file`
+pointing at a durable host-backed volume. Each sequence number is written
+and synced to disk before being sent. Keep this volume across Podman runs;
+do not reset/delete it during normal testing.
+
+One-time host setup:
+
+```bash
+podman volume create leroy-motor-sequences
+```
+
+Add the following to the tested Podman run command:
+
+```bash
+--mount type=volume,src=leroy-motor-sequences,dst=/leroy-state
+```
+
+Add this argument to `ros2 run ... leroy_motor_manual_commission`:
+
+```bash
+--sequence-state-file /leroy-state/motor_sequence
+```
+
+On the first run after migrating from the old timestamp-based controller,
+the STM32 may still retain a higher accepted sequence than the new file.
+In that case the MCU **must remain inhibited**. With motor power physically
+cut off, separately power-cycle the STM32/USB, then retry. Do not advance
+a rejected sequence blindly or disable the MCU stale-sequence check.
+
+Keyboard release uses an integer `EVIOCGRAB` argument of 0; passing a
+pointer to packed zero inadvertently repeated the grab and caused
+`EBUSY` on exit. Closing the descriptor releases the grab in the kernel
+even if explicit ungrab fails.
+
 ## Supervised hold-mode PWM calibration
 
 The `--keyboard-device /dev/input/eventN` hold mode retains the original
@@ -40,6 +77,7 @@ interrupt motor rails even while USB powers the MCU:
 ```bash
 ros2 run leroy_bridge leroy_motor_manual_commission -- \
   --port /dev/ttyACM0 --pwm 24 --duration-ms 150 \
+  --sequence-state-file /leroy-state/motor_sequence \
   --wheel-polarities +1,+1,+1,+1
 ```
 
