@@ -39,7 +39,15 @@ class ManualTests(unittest.TestCase):
 
     def test_directions_and_polarity(self):
         self.assertEqual(len(DIRECTIONS), 6)
-        self.assertEqual(DIRECTIONS["a"], (-1, 1, 1, -1))
+        # Field-verified manual keyboard calibration: on Leroy the
+        # originally nominal left/right vectors were physically reversed.
+        self.assertEqual(DIRECTIONS["a"], (1, -1, -1, 1))
+        self.assertEqual(DIRECTIONS["d"], (-1, 1, 1, -1))
+        # Keep forward, reverse and both rotation commands unchanged.
+        self.assertEqual(DIRECTIONS["w"], (1, 1, 1, 1))
+        self.assertEqual(DIRECTIONS["s"], (-1, -1, -1, -1))
+        self.assertEqual(DIRECTIONS["q"], (-1, 1, -1, 1))
+        self.assertEqual(DIRECTIONS["e"], (1, -1, 1, -1))
         self.assertEqual(wheel_polarities("+1,-1,+1,-1"), (1, -1, 1, -1))
 
     def test_protocol_sequence_stop_and_watchdog(self):
