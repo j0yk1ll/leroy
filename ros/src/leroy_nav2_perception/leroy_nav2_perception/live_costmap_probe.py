@@ -61,9 +61,11 @@ class LiveCostmapProbe(Node):
     def graph_status(self):
         """(state, details): unsafe is terminal; discovery-missing is not.
 
-        A missing expected publisher can be a normal DDS discovery delay.
-        Unexpected publishers, motor topics or actuator nodes inhibit
-        immediately. No missing publisher is synthesized or ignored for PASS.
+        Missing expected publishers or anonymous endpoints can reflect delayed
+        or impaired DDS discovery: both are bounded, fail-closed WAITING.
+        Unexpected identifiable publishers, duplicate sources, forbidden
+        topics and actuator nodes inhibit immediately. Anonymous endpoints
+        must NEVER satisfy PASS.
         """
         topic_types = dict(self.get_topic_names_and_types())
         forbidden_topics = sorted(
@@ -96,9 +98,24 @@ class LiveCostmapProbe(Node):
                 continue
             observed = [(e.node_namespace, e.node_name, e.topic_type)
                         for e in endpoints]
-            if (len(endpoints) != 1
-                    or observed[0] != ("/", expected_name, expected_type)):
-                return "UNSAFE", (f"unexpected_publishers_on={topic} "
+            if len(endpoints) != 1:
+                return "UNSAFE", (f"unexpected_publisher_count_on={topic} "
+                                  + repr(observed))
+            namespace, name, actual_type = observed[0]
+            if actual_type != expected_type:
+                return "UNSAFE", (f"unexpected_publisher_type_on={topic} "
+                                  + repr(observed))
+            # Fast DDS may expose a matched endpoint before ROS node
+            # identity metadata is available, or indefinitely if its graph
+            # transport is impaired. Anonymous is NEVER sufficient for PASS:
+            # wait boundedly for identity rather than mislabelling unknown
+            # as a proven rogue source or accepting the anonymous writer.
+            if (namespace in ("", "_NODE_NAMESPACE_UNKNOWN_")
+                    or name in ("", "_NODE_NAME_UNKNOWN_")):
+                missing.append(f"{topic}:publisher_identity_unverified")
+                continue
+            if (namespace, name) != ("/", expected_name):
+                return "UNSAFE", (f"unexpected_publisher_identity_on={topic} "
                                   + repr(observed))
         if missing:
             return "WAITING", "missing_publishers=" + repr(missing)
