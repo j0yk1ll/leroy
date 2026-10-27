@@ -25,7 +25,8 @@ DIRECTIONS = {
     "q": (-1, 1, -1, 1),     # counterclockwise
     "e": (1, -1, 1, -1),     # clockwise
 }
-MAX_PWM = 64                    # Matches MCU's signed wheel command ceiling.
+MAX_PWM = 255                   # Eight-bit duty; 256 is not representable.
+SIGNED_PWM_MAX = 64              # Normal production command remains ±64.
 MAX_PULSE_MS = 150
 ENABLE_WINDOW_NS = 500_000_000  # Each press of SPACE permits one direction.
 WATCHDOG_MARGIN_MS = 100
@@ -103,7 +104,8 @@ class MotorSequenceLedger:
 class ManualPulseProtocol:
     """One serial owner; a failed ACK permanently inhibits further motion."""
 
-    def __init__(self, mcu, *, first_sequence, pulse_ms, sequence_ledger=None):
+    def __init__(self, mcu, *, first_sequence, pulse_ms, sequence_ledger=None,
+                 high_pwm_enabled=False):
         if (type(first_sequence) is not int
                 or not 0 < first_sequence < 0xffff0000):
             raise ValueError("invalid initial MCU sequence")
@@ -114,6 +116,7 @@ class ManualPulseProtocol:
         self.sequence_ledger = sequence_ledger
         self.pulse_ms = pulse_ms
         self.faulted = False
+        self.high_pwm_enabled = high_pwm_enabled
 
     def _transaction(self, command, expected, timeout_s=0.25):
         try:
@@ -172,16 +175,23 @@ class ManualPulseProtocol:
                 or any(type(x) is not int or abs(x) > MAX_PWM for x in wheel_pwm)
                 or not any(wheel_pwm)):
             raise ValueError("invalid bounded hold-mode PWM")
+        peak = max(abs(x) for x in wheel_pwm)
+        if peak > SIGNED_PWM_MAX and not self.high_pwm_enabled:
+            raise ValueError("high PWM requires explicit commissioning opt-in")
+        # High-duty requests cannot pass through the production command.
+        command = ("set_wheels_calibration_tx" if peak > SIGNED_PWM_MAX
+                   else "set_wheels_tx")
         seq = self._next_seq()
         self._transaction(
-            f"set_wheels_tx {seq} " + " ".join(map(str, wheel_pwm)),
-            f"ok set_wheels_tx seq={seq}", timeout_s=0.06)
+            f"{command} {seq} " + " ".join(map(str, wheel_pwm)),
+            f"ok {command} seq={seq}", timeout_s=0.06)
 
     def pulse(self, wheel_pwm):
         if self.faulted:
             raise RuntimeError("motor session latched after CDC fault")
         if (type(wheel_pwm) is not tuple or len(wheel_pwm) != 4
-                or any(type(x) is not int or abs(x) > MAX_PWM for x in wheel_pwm)
+                or any(type(x) is not int or abs(x) > SIGNED_PWM_MAX
+                       for x in wheel_pwm)
                 or not any(wheel_pwm)):
             raise ValueError("invalid bounded four-wheel pulse")
         seq = self._next_seq()
@@ -210,6 +220,10 @@ def main(args=None):
         help="absolute path in a persistently mounted Podman volume; "
              "prevents stale MCU sequences after restarting container")
     parser.add_argument("--pwm", type=int, default=32)
+    parser.add_argument(
+        "--experimental-high-pwm", action="store_true",
+        help="explicitly authorize attended, short-duration calibration "
+             "commands above 64 up to 255; requires updated STM32 firmware")
     parser.add_argument("--duration-ms", type=int, default=150)
     parser.add_argument(
         "--keyboard-device", default=None,
@@ -221,10 +235,16 @@ def main(args=None):
     if not opts.port.startswith("/dev/ttyACM"):
         parser.error("commission only a real /dev/ttyACM* device")
     if not 1 <= opts.pwm <= MAX_PWM:
-        parser.error(f"pwm must be 1..{MAX_PWM}")
+        parser.error(f"pwm must be 1..{MAX_PWM} (8-bit duty; 256 is invalid)")
+    if opts.pwm > SIGNED_PWM_MAX and not opts.experimental_high_pwm:
+        parser.error(
+            "PWM above 64 requires --experimental-high-pwm "
+            "and updated firmware")
     if not 20 <= opts.duration_ms <= MAX_PULSE_MS:
         parser.error("duration-ms must be 20..150")
 
+    if opts.pwm > SIGNED_PWM_MAX and opts.keyboard_device is None:
+        parser.error("high-power commissioning requires --keyboard-device")
     if opts.keyboard_device is not None:
         from leroy_bridge.motor_keyboard_hold import run_hold
         return run_hold(opts)
@@ -321,7 +341,8 @@ def main(args=None):
             mcu.reset_input_buffer()
             controller = ManualPulseProtocol(
                 mcu, first_sequence=ledger.current,
-                pulse_ms=opts.duration_ms, sequence_ledger=ledger)
+                pulse_ms=opts.duration_ms, sequence_ledger=ledger,
+                high_pwm_enabled=False)
             controller.configure()
             tty.setcbreak(tty_in.fileno())
             node = CommissionNode(tfd=tty_in.fileno(), controller=controller)
