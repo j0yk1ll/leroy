@@ -116,43 +116,103 @@ uncertainty, fixed diagnostic footprint and stale-layer persistence remain.
 No robot motor power, odometry localization or autonomous motion is
 authorized by this result.
 
-### Stage 3 sidecar IPC correction (2026-10-27)
+### Stage 3 DDS transport correction after real cross-container test
 
-First operator attempt failed before XRSLAM launch with:
+A Stage 2 parent with `--network=none --ipc=private` passed the
+real camera-to-costmap probe. The first XRSLAM sidecar attempt failed
+because Podman refused to join a non-shareable parent IPC namespace.
+The second attempt **started XRSLAM** with the same network namespace
+but private IPC and `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`. The operator
+observed only partial DDS discovery: the XRSLAM process logged
+`XRSLAM mode=monocular; IMU=disabled; pose output gated=yes`, but
+its publisher and subscription endpoints appeared to the other
+container as `_NODE_NAME_UNKNOWN_`; neither the latched
+`/xrslam/tracking_status` nor `/xrslam/localization_valid` could
+be received, and no real camera-frame submission was observed.
+**Stage 3 did not PASS.** The cause is consistent with the Fast DDS
+same-network/different-IPC shared-memory transport caveat documented
+by eProsima, rather than evidence about XRSLAM feature tracking.
 
-```text
-joining IPC of container ... is not allowed: non-shareable IPC
-(hint: use IpcMode:shareable for the donor container)
-```
+The supported Stage 3 configuration now shares ONLY the **existing
+isolated parent network and its explicitly shareable IPC namespace**.
+No host network or host IPC namespace is used. The sidecar uses the
+parent Fast DDS transport selection (no conflicting UDP-only override).
+The script fails before starting if the parent IPC is not
+`shareable`. This requires a controlled Stage 2 restart; an existing
+container cannot have its IPC namespace changed in-place.
 
-The accepted Stage 2 parent intentionally uses `--ipc=private`. Do
-**not** stop and rebuild the accepted live costmap merely to permit a
-sidecar. `live_stage3_monocular_sidecar.sh` now joins only the existing
-isolated network namespace, creates its **own** `--ipc private`
-namespace and sets `FASTDDS_BUILTIN_TRANSPORTS=UDPv4` for the XRSLAM
-process. UDPv4 is a standard Fast DDS transport and works without
-sharing /dev/shm with the donor. The already running parent's default
-Fast DDS configuration supports UDPv4 alongside SHM; cross-container
-discovery and camera delivery are still to be verified on the host.
-If the effective RMW or transport profiles differ, the diagnostic test
-must report that rather than substituting a fake camera feed.
-
-With the parent still running, update source and run:
+Keep motor power physically disconnected and STOP any XRSLAM sidecar
+before stopping its camera parent. Rebuild from the corrected Stage 2
+source, so the previously operator-validated Nav2 height filter
+`[-3.0, 3.0]` is persistent rather than only a runtime parameter:
 
 ```bash
 cd /home/kevin/Code/leroy
 git pull --ff-only
 cd ros
-bash -n ./live_stage3_monocular_sidecar.sh
+podman stop leroy-live-xrslam || true
+podman stop leroy-live-costmap
+podman rm leroy-live-costmap
+podman build -f Dockerfile.live-costmap -t leroy-ros:costmap .
+```
+
+Terminal 1, the same non-actuating Stage 2 camera/costmap experiment,
+now with **`--ipc=shareable`** (and a larger private shared-memory
+filesystem, not the host's):
+
+```bash
+podman run -it \
+  --name leroy-live-costmap \
+  --network=none --ipc=shareable --shm-size=256m --pid=private \
+  --group-add keep-groups --device=/dev/video2 \
+  --cap-drop=all --security-opt=no-new-privileges \
+  -e ROS_DOMAIN_ID=170 \
+  -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+  -e LEROY_LIVE_PERCEPTION_ONLY=1 \
+  -e LEROY_LIVE_COSTMAP_DIAGNOSTIC=1 \
+  --entrypoint bash localhost/leroy-ros:costmap -lc '
+    source /opt/ros/jazzy/setup.bash
+    source /leroy_ws/install/setup.bash
+    ros2 launch leroy_nav2_perception live_depth_costmap.launch.py
+  '
+```
+
+Verify the parent IPC mode on the host:
+
+```bash
+podman inspect --format '{{.HostConfig.IpcMode}}' leroy-live-costmap
+# Expected: shareable
+```
+
+Terminal 2, explicitly configure/activate the standalone costmap,
+then **re-establish Stage 2 PASS on this freshly started graph**:
+
+```bash
+podman exec leroy-live-costmap bash -lc '
+  set -e
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  ros2 lifecycle set /costmap configure
+  ros2 lifecycle set /costmap activate
+  ros2 run leroy_nav2_perception live_costmap_probe
+'
+```
+
+Only after this is `LIVE_DEPTH_COSTMAP=PASS`, Terminal 3:
+
+```bash
 python3 -m unittest -v live_stage3_sidecar_static_test
 bash ./live_stage3_monocular_sidecar.sh
 ```
 
-The earlier failed sidecar creation should not have altered the live
-Stage 2 container. If `leroy-live-xrslam` is stuck as a stopped
-container, inspect it and remove **only** that sidecar before retrying.
-A successful start needs independent confirmation of real XRSLAM
-frame ingestion and an isolated graph with odometry/motor gates OFF.
+Expect `Submitted 1 camera frames to XRSLAM (monocular)` and a
+readable `/xrslam/tracking_status` (likely `initializing` with
+`/xrslam/localization_valid=false`). Confirm
+`/leroy_xrslam` becomes a **named** ROS graph node in both containers
+and rerun the Stage 2 probe concurrently. These conditions have **not
+yet been observed** in the newly shared IPC layout. If the graph
+remains anonymous, inspect middleware selection and transport settings
+rather than enabling odometry, fake poses or extra TF owners.
 
 ## Stage 3: run XRSLAM monocular alongside the already working live costmap
 
