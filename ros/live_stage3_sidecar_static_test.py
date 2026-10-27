@@ -1,4 +1,4 @@
-"""Stage 3 sidecar must share only the isolated parent's network and IPC."""
+"""Stage 3 Fast DDS sidecar uses isolated parent's network, IPC and PID."""
 import pathlib
 import unittest
 
@@ -18,6 +18,11 @@ class LiveStage3SidecarContract(unittest.TestCase):
             "fail COSTMAP_PARENT_IPC_NOT_SHAREABLE_RECREATE_WITH_IPC_SHAREABLE",
             s)
         self.assertIn('--network "container:$parent" --ipc "container:$parent"', s)
+        self.assertIn('--pid "container:$parent"', s)
+        self.assertIn("{{.HostConfig.PidMode}}", s)
+        self.assertIn("COSTMAP_PARENT_HOST_PID_MODE_DISALLOWED", s)
+        self.assertNotIn('--pid private', s)
+        self.assertNotIn('--pid host', s)
         self.assertIn('RMW_IMPLEMENTATION=rmw_fastrtps_cpp', s)
         self.assertNotIn('FASTDDS_BUILTIN_TRANSPORTS=UDPv4', s)
         self.assertNotIn('--ipc host', s)
