@@ -132,6 +132,43 @@ uses the existing `leroy_nav2_costmap_fixture` executable with its experimental
 callback-group cleanup behavior. That workaround is not yet proven on the
 new real-data build.
 
+### Startup failure fixes and camera ownership
+
+The first live Stage 2 run exposed three distinct facts:
+
+- Nav2 `costmap.height` and `costmap.width` parameters must be integer
+  YAML scalars (`8`, not `8.0`). Invalid double dimensions abort
+  costmap construction before lifecycle configuration.
+- The log started `robot_state_publisher`, revealing an older installed
+  description launch in the previous image. `Dockerfile.live-costmap`
+  now recopies and rebuilds `leroy_description` from this branch and
+  checks for `static_transform_publisher` in the installed launch.
+- The camera aborted with a thrown `char*` while starting `/dev/video2`.
+  The log alone does not identify the cause. Check for an existing camera
+  owner or another `leroy-live-perception` container, then retest.
+  The unrelated `Cannot open device /dev/video7` etc. lines are
+  enumeration attempts, not proof that `/dev/video2` is misconfigured.
+
+Before rebuilding/restarting Stage 2, stop the failing Stage 2 launch
+(Ctrl+C), ensure other camera test containers have been stopped, and check:
+
+```bash
+podman ps --format '{{.Names}}'
+fuser -v /dev/video2 || true
+```
+
+Do not kill an unknown process blindly. Stop only the camera process you
+control. Verify the expected physical USB camera is still actually mapped
+to `/dev/video2`.
+
+Rebuild `localhost/leroy-ros:costmap` using the above command; the
+Dockerfile now runs source-level static regression tests as part of build.
+On successful launch, expect six `leroy_static_tf_*` publishers rather
+than `robot_state_publisher`. If the camera still aborts with no competing
+owner, rerun the previously passing Stage 1 live perception image as a
+control and retain the exact `usb_cam` startup log; do not assume the
+costmap itself caused the camera failure.
+
 Terminal 1 — isolated sensor and costmap processes, no MCU serial:
 
 ```bash
