@@ -33,4 +33,5 @@ RUN bash -lc 'set -e; \
     test -f /etc/leroy/sensor_mounts.yaml; \
     test ! -L /etc/leroy/sensor_mounts.yaml; \
     cmp -s /etc/leroy/sensor_mounts.yaml /leroy_ws/src/leroy_description/config/sensor_mounts.yaml; \
-    python3 -m unittest discover -s /leroy_ws/src/leroy_nav2_perception/test -p test_live_costmap_static_contract.py -v'
+    python3 -m unittest discover -s /leroy_ws/src/leroy_nav2_perception/test -p test_live_costmap_static_contract.py -v; \
+    python3 -m unittest discover -s /leroy_ws/src/leroy_nav2_perception/test -p test_live_costmap_graph_contract.py -v'
