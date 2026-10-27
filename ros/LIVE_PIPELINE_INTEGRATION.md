@@ -116,6 +116,67 @@ uncertainty, fixed diagnostic footprint and stale-layer persistence remain.
 No robot motor power, odometry localization or autonomous motion is
 authorized by this result.
 
+### Stage 3 publisher identity / shared PID follow-up (2026-10-27)
+
+After rebuilding the costmap with shareable IPC, the operator observed
+`Transitioning successful` twice but the Stage 2 acceptance probe
+failed immediately:
+
+```text
+LIVE_DEPTH_COSTMAP_GRAPH=UNSAFE unexpected_publishers_on=/leroy_nav2/diagnostics/raw_depth_points [('_NODE_NAMESPACE_UNKNOWN_', '_NODE_NAME_UNKNOWN_', 'sensor_msgs/msg/PointCloud2')]
+```
+
+The identified raw cloud *topic* and type are present, but DDS returned
+unknown identity metadata. This is not proof that the publisher was
+unauthorized; equally it is not acceptable evidence of the required
+source's identity. The probe now treats the matching single endpoint
+with missing ROS node metadata as `WAITING` with
+`publisher_identity_unverified`, cannot PASS it, and times out to
+`INCOMPLETE` after 90 seconds if discovery does not recover.
+Unexpected **named** publishers, duplicates, wrong types, actuator
+topics and forbidden nodes still block immediately; regression tests
+cover all those cases.
+
+The first shareable IPC sidecar still did not demonstrate XRSLAM frame
+ingestion. An additional possible cause is **PID namespace collision**
+between multiple Fast DDS processes sharing IPC/SHM. The XRSLAM
+launcher now joins only the existing isolated parent's **PID** namespace
+in addition to its network and IPC namespace:
+`--pid "container:$parent"`, not `--pid=host`.
+The parent retains `--pid=private`; the sidecar checks the parent
+is not in host PID mode. This change has **not** been run on physical
+hardware yet.
+
+Before rebuilding or changing the proven costmap again, STOP only the
+XRSLAM sidecar and inspect the **parent's** raw cloud graph:
+
+```bash
+podman stop leroy-live-xrslam || true
+podman exec leroy-live-costmap bash -lc '
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  ros2 node list
+  ros2 topic info /leroy_nav2/diagnostics/raw_depth_points --verbose
+  ros2 lifecycle get /costmap
+'
+```
+
+If the raw cloud publisher is named `depth_obstacles`, rerun
+`ros2 run leroy_nav2_perception live_costmap_probe` inside the
+parent and require `PASS` **before** starting XRSLAM. If it remains
+anonymous, treat Stage 2's *new container* as not yet accepted; do
+not start XRSLAM or relax the probe. Inspect DDS state and compare
+parent/child endpoint identity with both graph tools.
+
+Then, from `ros/`, `git pull --ff-only` and run
+`python3 -m unittest -v live_stage3_sidecar_static_test`; the
+corrected `bash ./live_stage3_monocular_sidecar.sh` requires no
+XRSLAM image rebuild. Check new output for a real
+`Submitted 1 camera frames to XRSLAM (monocular)` and readable
+latched tracking messages. Rerun the costmap probe after starting
+the sidecar. Neither native XRSLAM submission nor monocular status
+proves metric localization.
+
 ### Stage 3 DDS transport correction after real cross-container test
 
 A Stage 2 parent with `--network=none --ipc=private` passed the
@@ -134,8 +195,9 @@ same-network/different-IPC shared-memory transport caveat documented
 by eProsima, rather than evidence about XRSLAM feature tracking.
 
 The supported Stage 3 configuration now shares ONLY the **existing
-isolated parent network and its explicitly shareable IPC namespace**.
-No host network or host IPC namespace is used. The sidecar uses the
+isolated parent network, its explicitly shareable IPC namespace and
+its private PID namespace**. No host network, IPC or PID namespace is
+used. The sidecar uses the
 parent Fast DDS transport selection (no conflicting UDP-only override).
 The script fails before starting if the parent IPC is not
 `shareable`. This requires a controlled Stage 2 restart; an existing
@@ -210,7 +272,7 @@ readable `/xrslam/tracking_status` (likely `initializing` with
 `/xrslam/localization_valid=false`). Confirm
 `/leroy_xrslam` becomes a **named** ROS graph node in both containers
 and rerun the Stage 2 probe concurrently. These conditions have **not
-yet been observed** in the newly shared IPC layout. If the graph
+yet been observed** in the newly shared IPC/PID layout. If the graph
 remains anonymous, inspect middleware selection and transport settings
 rather than enabling odometry, fake poses or extra TF owners.
 
