@@ -45,7 +45,7 @@ class HeldKeyboard:
         self._grabbed = False
         try:
             # Do not allow keys typed into unrelated GUI windows to drive.
-            fcntl.ioctl(self.fd, _GRAB, struct.pack("i", 1))
+            fcntl.ioctl(self.fd, _GRAB, 1)
             self._grabbed = True
             self._inhibited = True
             self._started_ns = None
@@ -112,12 +112,19 @@ class HeldKeyboard:
 
     def close(self):
         if getattr(self, "fd", None) is not None:
+            fd = self.fd
+            self.fd = None
             try:
                 if self._grabbed:
-                    fcntl.ioctl(self.fd, _GRAB, struct.pack("i", 0))
+                    # EVIOCGRAB tests its argument VALUE, not a pointer to an
+                    # integer. Supplying packed zero incorrectly re-grabbed
+                    # the device and raised EBUSY on exit.
+                    try:
+                        fcntl.ioctl(fd, _GRAB, 0)
+                    except OSError:
+                        pass  # closing fd also ungrabs in the Linux kernel
             finally:
-                os.close(self.fd)
-                self.fd = None
+                os.close(fd)
 
 
 def run_hold(opts):
@@ -218,6 +225,7 @@ def run_hold(opts):
     rclpy.init(args=[])
     keyboard = None
     controller = None
+    ledger = None
     mcu = None
     node = None
     try:
@@ -228,11 +236,18 @@ def run_hold(opts):
         time.sleep(0.20)
         mcu.reset_input_buffer()
         # Configure a bounded 200ms MCU watchdog, independent of hold length.
+        from leroy_bridge.motor_manual_commission import MotorSequenceLedger
+        ledger = MotorSequenceLedger(opts.sequence_state_file)
         controller = ManualPulseProtocol(
-            mcu, first_sequence=int(time.time()), pulse_ms=100)
+            mcu, first_sequence=ledger.current, pulse_ms=100,
+            sequence_ledger=ledger)
         controller.configure()
         node = HoldNode(controller, keyboard)
-        rclpy.spin(node)
+        from rclpy.executors import ExternalShutdownException
+        try:
+            rclpy.spin(node)
+        except (KeyboardInterrupt, ExternalShutdownException):
+            pass
     finally:
         # Always attempt STOP even after input/ROS/CDC faults. A STOP ACK
         # does not establish physical stopping; the cutoff is independent.
@@ -243,6 +258,8 @@ def run_hold(opts):
                 print(f"STOP_UNCONFIRMED: {exc}; operate physical cutoff")
         if keyboard is not None:
             keyboard.close()
+        if ledger is not None:
+            ledger.close()
         if mcu is not None:
             mcu.close()
         if node is not None:
