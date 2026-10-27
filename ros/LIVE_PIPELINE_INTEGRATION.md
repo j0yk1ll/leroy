@@ -116,6 +116,44 @@ uncertainty, fixed diagnostic footprint and stale-layer persistence remain.
 No robot motor power, odometry localization or autonomous motion is
 authorized by this result.
 
+### Stage 3 sidecar IPC correction (2026-10-27)
+
+First operator attempt failed before XRSLAM launch with:
+
+```text
+joining IPC of container ... is not allowed: non-shareable IPC
+(hint: use IpcMode:shareable for the donor container)
+```
+
+The accepted Stage 2 parent intentionally uses `--ipc=private`. Do
+**not** stop and rebuild the accepted live costmap merely to permit a
+sidecar. `live_stage3_monocular_sidecar.sh` now joins only the existing
+isolated network namespace, creates its **own** `--ipc private`
+namespace and sets `FASTDDS_BUILTIN_TRANSPORTS=UDPv4` for the XRSLAM
+process. UDPv4 is a standard Fast DDS transport and works without
+sharing /dev/shm with the donor. The already running parent's default
+Fast DDS configuration supports UDPv4 alongside SHM; cross-container
+discovery and camera delivery are still to be verified on the host.
+If the effective RMW or transport profiles differ, the diagnostic test
+must report that rather than substituting a fake camera feed.
+
+With the parent still running, update source and run:
+
+```bash
+cd /home/kevin/Code/leroy
+git pull --ff-only
+cd ros
+bash -n ./live_stage3_monocular_sidecar.sh
+python3 -m unittest -v live_stage3_sidecar_static_test
+bash ./live_stage3_monocular_sidecar.sh
+```
+
+The earlier failed sidecar creation should not have altered the live
+Stage 2 container. If `leroy-live-xrslam` is stuck as a stopped
+container, inspect it and remove **only** that sidecar before retrying.
+A successful start needs independent confirmation of real XRSLAM
+frame ingestion and an isolated graph with odometry/motor gates OFF.
+
 ## Stage 3: run XRSLAM monocular alongside the already working live costmap
 
 This stage is about **concurrent application integration**. The historical
