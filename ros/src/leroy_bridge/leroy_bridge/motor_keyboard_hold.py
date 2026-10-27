@@ -11,7 +11,9 @@ import re
 import struct
 import time
 
-from leroy_bridge.motor_manual_commission import DIRECTIONS, ManualPulseProtocol
+from leroy_bridge.motor_manual_commission import (
+    DIRECTIONS, ManualPulseProtocol, SIGNED_PWM_MAX,
+)
 
 # Linux input.h: EVIOCGKEY(N), EVIOCGRAB and input-event-codes.h.
 _EVENT = struct.Struct("@llHHi")
@@ -26,6 +28,7 @@ _ESC = 1
 _X = 45
 # No unbounded first motor-on run without measured floor stopping/coverage.
 MAX_HOLD_NS = 3_000_000_000
+HIGH_PWM_MAX_HOLD_NS = 500_000_000  # Explicit release required every 0.5s.
 MAX_TICK_GAP_NS = 180_000_000
 RESEND_NS = 50_000_000
 
@@ -37,12 +40,13 @@ class KeyboardExit(Exception):
 class HeldKeyboard:
     """Only one physical key held; missing release/fault fails closed."""
 
-    def __init__(self, device):
+    def __init__(self, device, *, max_hold_ns=MAX_HOLD_NS):
         if (type(device) is not str or
                 not re.fullmatch(r"/dev/input/event[0-9]+", device)):
             raise ValueError("use a mapped /dev/input/eventN keyboard device")
         self.fd = os.open(device, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
         self._grabbed = False
+        self.max_hold_ns = max_hold_ns
         try:
             # Do not allow keys typed into unrelated GUI windows to drive.
             fcntl.ioctl(self.fd, _GRAB, 1)
@@ -105,7 +109,8 @@ class HeldKeyboard:
         if self._started_ns is None:
             self._started_ns = now_ns
         self._last_direction = direction
-        if not 0 <= now_ns - self._started_ns <= MAX_HOLD_NS:
+        if not 0 <= now_ns - self._started_ns <= getattr(
+                self, "max_hold_ns", MAX_HOLD_NS):
             self.inhibit()
             return None
         return direction
@@ -149,7 +154,8 @@ def run_hold(opts):
             self.get_logger().warning(
                 "WHEELS-RAISED HOLD MODE, NO OBSTACLE PROTECTION. "
                 "Hold one W/A/S/D/Q/E; release=STOP; X=latch STOP; ESC=exit. "
-                "Max 3s per press; release fully to reenable.")
+                f"Max {0.5 if opts.pwm > SIGNED_PWM_MAX else 3}s "
+                "per press; release fully to reenable.")
 
         def report(self, state, pwm=(0, 0, 0, 0)):
             self._requested.publish(Int16MultiArray(data=list(pwm)))
@@ -217,6 +223,7 @@ def run_hold(opts):
             "desktop/terminal shortcuts will stop working until ESC exits.\n"
             "Hold one W/A/S/D/Q/E; release=STOP, X=latch STOP, ESC=exit.\n"
             "Duty defaults to 32/255; no floor movements authorized.\n"
+            "Above 64/255: HIGH-CURRENT RISK, 0.5s max per press.\n"
             "Type HOLD_MOTORS_READY (exactly) to continue: ")
         tty_out.flush()
         if tty_in.readline().strip() != "HOLD_MOTORS_READY":
@@ -230,7 +237,10 @@ def run_hold(opts):
     node = None
     try:
         # Exclusive evdev grab must succeed before opening motion-capable CDC.
-        keyboard = HeldKeyboard(opts.keyboard_device)
+        keyboard = HeldKeyboard(
+            opts.keyboard_device,
+            max_hold_ns=(HIGH_PWM_MAX_HOLD_NS if opts.pwm > SIGNED_PWM_MAX
+                         else MAX_HOLD_NS))
         mcu = serial.Serial(opts.port, baudrate=115200, timeout=0.02,
                             write_timeout=0.08, exclusive=True)
         time.sleep(0.20)
@@ -240,7 +250,8 @@ def run_hold(opts):
         ledger = MotorSequenceLedger(opts.sequence_state_file)
         controller = ManualPulseProtocol(
             mcu, first_sequence=ledger.current, pulse_ms=100,
-            sequence_ledger=ledger)
+            sequence_ledger=ledger,
+            high_pwm_enabled=opts.pwm > SIGNED_PWM_MAX)
         controller.configure()
         node = HoldNode(controller, keyboard)
         from rclpy.executors import ExternalShutdownException
