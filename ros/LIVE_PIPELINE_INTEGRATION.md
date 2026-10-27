@@ -132,6 +132,42 @@ uses the existing `leroy_nav2_costmap_fixture` executable with its experimental
 callback-group cleanup behavior. That workaround is not yet proven on the
 new real-data build.
 
+### Costmap grid publishes but contains only unknown cells
+
+A live run demonstrated all required publishers, `124` real point clouds,
+`118` actual costmap grids, and `unknown=True`, but `lethal=False`.
+The cause found in Nav2 Jazzy's `ObstacleLayer::updateBounds()` is a
+**second height filter** at the layer level, independent of the configured
+`raw_depth_surfaces.min_obstacle_height=-3.0` and
+`max_obstacle_height=3.0` source filter. With the layer's default
+`[0.0, 2.0]` interval, the provisionally downward-pitched camera can
+project valid distance surfaces into **negative base_link Z**, where
+Nav2 discards them before marking costmap cells.
+
+Stage 2 now explicitly sets `obstacle_layer.min_obstacle_height=-3.0`
+and `obstacle_layer.max_obstacle_height=3.0` and tests for those fields
+during image build. Both settings are diagnostic only; marks can represent
+floors and other unclassified surfaces, **not validated obstacles**.
+
+To test this without rebuilding the existing *active* Stage 2 container:
+
+```bash
+podman exec leroy-live-costmap bash -lc '
+  set -e
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  ros2 param get /costmap obstacle_layer.min_obstacle_height
+  ros2 param get /costmap obstacle_layer.max_obstacle_height
+  ros2 param set /costmap obstacle_layer.min_obstacle_height -3.0
+  ros2 param set /costmap obstacle_layer.max_obstacle_height 3.0
+  ros2 run leroy_nav2_perception live_costmap_probe
+'
+```
+
+The runtime adjustment does not persist across a container restart;
+use a new `git pull --ff-only` and image rebuild for the corrected YAML.
+The motor disconnected safety constraints remain in force.
+
 ### After costmap lifecycle activation: DDS graph discovery behavior
 
 The operator successfully configured and activated `/costmap`, but
