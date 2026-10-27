@@ -67,7 +67,8 @@ class MotorSequenceLedger:
     def __init__(self, path):
         if not path or not os.path.isabs(path):
             raise ValueError("sequence state needs an absolute persistent path")
-        self.file = open(path, "a+", encoding="ascii")
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+        self.file = os.fdopen(fd, "r+", encoding="ascii")
         try:
             fcntl.flock(self.file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.file.seek(0)
