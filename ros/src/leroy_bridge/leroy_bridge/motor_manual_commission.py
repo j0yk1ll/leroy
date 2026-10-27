@@ -9,6 +9,7 @@ has an MCU watchdog, sequenced ACK, and explicit STOP; no keepalives.
 A hardwired motor-power cutoff remains mandatory and independent of software.
 """
 import argparse
+import fcntl
 import os
 import select
 import termios
@@ -55,10 +56,53 @@ class OneShotEnable:
                 and 0 <= deadline - now_ns <= ENABLE_WINDOW_NS)
 
 
+class MotorSequenceLedger:
+    """Persistent, exclusive write-ahead u32 command sequence for MCU sessions.
+
+    The STM32 remembers its last accepted sequence across USB reconnects.
+    Record each claimed number before transmitting, even if USB then fails.
+    A Podman volume must persist this file between container instances.
+    """
+
+    def __init__(self, path):
+        if not path or not os.path.isabs(path):
+            raise ValueError("sequence state needs an absolute persistent path")
+        self.file = open(path, "a+", encoding="ascii")
+        try:
+            fcntl.flock(self.file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.file.seek(0)
+            raw = self.file.read().strip()
+            if raw and (not raw.isdecimal() or int(raw) > 0xffffffff):
+                raise ValueError("corrupt persistent motor sequence state")
+            # Preserve progress even when the system clock jumps backwards.
+            self.current = max(int(time.time()), int(raw) if raw else 0)
+            if self.current >= 0xffff0000:
+                raise RuntimeError("MCU sequence nearly exhausted: inhibit")
+        except BaseException:
+            self.close()
+            raise
+
+    def claim(self):
+        if self.current >= 0xffff0000:
+            raise RuntimeError("MCU sequence nearly exhausted: inhibit")
+        next_seq = self.current + 1
+        self.file.seek(0)
+        self.file.write(str(next_seq) + "\n")
+        self.file.truncate()
+        self.file.flush()
+        os.fsync(self.file.fileno())
+        self.current = next_seq
+        return next_seq
+
+    def close(self):
+        if not self.file.closed:
+            self.file.close()
+
+
 class ManualPulseProtocol:
     """One serial owner; a failed ACK permanently inhibits further motion."""
 
-    def __init__(self, mcu, *, first_sequence, pulse_ms):
+    def __init__(self, mcu, *, first_sequence, pulse_ms, sequence_ledger=None):
         if (type(first_sequence) is not int
                 or not 0 < first_sequence < 0xffff0000):
             raise ValueError("invalid initial MCU sequence")
@@ -66,6 +110,7 @@ class ManualPulseProtocol:
             raise ValueError("pulse outside 20..150 ms")
         self.mcu = mcu
         self.sequence = first_sequence
+        self.sequence_ledger = sequence_ledger
         self.pulse_ms = pulse_ms
         self.faulted = False
 
@@ -88,11 +133,17 @@ class ManualPulseProtocol:
             raise
 
     def _next_seq(self):
-        if self.sequence >= 0xffffffff:
+        try:
+            if self.sequence_ledger is not None:
+                self.sequence = self.sequence_ledger.claim()
+            else:
+                if self.sequence >= 0xffffffff:
+                    raise RuntimeError("MCU sequence exhausted")
+                self.sequence += 1
+            return self.sequence
+        except Exception:
             self.faulted = True
-            raise RuntimeError("MCU sequence exhausted")
-        self.sequence += 1
-        return self.sequence
+            raise
 
     def stop(self):
         # STOP is still attempted after a fault. MCU STOP disables drivers
@@ -153,6 +204,10 @@ class ManualPulseProtocol:
 def main(args=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", default="/dev/ttyACM0")
+    parser.add_argument(
+        "--sequence-state-file", required=True,
+        help="absolute path in a persistently mounted Podman volume; "
+             "prevents stale MCU sequences after restarting container")
     parser.add_argument("--pwm", type=int, default=32)
     parser.add_argument("--duration-ms", type=int, default=150)
     parser.add_argument(
@@ -253,7 +308,10 @@ def main(args=None):
         rclpy.init(args=[])
         node = None
         mcu = None
+        controller = None
+        ledger = None
         try:
+            ledger = MotorSequenceLedger(opts.sequence_state_file)
             # Cooperative exclusive lock requires normal bridge ALSO use
             # pyserial exclusive=True. Do not run concurrently in any case.
             mcu = serial.Serial(opts.port, baudrate=115200, timeout=0.025,
@@ -261,8 +319,8 @@ def main(args=None):
             time.sleep(0.20)
             mcu.reset_input_buffer()
             controller = ManualPulseProtocol(
-                mcu, first_sequence=int(time.time()),
-                pulse_ms=opts.duration_ms)
+                mcu, first_sequence=ledger.current,
+                pulse_ms=opts.duration_ms, sequence_ledger=ledger)
             controller.configure()
             tty.setcbreak(tty_in.fileno())
             node = CommissionNode(tfd=tty_in.fileno(), controller=controller)
@@ -277,6 +335,8 @@ def main(args=None):
                 except Exception as exc:
                     print(f"STOP_UNCONFIRMED: {exc}; use physical cutoff")
                 mcu.close()
+            if ledger is not None:
+                ledger.close()
             if node is not None:
                 node.destroy_node()
             if rclpy.ok():
