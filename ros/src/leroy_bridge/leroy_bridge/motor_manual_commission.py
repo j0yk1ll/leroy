@@ -20,8 +20,8 @@ import tty
 DIRECTIONS = {
     "w": (1, 1, 1, 1),       # forward
     "s": (-1, -1, -1, -1),   # backward
-    "a": (-1, 1, 1, -1),     # left strafe
-    "d": (1, -1, -1, 1),     # right strafe
+    "a": (1, -1, -1, 1),     # left strafe, physically calibrated on Leroy
+    "d": (-1, 1, 1, -1),     # right strafe, physically calibrated on Leroy
     "q": (-1, 1, -1, 1),     # counterclockwise
     "e": (1, -1, 1, -1),     # clockwise
 }
