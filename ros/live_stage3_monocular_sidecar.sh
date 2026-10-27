@@ -36,10 +36,13 @@ done
 printf '%s\n'   'Leroy Stage 3: reuse existing real camera + Nav2 diagnostic costmap.'   'XRSLAM monocular joins isolated DDS graph with NO device mapping.'   'No IMU, MCU/serial access, motor bridge, odometry authorization, map TF,'   'navigation goals or physical motion. Metric localization NOT validated.'   'Camera and TF calibrations remain provisional.'
 printf 'LIVE_STAGE3_XRSLAM=STARTING_MONOCULAR_DIAGNOSTIC_ONLY\n'
 
-# --network/--ipc container joins ONLY the already isolated parent.
+# Only join the network namespace. Stage 2 was launched with --ipc private,
+# so Podman cannot join its IPC namespace (the donor is not shareable).
+# Give XRSLAM private IPC and force Fast DDS UDPv4, disabling SHM transport
+# on this participant; Stage 2's default Fast DDS includes UDPv4.
 # We intentionally do not start another camera, DepthART or static TF owner.
 exec podman run --rm -it --pull=never --name "$sidecar" \
-    --network "container:$parent" --ipc "container:$parent" --pid private \
+    --network "container:$parent" --ipc private --pid private \
     --read-only --cap-drop=all --security-opt=no-new-privileges \
     --tmpfs /tmp:rw,nosuid,nodev,size=256m \
     --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_monocular_diag.yaml,dst=/opt/leroy_stage3_slam.yaml,readonly" \
@@ -47,6 +50,7 @@ exec podman run --rm -it --pull=never --name "$sidecar" \
     -e ROS_DOMAIN_ID=170 \
     -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
     -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+    -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
     -e ROS_LOG_DIR=/tmp/leroy-xrslam-ros \
     -e XDG_CACHE_HOME=/tmp/leroy-xrslam-cache \
     --entrypoint bash "$image" -lc '
