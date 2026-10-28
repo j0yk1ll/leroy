@@ -72,20 +72,26 @@ def _mac(key, fields):
     return hmac.new(key, encoded, hashlib.sha256).hexdigest()
 
 
-def sign_test_motion(*, key, session_id, sequence, generated_ns, expires_ns,
+def sign_motion(*, key, session_id, sequence, generated_ns, expires_ns,
                      vx=0.04, vy=0.0, wz=0.07, owner=OWNER):
-    """Fake issuer helper. Never expose the key through ROS or logs."""
+    """Sign one finite current-session command; never log the key."""
     packet = MotionEnvelope(session_id, owner, sequence, generated_ns,
                             expires_ns, vx, vy, wz, "")
     return MotionEnvelope(**{**packet.__dict__,
                              "mac": _mac(key, _command_fields(packet))})
 
 
-def sign_test_rearm(*, key, session_id, counter, generated_ns, expires_ns):
-    """Fake operator helper. No real operator authentication is supplied."""
+def sign_rearm(*, key, session_id, counter, generated_ns, expires_ns):
+    """Sign explicit operator request. Caller must authenticate locally."""
     packet = RearmEnvelope(session_id, counter, generated_ns, expires_ns, "")
     return RearmEnvelope(**{**packet.__dict__,
                             "mac": _mac(key, _rearm_fields(packet))})
+
+
+# Preserve the existing offline fixture API without making fake test
+# signers the production entry point.
+sign_test_motion = sign_motion
+sign_test_rearm = sign_rearm
 
 
 def _valid_window(generated_ns, expires_ns, now_ns):

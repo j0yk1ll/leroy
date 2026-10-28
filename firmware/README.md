@@ -265,19 +265,42 @@ Commands are ASCII, one command per line.
 
 # 7. Remote command interface
 
-## Platform movement
+## Platform movement — signed-bridge sequenced MCU transport
+
+Legacy `move_platform_*`, `rotate_platform_*` and nonzero
+`set_wheels` now return an error; they can no longer bypass the
+production bridge's signed-command authority. Exact legacy
+`set_wheels 0 0 0 0`, `stop_platform` and `stop_all`
+remain valid stopping commands.
+
+**New MCU protocol (host-internal, not an operator movement API):**
 
 ```text
-move_platform_forward
-move_platform_backward
-move_platform_left
-move_platform_right
-rotate_platform_cw
-rotate_platform_ccw
-stop_platform
+set_wheels_tx <monotonically_increasing_u32_sequence> <FL> <FR> <RL> <RR>
+stop_wheels_tx <u32_sequence>
 ```
 
-Platform movement is persistent: a movement command continues until another platform command, `stop_platform`, `stop_all`, or the optional communications watchdog stops it.
+All four duties must be integers between -64 and +64, in FL/FR/RL/RR
+order. Nonzero wheel transactions require the MCU communications
+watchdog already configured to 1–500 ms and a strictly increasing
+sequence number. The MCU replies
+`ok set_wheels_tx seq=<sequence>` only after accepting the
+command. Replays/stale sequences are rejected. The host permits only
+one wheel transaction awaiting acknowledgement at a time; a STOP
+can preempt it.
+
+`stop_wheels_tx` immediately zeros outputs and **disables wheel
+driver-enable lines**, even with a stale sequence, then replies
+`ok stop_wheels_tx seq=<sequence>`. The acknowledgement proves that
+the MCU command handler ran, **not** that motor power was physically
+disconnected or every wheel stopped moving. No physical E-stop or
+motor-power-cutoff hardware is implemented by this firmware change.
+Manipulator commands remain a separate physical hazard.
+
+The new protocol is source-only in PR #156 until a firmware binary
+is built and explicitly flashed during a separate, supervised robot
+session. Existing flashed MCU firmware must not be assumed to
+understand these new commands.
 
 ## Manipulator movement
 
@@ -347,6 +370,13 @@ Disable the watchdog:
 ```text
 set_watchdog_ms 0
 ```
+
+The firmware powers up with its communication watchdog disabled.
+The new signed-wheel protocol REFUSES nonzero output unless a positive
+watchdog of at most 500 ms is already configured. The bridge requires
+the actual `ok set_watchdog_ms` response and suspends keepalive
+transmissions when signed motor control becomes stale or faults.
+The independent power cutoff must still operate on its own.
 
 When the watchdog is enabled, send periodically while motion is active:
 

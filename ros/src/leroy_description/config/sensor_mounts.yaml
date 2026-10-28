@@ -1,6 +1,6 @@
 # Leroy's fixed robot sensor TF configuration; no URDF/Xacro is required.
 #
-# Only ros/src/leroy_description/launch/live_sensor_mounts.launch.py publishes
+# Only ros/src/leroy_description/launch/description.launch.py publishes
 # these exact six parent->child transforms using tf2_ros static publishers.
 #
 # Parent base_link convention: +X forward, +Y left, +Z up.

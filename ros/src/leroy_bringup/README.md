@@ -26,8 +26,10 @@ The SLAM YAML's `sensor.mode` selects the pipeline:
   `xrslam_camera_imu_offset_sec` is required and the IMU topic defaults to
   `/imu/data_raw`.
 
-The camera optical frame follows `camera_frame`; static transforms come
-from the URDF via `robot_state_publisher`. Both modes retain the
+The camera optical frame follows `camera_frame`; static sensor transforms
+are published from `leroy_description/config/sensor_mounts.yaml` using the
+package's six standard `tf2_ros/static_transform_publisher` nodes. URDF and
+`robot_state_publisher` are no longer used for these frames. Both modes retain the
 `xrslam_pose_convention_validated:=false` default and disabled map TF.
 
 The adapter stays gated with

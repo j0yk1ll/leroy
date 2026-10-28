@@ -19,7 +19,7 @@ For a repeatable image build and safe smoke tests, see
    `tf2_ros`, the common ROS messages, and `yaml-cpp`.
 3. Obtain a **robot-calibrated** SLAM YAML and sensor/noise template YAML.
    The EuRoC example sensor file is NOT a substitute for Leroy's noise or
-   temporal calibration. The URDF/robot_state_publisher owns extrinsics.
+   temporal calibration. The sole YAML-driven `leroy_description` static TF launch owns sensor extrinsics; the URDF/robot_state_publisher path was retired in Stage 3's source candidate. No duplicate static broadcaster may run.
 4. Use `ros2 topic list -t`, `ros2 topic info -v /imu/data_raw`, and
    `ros2 topic info -v <candidate-image-topic>` to identify the actual
    rectified image and matching CameraInfo topics. Both must use the optical

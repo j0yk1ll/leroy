@@ -7,7 +7,6 @@ install(
   DIRECTORY
     launch
     config
-    urdf
   DESTINATION share/${PROJECT_NAME}
 )
 
