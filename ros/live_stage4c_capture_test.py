@@ -61,7 +61,8 @@ class PureCaptureContract(unittest.TestCase):
         self.assertEqual(report["matched_imu_metadata_stamps"], 1)
         self.assertEqual(report["unmatched_imu_stamps"], 0)
         self.assertEqual(report["unmatched_metadata_stamps"], 0)
-        self.assertFalse(report["source_metadata_provenance_verified"])
+        self.assertFalse(report["mcu_metadata_stamp_match_complete"])
+        self.assertFalse(report["physical_source_authenticated"])
 
     def test_complete_bounded_synthetic_capture_does_not_certify_offset(self):
         for k in range(500):
