@@ -34,6 +34,18 @@ class CaptureIngress:
         self._clock = monotonic_ns
         self.terminal_fault = None
 
+    def close(self):
+        """Permanently disarm receipt and release injected writer references.
+
+        In particular, an injected `writer.write` bound method keeps the
+        underlying rosbag2_py.SequentialWriter alive even after the caller
+        deletes its local `writer` variable. Drop that reference BEFORE
+        finalizing/reopening a bag for read-only verification.
+        """
+        if self.terminal_fault is None:
+            self.terminal_fault = "ingress_closed"
+        self._write = None
+
     def accept(self, topic, msg, *, receipt_ns=None):
         if self.terminal_fault is not None:
             raise CaptureError("ingress_terminal_fault_latched")
