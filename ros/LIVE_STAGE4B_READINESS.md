@@ -106,9 +106,57 @@ Building an image does **not** access `/dev/ttyACM0`.
 The image defaults to `/bin/false`. The existing independent
 motor-power cutoff and Stage 4A consent requirements are unchanged.
 
+### Exact next operations after an offline build
+
+The existing launcher normally chooses `localhost/leroy-ros:stage4-imu`
+(the previous accepted image). This branch adds a **strictly allowlisted**
+override `LEROY_STAGE4_IMU_IMAGE=localhost/leroy-ros:stage4b-imu`
+to select the new image deliberately. It refuses arbitrary tags. Before
+MCU use, the wrapper verifies Stage 4B instrumentation inside that image
+in a separate `--network=none`, no-device, read-only container.
+Check the locally built image without MCU:
+
+```bash
+podman image exists localhost/leroy-ros:stage4b-imu
+podman run --rm --pull=never --network=none --read-only \
+  --entrypoint /bin/sh localhost/leroy-ros:stage4b-imu -c '
+  test -s /opt/stage4/live_stage4b_delivery_trace.py
+  grep -F stage4b_delivery_trace /opt/stage4/live_stage4_imu_overlap.py
+'
+```
+
+A **future separately supervised physical session** may use the same
+existing Stage 3 diagnostic parents, but only if they're running and
+the sensor-only startup/fresh live costmap diagnostic have passed,
+motor-driver and manipulator rails are independently disconnected,
+the chassis and E-stop are safe, the operator is present and the stable
+STM32 `/dev/serial/by-id/` identity is checked again. Only then, from
+the Stage 4B `ros` directory:
+
+```bash
+LEROY_STAGE4_IMU_IMAGE=localhost/leroy-ros:stage4b-imu \
+LEROY_STAGE4_MOTOR_ISOLATION_ATTESTED=YES \
+LEROY_STAGE4_MCU_BY_ID=/dev/serial/by-id/<verified-stm32-id> \
+bash ./live_stage4_imu_sidecar.sh
+```
+
+Replace the placeholder by the actually verified stable ID. The script
+again checks the real costmap and explicitly asks `STAGE4_IMU_ONLY`
+before the MCU port opens; it retains the prior 75s supervised START/
+STOP-ACK sequence and guarantees no new motor writes. Look for
+`STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE`,
+`STAGE4A_SELECTED_IMAGE=localhost/leroy-ros:stage4b-imu`
+and `stage4b_delivery_trace` in `STAGE4A_RESULT_JSON`.
+
+A physical Stage 4B run can still be **incomplete** even if Stage 4A
+transport passes; do not silently equate IMU match fraction with DDS
+network loss. Preserve the full console transcript in a new local log
+file without overwriting previous evidence. A missing STOP ACK still
+means unknown MCU state and mandatory continued physical motor cutoff.
+
 **Do not run the Stage 4B instrumented image against the MCU until the
-code, image and physical-session gate are separately reviewed.** Do not
-change Stage 3's live camera or XRSLAM namespaces to make it work.
+code, image and physical-session gate have been separately reviewed.**
+Do not change Stage 3's live camera or XRSLAM namespaces to make it work.
 
 ## Calibration evidence still missing
 
