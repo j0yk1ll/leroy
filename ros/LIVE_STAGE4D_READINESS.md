@@ -83,6 +83,34 @@ This is GitHub source-only CI; it does **not** run the native
 paced DDS+SQLite smoke or authenticate any physical data.
 The latter remains **OPERATOR TEST REQUIRED**.
 
+## First native paced DDS run: SQLite readback blocked, lifecycle fix
+
+The operator's first paced no-device ROS/DDS run opened the disposable
+bag for `READ_WRITE` and advanced to the readback stage. The
+`SequentialReader.open()` then failed with
+`SQLite error (10): disk I/O error` / `No storage could be initialized`.
+**The first native Stage 4D test did not PASS**, even though the source
+checks and message-count gate had been reached. Do not mistake the
+error for a physical camera/IMU timing fault or motor/MCU issue.
+
+Source inspection identified a likely bag-finalization bug:
+`CaptureIngress(..., write=writer.write)` holds a **bound-method
+reference** to `SequentialWriter`. Deleting the separate local
+`writer` variable does *not* close the SQLite writer while ingress
+still holds that reference. The corrected ingress implements
+`close()`, latching the stop state and releasing its bound method;
+the paced DDS/SQLite test invokes `ingress.close()` **before**
+deleting the writer and reopening the bag read-only. The dormant
+Stage 4C recorder now also closes its ingress before finalization.
+New Python weakref regression coverage asserts the writer is
+actually collectible, and that repeated `close()` or a previous
+disk fault never permits further writes.
+
+This is a **candidate fix** until the operator reruns the native
+DDS/SQLite test. A repeat disk I/O error requires investigation of
+temporary storage and rosbag2 SQLite lifecycle, not increasing
+device permissions, relaxing caps or ignoring readback errors.
+
 ## Offline acceptance commands — no devices
 
 The Stage 4D branch is a *new* worktree stacked on the Stage 4C source:
