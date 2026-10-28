@@ -1,37 +1,34 @@
-# leroy_description
+# Leroy robot description and sensor TF
 
-Canonical fixed sensor geometry for Leroy, published once via
-`robot_state_publisher`. The bridge and XRSLAM must not publish duplicate
-static sensor transforms. The TF tree is:
+The **legacy** `description.launch.py` on main remains unchanged and
+uses Xacro with `robot_state_publisher`; the usual robot bringup still
+refers to this entry point.
 
-```text
-base_link
-├── imu_link
-├── front_camera_link
-│   └── front_camera_optical_frame
-│       └── camera_optical_frame
-└── workspace_camera_link
-    └── workspace_camera_optical_frame
-```
+For the separately guarded real-camera Stage 3 integration, use
+`live_sensor_mounts.launch.py`. It reads
+`config/sensor_mounts.yaml` and publishes exactly six fixed sensor TF
+edges with `tf2_ros/static_transform_publisher`. The source YAML is
+**provisional** (not physical calibration). The live costmap launch
+supplies the regular-file copy at `/etc/leroy/sensor_mounts.yaml`, to
+avoid a symlink from colcon's `--symlink-install` mode.
 
-**PROVISIONAL** Xacro values: IMU translation
-`(0.095, -0.095, 0.0)` m with identity rotation; front camera tilted 30°
-down from forward; workspace camera tilted 60° down. Camera translations and
-IMU height are currently zero **approximations**, not measured calibrations.
-Do not mark camera/IMU VIO as validated with these assumptions.
+These two launchers are **alternative TF owners** for overlapping sensor
+frames; do not start both in one ROS graph. The isolated Stage 3 script
+starts only the live sensor TF launcher. It does not start the
+motor-capable bridge, dynamic odom TF, map alignment, planners or
+controllers.
 
-Measure the IMU and front camera 6-DoF extrinsics on the physical robot, verify
-that the IMU uses +X forward, +Y left, +Z up, that the optical frame uses +X
-right, +Y down, +Z forward, and that the rectified image header identifies
-`camera_optical_frame`. Then update the **single authoritative** Xacro. The
-XRSLAM adapter will look up its camera/IMU extrinsics with TF2 rather than
-using duplicated pose values in device YAML.
+Frame topology in the live launcher is fixed:
 
-```bash
-ros2 launch leroy_description description.launch.py
-ros2 run tf2_ros tf2_echo base_link imu_link
-ros2 run tf2_ros tf2_echo base_link camera_optical_frame
-ros2 run tf2_ros tf2_echo base_link workspace_camera_optical_frame
-```
+- `base_link -> imu_link`
+- `base_link -> front_camera_link`
+- `front_camera_link -> front_camera_optical_frame`
+- `front_camera_optical_frame -> camera_optical_frame`
+- `base_link -> workspace_camera_link`
+- `workspace_camera_link -> workspace_camera_optical_frame`
 
-No static `odom -> base_link` or fake identity `map -> odom` belongs here.
+Coordinates are metres and RPY radians. Camera centers and pitch
+are placeholders; `/imu/data_raw` is already robot-axis aligned by
+the MCU, so `imu_link` remains identity rotation. No `odom` or `map`
+edges are created. For the accepted sensor-only runtime and tests, see
+`ros/LIVE_STAGE3_REPRODUCIBLE.md`.
