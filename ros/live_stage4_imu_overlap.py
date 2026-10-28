@@ -8,6 +8,8 @@ M18 START/STOP commands. If STOP ACK is missing, state is UNVERIFIED.
 import json
 import math
 import os
+from pathlib import Path
+import re
 import signal
 import sys
 import time
@@ -188,6 +190,19 @@ def source_metadata_enabled():
 
 def run():
     metadata_enabled = source_metadata_enabled()
+    capture_requested = os.environ.get("LEROY_STAGE4C_RECORD", "0")
+    if capture_requested not in ("0", "1"):
+        raise RuntimeError("invalid_real_capture_mode")
+    capture_armed_path = None
+    if capture_requested == "1":
+        if not metadata_enabled:
+            raise RuntimeError("real_capture_requires_m18_metadata")
+        capture_name = os.environ.get("LEROY_STAGE4C_CAPTURE_NAME", "")
+        if not re.fullmatch(r"stage4c-[a-zA-Z0-9_-]{6,50}", capture_name):
+            raise RuntimeError("invalid_capture_armed_name")
+        capture_armed_path = Path("/capture") / (capture_name + "-armed")
+        if not capture_armed_path.parent.is_dir():
+            raise RuntimeError("capture_read_only_mount_missing")
     for name, value in EXPECTED.items():
         if os.environ.get(name) != value:
             raise RuntimeError("blocked_environment_" + name)
@@ -246,6 +261,22 @@ def run():
         else:
             raise RuntimeError("required_stage3_graph_or_false_validity_not_ready")
         print("STAGE4A_PRE_SERIAL_DDS_GRAPH=PASS", flush=True)
+        if capture_armed_path is not None:
+            # The ROS graph alone does not prove the SQLite writer is open.
+            # Wait for the existing passive recorder to arm its writer
+            # BEFORE even opening the motor-capable STM32 CDC interface.
+            deadline = time.monotonic() + 20.0
+            while time.monotonic() < deadline and not quitting[0]:
+                try:
+                    marker = capture_armed_path.read_text(encoding="ascii")
+                except (OSError, UnicodeError):
+                    marker = ""
+                if marker == "STAGE4C_RECORDER_ARMED=1\n":
+                    break
+                time.sleep(0.05)
+            else:
+                raise RuntimeError("capture_not_armed_before_serial")
+            print("STAGE4C_RECORDER_ARMED_BEFORE_SERIAL=PASS", flush=True)
 
         with serial.Serial(port=PORT, baudrate=115200, timeout=0.08,
                            write_timeout=0.25, exclusive=True) as device:
