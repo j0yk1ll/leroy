@@ -101,8 +101,12 @@ def run_offline():
             raise RuntimeError("missing_or_extra_rosbag_samples")
         if set((topic for topic, _, _ in actual)) != set(TOPICS):
             raise RuntimeError("rosbag_topic_set_mismatch")
-        for (topic, raw, stamp), (actual_topic, original_raw, original_stamp) in zip(actual, expected):
-            if topic != actual_topic or stamp != original_stamp or bytes(raw) != bytes(original_raw):
+        # Timestamp ties are legal (especially IMU+MCU metadata); SQLite
+        # does not promise the relative order of equal-time topic records.
+        originals = {topic: (raw, stamp) for topic, raw, stamp in expected}
+        for topic, raw, stamp in actual:
+            original_raw, original_stamp = originals[topic]
+            if stamp != original_stamp or bytes(raw) != bytes(original_raw):
                 raise RuntimeError("rosbag_cdr_timestamp_or_payload_mismatch")
             message = deserialize_message(raw, types[topic])
             if topic == "/stage4c/imu_source_meta":
