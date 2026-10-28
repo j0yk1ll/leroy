@@ -1,5 +1,7 @@
 """Stage 4D no-device validation, fault injection and virtual 75-second load."""
+import gc
 import json
+import weakref
 from pathlib import Path
 from types import SimpleNamespace as NS
 import unittest
@@ -138,6 +140,45 @@ class IngressNoDevice(unittest.TestCase):
         self.assertEqual(self.calls, [])
         self.assertEqual(self.policy.counts["/imu/data_raw"], 0)
 
+    def test_close_releases_bound_writer_reference_before_read_only_replay(self):
+        class FakeBagWriter:
+            def write(self, _topic, _raw, _stamp):
+                return None
+
+        writer = FakeBagWriter()
+        ref = weakref.ref(writer)
+        ingress = CaptureIngress(
+            contract=CaptureContract(), serialize=lambda msg: msg.cdr,
+            write=writer.write)
+        ingress.accept("/imu/data_raw", imu(T0), receipt_ns=R0+1)
+        del writer
+        gc.collect()
+        self.assertIsNotNone(
+            ref(), "An ingress holding writer.write keeps the writer alive")
+        ingress.close()
+        gc.collect()
+        self.assertIsNone(
+            ref(), "Closing ingress must release its bound writer reference")
+        with self.assertRaisesRegex(CaptureError, "ingress_terminal_fault_latched"):
+            ingress.accept("/imu/data_raw", imu(T0+20_000_000),
+                           receipt_ns=R0+20_000_001)
+        ingress.close()  # idempotent
+
+    def test_close_preserves_existing_failure_reason_and_blocks_writes(self):
+        def fail(_topic, _raw, _stamp):
+            raise OSError("disk_full")
+        ingress = CaptureIngress(
+            serialize=lambda msg: msg.cdr, write=fail)
+        with self.assertRaisesRegex(OSError, "disk_full"):
+            ingress.accept("/imu/data_raw", imu(T0), receipt_ns=R0+1)
+        prior = ingress.terminal_fault
+        ingress.close()
+        self.assertEqual(ingress.terminal_fault, prior)
+        self.assertIsNone(ingress._write)
+        with self.assertRaisesRegex(CaptureError, "ingress_terminal_fault_latched"):
+            ingress.accept("/imu/data_raw", imu(T0+20_000_000),
+                           receipt_ns=R0+20_000_001)
+
     def test_virtual_75s_50hz_imu_and_30hz_camera_no_disk_or_dds(self):
         """12k callbacks/75s virtual clock; NOT a real DDS throughput test."""
         policy = CaptureContract()
@@ -187,6 +228,10 @@ class IntegrationGuards(unittest.TestCase):
         self.assertIn("from live_stage4d_capture_ingress import CaptureIngress", recorder)
         self.assertIn("self.ingress = CaptureIngress(", recorder)
         self.assertIn("self.ingress.accept(topic, msg)", recorder)
+        self.assertIn("node.ingress.close()", recorder)
+        load = (HERE / "live_stage4d_synthetic_load.py").read_text()
+        self.assertIn("ingress.close()", load)
+        self.assertLess(load.index("ingress.close()"), load.index("del writer"))
         self.assertIn("LIVE_CAPTURE_COMMISSIONED = False", recorder)
         self.assertIn('STAGE4C=BLOCKED_LIVE_CAPTURE_NOT_COMMISSIONED', recorder)
         self.assertNotIn("serial.Serial(", recorder)
