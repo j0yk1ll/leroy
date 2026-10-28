@@ -30,12 +30,14 @@ jobs:
             ros/live_stage4c_passive_recorder.py \
             ros/live_stage4c_source_meta.py \
             ros/live_stage4c_source_meta_test.py \
+            ros/live_stage4c_source_meta_ros.py \
+            ros/live_stage4c_source_meta_ros_test.py \
             ros/live_stage4c_rosbag_smoke.py \
             ros/live_stage4c_capture_test.py
       - name: Pure no-device fault and safety contracts
         run: |
           cd ros
-          python -m unittest -v live_stage4c_capture_test live_stage4c_source_meta_test
+          python -m unittest -v live_stage4c_capture_test live_stage4c_source_meta_test live_stage4c_source_meta_ros_test
           python -Werror::SyntaxWarning live_stage4c_passive_recorder.py --contract-smoke
       - name: Block accidental Stage 4C runtime activation
         run: |
