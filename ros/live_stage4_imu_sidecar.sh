@@ -39,7 +39,9 @@ if [[ "$image" == localhost/leroy-ros:stage4b-imu ]]; then
       --read-only --cap-drop=all --security-opt=no-new-privileges \
       --entrypoint /bin/sh "$image" -c '
         test -s /opt/stage4/live_stage4b_delivery_trace.py
+        test -s /opt/stage4/live_stage4b_spin_budget.py
         grep -Fq "stage4b_delivery_trace" /opt/stage4/live_stage4_imu_overlap.py
+        grep -Fq "service_callbacks(" /opt/stage4/live_stage4_imu_overlap.py
       ' || fail STAGE4B_IMAGE_TRACE_NOT_INSTALLED
     echo 'STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE'
 fi
