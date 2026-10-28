@@ -147,6 +147,32 @@ syntactic, per-sample agreement only; all reports retain
 `physical_source_authenticated=false` and
 `physical_camera_imu_offset_validated=false`.
 
+### Simulated source-side ROS metadata publisher — still disconnected
+
+The draft now also contains `live_stage4c_source_meta_ros.py`:
+a **non-executable, source-only** wrapper that can turn a validated
+M18 post-publication metadata JSON into `std_msgs/msg/String`,
+using the already-existing `/m18_imu_source` Node rather than
+instantiating another source. It demands the expected source
+name/namespace and rejects topic remapping. These checks only
+verify the supplied node's identifiers; they are not physical
+provenance authentication.
+
+The wrapper is **NOT** copied into the candidate passive-recorder
+image, NOT imported by M18 or the accepted Stage 4B sidecar, and
+has no executable launch path. `live_stage4c_source_meta_ros_test.py`
+uses a **fake M18 node/publisher** to check exact metadata payloads,
+publisher failures, missing MCU ticks, source identity guards and
+unchanged Stage 4B wiring. No ROS graph or device is started.
+
+The next gate is an independently reviewed, no-device
+simulated-ROS integration test that verifies the accepted M18
+publish callback, the source-side metadata publisher and the
+passive recorder can coexist under bounded callback load without
+altering the required START/STOP safety contract. Do not wire
+or run live based on these fake-node tests.
+
+
 The policy limits payload to 900 MB of *serialized messages*,
 20,000 total records, at most 4 MB per message and 75 seconds.
 Serialized payload is **not** an exact on-disk quota; SQLite
@@ -166,7 +192,8 @@ git worktree add --detach ../leroy-stage4c \
   origin/feature/stage4c-calibration-evidence-plan
 cd ../leroy-stage4c/ros
 PYTHONDONTWRITEBYTECODE=1 python3 -Werror::SyntaxWarning -m unittest -v \
-  live_stage4c_capture_test live_stage4c_source_meta_test
+  live_stage4c_capture_test live_stage4c_source_meta_test \
+  live_stage4c_source_meta_ros_test
 PYTHONDONTWRITEBYTECODE=1 python3 -Werror::SyntaxWarning \
   live_stage4c_passive_recorder.py --contract-smoke
 ```
