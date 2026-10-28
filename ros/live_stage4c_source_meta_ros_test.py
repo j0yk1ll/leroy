@@ -152,6 +152,14 @@ class RosAdapterSimulation(unittest.TestCase):
         ):
             self.assertIn(token, wrapper)
         self.assertIn("LIVE_CAPTURE_COMMISSIONED = False", recorder)
+        runner = (HERE / "live_stage4_imu_overlap.py").read_text()
+        self.assertIn('capture_not_armed_before_serial', runner)
+        self.assertIn('STAGE4C_RECORDER_ARMED_BEFORE_SERIAL=PASS', runner)
+        self.assertIn('STAGE4C_RECORDER_ARMED=1', recorder)
+        self.assertIn('armed_path.open("x"', recorder)
+        self.assertIn('armed_path.unlink()', recorder)
+        self.assertIn('record_mount=(-v "$capture_root:/capture:ro")', wrapper)
+        self.assertIn('"${record_mount[@]}"', wrapper)
         self.assertIn("if not LIVE_CAPTURE_COMMISSIONED:", recorder)
         # No hardware passthrough or motor command in the recorder segment.
         recorder_run = wrapper.split('    trap cleanup_capture EXIT', 1)[1].split(
