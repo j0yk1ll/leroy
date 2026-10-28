@@ -165,12 +165,88 @@ uses a **fake M18 node/publisher** to check exact metadata payloads,
 publisher failures, missing MCU ticks, source identity guards and
 unchanged Stage 4B wiring. No ROS graph or device is started.
 
-The next gate is an independently reviewed, no-device
-simulated-ROS integration test that verifies the accepted M18
-publish callback, the source-side metadata publisher and the
-passive recorder can coexist under bounded callback load without
-altering the required START/STOP safety contract. Do not wire
-or run live based on these fake-node tests.
+### Disconnected DDS/ROS bag integration candidate — synthetic only
+
+`live_stage4c_synthetic_dds_bag.py` uses a real `rclpy` graph
+inside a **disposable, network-disconnected, device-free** container.
+It creates a **FAKE M18-named ROS node** (not the actual M18
+`ImuStreamSource`), a fake camera publisher, and a synthetic
+capture-contract subscriber. The fake M18 node publishes 12 synthetic
+IMU samples; the actual `SourceMetadataRosAdapter` publishes
+matching synthetic `seq/t_us` metadata after each IMU publish.
+The fake camera publishes matching 2x2 synthetic Image and CameraInfo.
+A bounded callback loop requires all 48 ROS receipts before a
+temporary SQLite rosbag2 write/read comparison. The script refuses
+to run unless `ROS_DOMAIN_ID=171`, local-only discovery, the
+accepted Fast DDS RMW and `LEROY_STAGE4C_SYNTHETIC_ONLY=1` are set,
+and the known camera/MCU/GPIO device paths are absent.
+
+**Limitations:** This is actual ROS 2 DDS integration but still
+**synthetic provenance**. It does NOT construct the real M18 source,
+does NOT connect to or exercise the hard-disabled Stage 4C passive
+recorder entrypoint, does NOT stress delivery at full real sensor
+rates, and does NOT exercise the MCU START/STOP ACK path. Its
+12 synthetic samples intentionally yield
+`BLOCKED_INCOMPLETE_CAPTURE`; the test only checks internal
+per-message matching, replay and fail-closed reporting. A pass is
+**not** authority for a real capture.
+
+From the existing Stage 4C `ros` worktree, first fetch the new
+source-only test:
+
+```bash
+git status --short
+git fetch origin feature/stage4c-calibration-evidence-plan
+git merge --ff-only FETCH_HEAD
+PYTHONDONTWRITEBYTECODE=1 python3 -Werror::SyntaxWarning -m unittest -v \
+  live_stage4c_capture_test live_stage4c_source_meta_test \
+  live_stage4c_source_meta_ros_test live_stage4c_synthetic_dds_test
+```
+
+The above commands need only host Python; **no ROS**, devices or
+containers. The disposable ROS test below uses the already-built
+`localhost/leroy-ros:stage4c-capture-offline` image; **no rebuild
+required**. Bind the new source tree read-only:
+
+```bash
+podman run --rm --pull=never \
+  --network=none --ipc=private --pid=private \
+  --read-only --cap-drop=all --security-opt=no-new-privileges \
+  --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+  -v "$PWD:/offline:ro" \
+  -e PYTHONPATH=/offline:/opt/stage4c \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e ROS_DOMAIN_ID=171 \
+  -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+  -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+  -e LEROY_STAGE4C_SYNTHETIC_ONLY=1 \
+  -e ROS_LOG_DIR=/tmp/stage4c-ros \
+  -e XDG_CACHE_HOME=/tmp/stage4c-cache \
+  --entrypoint bash \
+  localhost/leroy-ros:stage4c-capture-offline -lc '
+    set -e
+    source /opt/ros/jazzy/setup.bash
+    source /leroy_ws/install/setup.bash
+    exec python3 -u /offline/live_stage4c_synthetic_dds_bag.py
+  '
+```
+
+Expected, if the operator's real disconnected ROS graph and bag
+storage pass:
+
+```text
+STAGE4C_SYNTHETIC_DDS_BAG_INTEGRATION=PASS_NO_DEVICE
+STAGE4C_SYNTHETIC_IMU_META_MATCHED=12
+STAGE4C_LIVE_CAPTURE_AUTHORIZED=FALSE
+STAGE4C_PHYSICAL_CALIBRATION_VALIDATED=FALSE
+```
+
+Only after an independent operator run should this stage be
+described as passed. The next gate after that remains **separate
+live-sidecar integration review, callback load testing and physical
+safety authorization**. Do not alter the accepted M18 runner,
+MCU STOP-ACK contract or live-capture hard block.
+
 
 
 The policy limits payload to 900 MB of *serialized messages*,
