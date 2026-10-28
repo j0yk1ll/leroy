@@ -20,6 +20,26 @@ class Stage4aStatic(unittest.TestCase):
         cls.dockerfile = (HERE / "Dockerfile.live-stage4-imu").read_text()
         cls.run_ast = ast.parse(cls.supervisor)
 
+    def test_all_observed_streams_have_timestamp_tracker(self):
+        """Catch CameraInfo KeyError in the callback before opening serial."""
+        klass = next(n for n in self.run_ast.body
+                     if isinstance(n, ast.ClassDef) and n.name == "PassiveOverlap")
+        constructor = next(n for n in klass.body
+                           if isinstance(n, ast.FunctionDef) and n.name == "__init__")
+        literal = {}
+        for n in ast.walk(constructor):
+            if isinstance(n, ast.Assign):
+                for target in n.targets:
+                    if (isinstance(target, ast.Attribute)
+                            and isinstance(target.value, ast.Name)
+                            and target.value.id == "self"
+                            and target.attr in ("counts", "last_stamp")):
+                        literal[target.attr] = ast.literal_eval(n.value)
+        self.assertEqual(set(literal["last_stamp"]), {"image", "info", "imu"})
+        self.assertTrue(set(literal["last_stamp"]).issubset(literal["counts"]))
+        for name in ("image", "info", "imu"):
+            self.assertIn(f'self._take("{name}"', self.supervisor)
+
     def test_only_prevalidated_m18_serial_commands(self):
         self.assertEqual(m18.START, b"set_imu_stream_hz 50\r\n")
         self.assertEqual(m18.STOP, b"set_imu_stream_hz 0\r\n")
