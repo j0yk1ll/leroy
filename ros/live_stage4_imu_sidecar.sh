@@ -27,7 +27,9 @@ if [[ "$record_mode" == 1 ]]; then
         fail CAPTURE_ROOT_MUST_BE_OWNED_REAL_PATH
     [[ ! -e "$capture_root/$capture_name" &&
        ! -L "$capture_root/$capture_name" &&
-       ! -e "$capture_root/$capture_name-capture-summary.json" ]] ||
+       ! -e "$capture_root/$capture_name-capture-summary.json" &&
+       ! -e "$capture_root/$capture_name-armed" &&
+       ! -L "$capture_root/$capture_name-armed" ]] ||
         fail CAPTURE_OUTPUT_ALREADY_EXISTS
     free_kib="$(df -Pk -- "$capture_root" | awk 'END {print $4}')"
     [[ "$free_kib" =~ ^[0-9]+$ && "$free_kib" -ge 1500000 ]] ||
@@ -192,6 +194,13 @@ if [[ "$record_mode" == 1 ]]; then
     [[ "$(podman inspect --format '{{.State.Running}}' "$capture_container" 2>/dev/null)" == true ]] ||
         fail RECORDER_FAILED_BEFORE_MCU_OPEN
 fi
+# Only the capture-mode IMU sidecar gets a read-only view of the
+# recorder's one-run armed marker; the recorder retains its own
+# device-free read/write output mount.
+record_mount=()
+if [[ "$record_mode" == 1 ]]; then
+    record_mount=(-v "$capture_root:/capture:ro")
+fi
 printf 'STAGE4A_SELECTED_IMAGE=%s\n' "$image"
 echo 'STAGE4A=STARTING_PHYSICAL_IMU_ONLY'
 # Shared container-private network+IPC+PID avoids Fast DDS shared-memory
@@ -202,6 +211,7 @@ timeout --foreground --signal=INT --kill-after=30s 130s \
   --network "container:$parent" --ipc "container:$parent" \
   --pid "container:$parent" \
   --device="$mcu:/dev/ttyACM0:rw" --group-add keep-groups \
+  "${record_mount[@]}" \
   --read-only --cap-drop=all --security-opt=no-new-privileges \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   -e ROS_DOMAIN_ID=170 \
@@ -210,6 +220,8 @@ timeout --foreground --signal=INT --kill-after=30s 130s \
   -e LEROY_STAGE4_IMU_ONLY=1 \
   -e LEROY_STAGE4C_SOURCE_META="${LEROY_STAGE4C_SOURCE_META:-0}" \
   -e LEROY_STAGE4C_CAPTURE_ONLY="${LEROY_STAGE4C_SOURCE_META:-0}" \
+  -e LEROY_STAGE4C_RECORD="$record_mode" \
+  -e LEROY_STAGE4C_CAPTURE_NAME="${capture_name:-}" \
   -e LEROY_NAV2_DRY_RUN=1 \
   -e ROS_LOG_DIR=/tmp/stage4a-ros \
   -e XDG_CACHE_HOME=/tmp/stage4a-cache \
