@@ -250,6 +250,9 @@ def _run_live(name):
         failure = type(exc).__name__ + ":" + str(exc)
     finally:
         node.running = False
+        # Disarm callbacks and release any injected writer reference before
+        # finalizing the SQLite bag or recording a failure manifest.
+        node.ingress.close()
         if node.writer is not None:
             del node.writer
             node.writer = None
