@@ -49,7 +49,7 @@ def run_offline():
     # No live capture/MCU node; create only disposable, fake ROS sources.
     rclpy.init(args=[])
     source = camera = receiver = None
-    writer = reader = None
+    writer = reader = ingress = None
     try:
         source = Node("m18_imu_source", enable_rosout=False,
                       start_parameter_services=False)
@@ -229,6 +229,11 @@ def run_offline():
                     report["physical_source_authenticated"] is not False or
                     report["physical_camera_imu_offset_validated"] is not False):
                 raise CaptureError("stage4d_synthetic_contract_invalid")
+            # FIRST detach the bound writer.write method retained by
+            # CaptureIngress. Merely deleting the local writer variable
+            # leaves rosbag2's SQLite writer open, which can produce
+            # SQLITE_IOERR(10) on subsequent read-only open.
+            ingress.close()
             del writer
             writer = None
             gc.collect()
@@ -269,6 +274,10 @@ def run_offline():
         print("STAGE4D_PHYSICAL_CALIBRATION_VALIDATED=FALSE", flush=True)
         return 0
     finally:
+        # Also release a still-bound CDR writer on all failed paths before
+        # the temporary bag directory is discarded.
+        if ingress is not None:
+            ingress.close()
         if reader is not None:
             del reader
         if writer is not None:
