@@ -15,7 +15,7 @@ class LiveCostmapStaticTest(unittest.TestCase):
         self.assertIn("LEROY_LIVE_COSTMAP_DIAGNOSTIC", source)
         self.assertIn('os.path.exists("/dev/ttyACM0")', source)
         self.assertIn('"live_depth_pipeline.launch.py"', source)
-        self.assertIn('"description.launch.py"', source)
+        self.assertIn('"live_sensor_mounts.launch.py"', source)
         self.assertIn('"sensor_mounts_file": "/etc/leroy/sensor_mounts.yaml"', source)
         self.assertIn('"costmap_fixture"', source)
         for denied in ('package="leroy_bridge"',
