@@ -209,6 +209,14 @@ class StaticNonActuation(unittest.TestCase):
         self.assertIn('CMD ["/bin/false"]', docker)
         self.assertNotIn("ENTRYPOINT", docker)
         self.assertIn("live_stage4c_passive_recorder.py", docker)
+        # ROS 2 Jazzy Python modules are installed under ROS-managed
+        # paths: import checks MUST source Jazzy and the Leroy overlay.
+        self.assertIn("source /opt/ros/jazzy/setup.bash", docker)
+        self.assertIn("source /leroy_ws/install/setup.bash", docker)
+        self.assertIn('python3 -c "import rosbag2_py; import rclpy"', docker)
+        self.assertLess(
+            docker.index("source /opt/ros/jazzy/setup.bash"),
+            docker.index('python3 -c "import rosbag2_py; import rclpy"'))
 
     def test_graph_requires_single_source_provenance_and_no_devices(self):
         s = (HERE / "live_stage4c_passive_recorder.py").read_text()
