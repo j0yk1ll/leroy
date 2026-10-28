@@ -48,6 +48,10 @@ class Stage4aStatic(unittest.TestCase):
             "camera_imu_absolute_offset_validated",
             "camera_imu_extrinsics_validated",
             "xrslam_vio_started", "metric_odometry_authorized",
+            'result["counts"]["stale_or_future_withheld"] == 0',
+            'result["counts"]["calibration_withheld"] == 0',
+            'result["counts"]["invalid_ascii_lines"] == 0',
+            'result["counts"]["unexpected_serial_lines"] == 0',
             "STAGE4A_IMU_OVERLAP=",
             "PASS_TRANSPORT_ONLY",
         ):
@@ -78,6 +82,8 @@ class Stage4aStatic(unittest.TestCase):
             "timeout --foreground", "--signal=INT",
             "LEROY_STAGE4_IMU_ONLY=1",
             "LEROY_NAV2_DRY_RUN=1",
+            "ros2 run leroy_nav2_perception live_costmap_probe",
+            "LIVE_STAGE3_COSTMAP_NOT_ACCEPTED",
         ):
             self.assertIn(token, s)
         for forbidden in (
