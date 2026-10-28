@@ -28,7 +28,8 @@ jobs:
       - name: Syntax only; no ROS runtime or devices
         run: |
           python -m compileall -q ros/live_stage4b_evidence_audit.py \
-            ros/live_stage4b_delivery_trace.py ros/live_stage4b_test.py \
+            ros/live_stage4b_delivery_trace.py ros/live_stage4b_spin_budget.py \
+            ros/live_stage4b_test.py \
             ros/live_stage4_imu_overlap.py
           bash -n ros/live_stage4_imu_sidecar.sh
       - name: Stage 4B audit and exact-stamp tests
