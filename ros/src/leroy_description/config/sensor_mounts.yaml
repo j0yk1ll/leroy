@@ -1,0 +1,44 @@
+# Leroy's fixed robot sensor TF configuration; no URDF/Xacro is required.
+#
+# Only ros/src/leroy_description/launch/description.launch.py publishes
+# these exact six parent->child transforms using tf2_ros static publishers.
+#
+# Parent base_link convention: +X forward, +Y left, +Z up.
+# xyz values are METRES. rpy values are RADIANS (roll, pitch, yaw).
+# Frame names/topology are fixed by the launcher and cannot be changed by
+# YAML content. The numbers below preserve the former URDF exactly.
+#
+# WARNING: physical mount positions/angles are PROVISIONAL. Zero camera
+# translations are placeholders, not measured optical centers. No change
+# to this file authorizes XRSLAM metric pose, map TF, Nav2 or motion.
+#
+# The MCU already outputs robot-aligned IMU values (+forward=-ICM X,
+# +left=-ICM Y, +up=+ICM Z). Keep the imu_link rpy identity to avoid
+# rotating the chip axes twice. Firmware axes are configured separately
+# in PR #155.
+#
+# 'fixed_frames' contain ROS standard optical-axis rotations and a
+# compatibility alias; they were previously fixed joints in Xacro.
+status: provisional
+
+mounts:
+  imu:
+    xyz: [0.095, -0.095, 0.0]
+    rpy: [0.0, 0.0, 0.0]
+  front_camera:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [0.0, 0.5235987755982988, 0.0]
+  workspace_camera:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [0.0, 1.0471975511965976, 0.0]
+
+fixed_frames:
+  front_camera_optical:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [-1.5707963267948966, 0.0, -1.5707963267948966]
+  workspace_camera_optical:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [-1.5707963267948966, 0.0, -1.5707963267948966]
+  camera_optical_alias:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [0.0, 0.0, 0.0]
