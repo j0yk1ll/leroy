@@ -1,0 +1,32 @@
+# Stage 4C candidate: isolated, passive ROS bag recorder only.
+# NEVER launches a ROS graph, opens devices or enables capture by default.
+# Live capture in script is hard-blocked pending separate hardware approval.
+FROM localhost/leroy-ros:stage4b-imu
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      ros-jazzy-rosbag2-py \
+      ros-jazzy-rosbag2-storage-default-plugins \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY live_stage4c_capture_contract.py /opt/stage4c/live_stage4c_capture_contract.py
+COPY live_stage4c_passive_recorder.py /opt/stage4c/live_stage4c_passive_recorder.py
+COPY live_stage4c_source_meta.py /opt/stage4c/live_stage4c_source_meta.py
+COPY live_stage4c_rosbag_smoke.py /opt/stage4c/live_stage4c_rosbag_smoke.py
+ENV PYTHONPATH=/opt/stage4c
+
+# ROS Python bindings are under /opt/ros/jazzy and the installed overlay,
+# not the bare system Python search path. Source the exact Jazzy/overlay
+# environment before importing rosbag2_py or rclpy in this build check.
+RUN bash -lc 'set -e; \
+    source /opt/ros/jazzy/setup.bash; \
+    source /leroy_ws/install/setup.bash; \
+    python3 -m py_compile \
+      /opt/stage4c/live_stage4c_capture_contract.py \
+      /opt/stage4c/live_stage4c_passive_recorder.py \
+      /opt/stage4c/live_stage4c_source_meta.py \
+      /opt/stage4c/live_stage4c_rosbag_smoke.py; \
+    python3 -c "import rosbag2_py; import rclpy"; \
+    python3 /opt/stage4c/live_stage4c_passive_recorder.py --contract-smoke'
+
+CMD ["/bin/false"]
