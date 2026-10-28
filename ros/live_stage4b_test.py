@@ -8,6 +8,7 @@ import unittest
 
 from live_stage4b_evidence_audit import EvidenceError, audit, parse_text
 from live_stage4b_delivery_trace import DeliveryTrace
+from live_stage4b_spin_budget import service_callbacks
 
 ROOT = Path(__file__).resolve().parent
 
@@ -127,6 +128,56 @@ class OfflineAudit(unittest.TestCase):
             parse_text("z" * (2 * 1024 * 1024 + 1))
         with self.assertRaises(EvidenceError):
             parse_text("a" * 80001)
+
+
+class BoundedSpin(unittest.TestCase):
+    def test_more_than_one_spin_per_serial_iteration(self):
+        state = {"t": 0.0, "spins": 0, "checks": 0}
+        def clock():
+            return state["t"]
+        def spin():
+            state["spins"] += 1
+            state["t"] += 0.002
+        def check():
+            state["checks"] += 1
+        attempts, elapsed = service_callbacks(
+            spin, check, monotonic=clock, max_spins=8, budget_s=0.006)
+        self.assertEqual(attempts, 3)
+        self.assertEqual(state["spins"], 3)
+        self.assertEqual(state["checks"], 3)
+        self.assertAlmostEqual(elapsed, 0.006)
+
+    def test_limit_and_exception_propagation(self):
+        state = {"t": 0.0, "spins": 0}
+        def clock():
+            return state["t"]
+        def spin():
+            state["spins"] += 1
+        n, _ = service_callbacks(spin, lambda: None, monotonic=clock)
+        self.assertEqual(n, 8)  # hard cap even if clock has not advanced
+        self.assertEqual(state["spins"], 8)
+        def fail():
+            raise RuntimeError("unexpected_odom_message")
+        with self.assertRaisesRegex(RuntimeError, "unexpected_odom_message"):
+            service_callbacks(spin, fail, monotonic=clock)
+        self.assertEqual(state["spins"], 9)
+        for kwargs in (
+            {"max_spins": 0}, {"max_spins": 9}, {"budget_s": 0},
+            {"budget_s": 0.009}, {"budget_s": float("inf")},
+        ):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                service_callbacks(spin, lambda: None, **kwargs)
+
+    def test_serial_bounded_multi_spin_integration(self):
+        script = (ROOT / "live_stage4_imu_overlap.py").read_text()
+        image = (ROOT / "Dockerfile.live-stage4-imu").read_text()
+        self.assertIn("from live_stage4b_spin_budget import service_callbacks", script)
+        self.assertIn("lambda: rclpy.spin_once(observer, timeout_sec=0.0)", script)
+        self.assertIn('spin_stats["spin_attempts"] += attempts', script)
+        self.assertIn('"stage4b_executor_service": {', script)
+        self.assertIn("send_only_whitelisted_serial_command(device, STOP)", script)
+        self.assertIn("COPY live_stage4b_spin_budget.py", image)
+        self.assertIn('CMD ["/bin/false"]', image)
 
 
 class StampMatching(unittest.TestCase):
