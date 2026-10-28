@@ -22,8 +22,27 @@ mcu_rdev="$(stat -Lc '%t:%T' -- "$mcu")" || fail MCU_RDEV_MISSING
 
 parent=leroy-live-costmap
 sidecar=leroy-stage4-imu
-image=localhost/leroy-ros:stage4-imu
+# Preserve the accepted Stage 4A image by default. Stage 4B must be
+# selected deliberately and ONLY from this exact locally built image tag.
+case "${LEROY_STAGE4_IMU_IMAGE:-localhost/leroy-ros:stage4-imu}" in
+    localhost/leroy-ros:stage4-imu)
+        image=localhost/leroy-ros:stage4-imu ;;
+    localhost/leroy-ros:stage4b-imu)
+        image=localhost/leroy-ros:stage4b-imu ;;
+    *) fail UNAPPROVED_STAGE4_IMAGE ;;
+esac
 podman image exists "$image" || fail STAGE4A_IMAGE_NOT_BUILT
+# Read-only, zero-device preflight for the Stage 4B image, BEFORE opening
+# the motor-capable MCU or prompting for a new physical attempt.
+if [[ "$image" == localhost/leroy-ros:stage4b-imu ]]; then
+    podman run --rm --pull=never --network=none \
+      --read-only --cap-drop=all --security-opt=no-new-privileges \
+      --entrypoint /bin/sh "$image" -c '
+        test -s /opt/stage4/live_stage4b_delivery_trace.py
+        grep -Fq "stage4b_delivery_trace" /opt/stage4/live_stage4_imu_overlap.py
+      ' || fail STAGE4B_IMAGE_TRACE_NOT_INSTALLED
+    echo 'STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE'
+fi
 [[ "$(podman inspect --format '{{.State.Running}}' "$parent" 2>/dev/null)" == true ]] ||
     fail STAGE3_PARENT_NOT_RUNNING
 [[ "$(podman inspect --format '{{.HostConfig.NetworkMode}}' "$parent")" == none ]] ||
@@ -64,6 +83,7 @@ read -r -p 'Type STAGE4_IMU_ONLY to authorize this bounded serial session: ' app
    "$(stat -Lc '%t:%T' "$mcu")" == "$mcu_rdev" ]] ||
     fail MCU_CHANGED_AFTER_APPROVAL
 
+printf 'STAGE4A_SELECTED_IMAGE=%s\n' "$image"
 echo 'STAGE4A=STARTING_PHYSICAL_IMU_ONLY'
 # Shared container-private network+IPC+PID avoids Fast DDS shared-memory
 # namespace collisions; no host namespace, no camera or bridge device.
