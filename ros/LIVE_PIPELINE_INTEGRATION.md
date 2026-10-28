@@ -125,9 +125,8 @@ camera frames reached its actual native submission API; identified
 DDS node and latched message transport work in *both* containers;
 Nav2 diagnostic costmap still marks real DepthART samples concurrently.
 These observations establish app/DDS integration, not tracking quality.
-The supplied console outputs do not include a fresh
-`/xrslam/localization_valid` message or a bounded zero-`/odom`
-observation. The adapter was started with
+The operator subsequently verified the final safety gates from the
+Stage 2 container (see below). The adapter was started with
 `pose_convention_validated=false` and `enable_map_tf=false`; keep
 these gates unchanged. The monocular run is **still initializing**, so
 neither metric odometry nor dynamic `odom -> base_link` nor SLAM map
@@ -157,11 +156,26 @@ podman exec leroy-live-costmap bash -lc '
 '
 ```
 
-The expected safety state is `data: false`, and the negative
-`/odom` test should time out. A ROS `/odom` publisher endpoint alone
-is not evidence of odometry messages: the XRSLAM adapter constructs
-the publisher during initialization but gates publishing. If either
-gate fails, investigate; do not enable pose TF to force PASS.
+**Observed final Stage 3 safety gate (2026-10-28):**
+
+```text
+=== Localization validity ===
+data: false
+VALIDITY_ECHO_RC=0
+=== Odometry inhibition ===
+ODOM_ECHO_RC=124
+```
+
+The `/xrslam/localization_valid` status reached the Stage 2 container
+and reported false. The `timeout 6s ros2 topic echo /odom` command
+returned 124, proving no odometry message arrived **in that six-second
+observation window**. The adapter was launched with
+`pose_convention_validated=false` and `enable_map_tf=false`.
+The ROS `/odom` publisher endpoint is constructed during initialization,
+but it does not establish that any odometry messages were published.
+Thus **Stage 3 monocular transport and safety gating PASS** while
+**native tracking/metric localization remain NOT VALIDATED**.
+Do not enable pose TF to force PASS.
 Next substantive stage is genuine **visual-inertial tracking** using
 the previously tested protected STM32 IMU stream, with a new supervised
 hardware session, independent power isolation, and calibration gates
