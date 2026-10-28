@@ -196,7 +196,6 @@ def run():
             if observer.failures:
                 raise RuntimeError(observer.failures[0])
             if (observer.graph_ready() and observer.valid_status is False
-            and observer.map_valid_status is False
                     and observer.map_valid_status is False):
                 break
         else:
@@ -263,6 +262,7 @@ def run():
             and counts.get("tf", 0) == 0
             and overlap >= 15.0
             and observer.valid_status is False
+            and observer.map_valid_status is False
             and not observer.failures
         )
         print("STAGE4A_RESULT_JSON=" + json.dumps({
