@@ -7,7 +7,6 @@ physical sensor provenance. Run only in rootless, no-network, private IPC/PID,
 no-device Podman with tmpfs. Fail closed on gaps, disk error and bad graph.
 """
 import gc
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,6 +17,7 @@ from live_stage4c_capture_contract import (
     CaptureContract, CaptureError, METADATA_TOPIC, TOPICS, source_metadata,
 )
 from live_stage4d_capture_ingress import CaptureIngress
+from live_stage4d_bag_audit import ExactWriteBagAudit
 from live_stage4c_source_meta_ros import SourceMetadataRosAdapter
 from live_stage4c_synthetic_dds_bag import check_isolation, FORBIDDEN_TOPICS
 
@@ -49,7 +49,7 @@ def run_offline():
     # No live capture/MCU node; create only disposable, fake ROS sources.
     rclpy.init(args=[])
     source = camera = receiver = None
-    writer = reader = ingress = None
+    writer = reader = ingress = audit = None
     try:
         source = Node("m18_imu_source", enable_rosout=False,
                       start_parameter_services=False)
@@ -71,7 +71,6 @@ def run_offline():
         }
         errors = []
         counts = dict.fromkeys(TOPICS, 0)
-        replay_hashes = {}
         last_publish_ns = {}
         delivery_ms = []
 
@@ -89,9 +88,13 @@ def run_offline():
                     serialization_format="cdr"))
 
             contract = CaptureContract(duration_s=30)
+            # The audit hashes only the CDR buffer ACTUALLY passed to
+            # writer.write. Independent ROS2 serializations of one message
+            # can have different CDR padding bytes.
+            audit = ExactWriteBagAudit(writer.write)
             ingress = CaptureIngress(
                 contract=contract, serialize=lambda msg: bytes(
-                    serialize_message(msg)), write=writer.write)
+                    serialize_message(msg)), write=audit.write)
             subscriptions = []
             for topic, cls in types.items():
                 def receive(msg, name=topic):
@@ -105,14 +108,11 @@ def run_offline():
                             int(msg.header.stamp.sec) * 1_000_000_000
                             + int(msg.header.stamp.nanosec))
                         key = (name, stamp)
-                        if key in replay_hashes:
+                        if key in audit.expected:
                             raise CaptureError("duplicate_stage4d_receipt")
+                        # Exactly ONE serialization inside ingress; audit
+                        # records its exact byte buffer after writer succeeds.
                         ingress.accept(name, msg, receipt_ns=received_ns)
-                        # Hash the exact payload stored via the same ingress
-                        # serializer and writer path used by the dormant
-                        # Stage 4C candidate. Do not retain image payloads.
-                        replay_hashes[key] = hashlib.sha256(
-                            serialize_message(msg)).digest()
                         counts[name] += 1
                         sent_ns = last_publish_ns.get(key)
                         if sent_ns is not None:
@@ -234,6 +234,7 @@ def run_offline():
             # leaves rosbag2's SQLite writer open, which can produce
             # SQLITE_IOERR(10) on subsequent read-only open.
             ingress.close()
+            audit.close()
             del writer
             writer = None
             gc.collect()
@@ -246,20 +247,16 @@ def run_offline():
                 rosbag2_py.ConverterOptions(
                     input_serialization_format="cdr",
                     output_serialization_format="cdr"))
-            actual = {}
             while reader.has_next():
                 topic, raw, stamp = reader.read_next()
-                key = (topic, stamp)
-                if key in actual or key not in replay_hashes:
-                    raise CaptureError("stage4d_bad_bag_topic_stamp")
-                actual[key] = hashlib.sha256(bytes(raw)).digest()
+                audit.verify_readback(topic, raw, stamp)
                 if topic == METADATA_TOPIC:
                     record = source_metadata(
                         deserialize_message(raw, String).data)
                     if record["imu_stamp_ns"] != stamp:
                         raise CaptureError("stage4d_metadata_stamp_changed")
-            if actual != replay_hashes:
-                raise CaptureError("stage4d_bag_payload_or_count_mismatch")
+            if audit.verify_complete() != sum(counts.values()):
+                raise CaptureError("stage4d_bag_record_count_mismatch")
             del reader
             reader = None
             gc.collect()
@@ -278,6 +275,8 @@ def run_offline():
         # the temporary bag directory is discarded.
         if ingress is not None:
             ingress.close()
+        if audit is not None:
+            audit.close()
         if reader is not None:
             del reader
         if writer is not None:
