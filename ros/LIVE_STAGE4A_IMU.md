@@ -91,7 +91,9 @@ It refuses to run as root, refuses host network/IPC/PID namespaces,
 refuses unexpected device identity, requires shareable IPC and a
 privately isolated Stage 3 parent, refuses an MCU visible inside
 either Stage 3 container, and refuses to overwrite any named existing
-sidecar. Only this new disposable child maps `/dev/ttyACM0`.
+sidecar. It also executes a fresh read-only Stage 3 costmap acceptance probe
+**before** prompting for MCU-session consent or mapping the serial device.
+Only this new disposable child maps `/dev/ttyACM0`.
 The child's filesystem is read-only, capabilities are dropped and its
 run is bounded. It does not map `/dev/video2`.
 
