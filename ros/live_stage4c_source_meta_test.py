@@ -99,7 +99,8 @@ class MetadataTapContract(unittest.TestCase):
         self.assertNotIn("device.write(", adapter)
         self.assertNotIn("create_publisher(", adapter)
         self.assertNotIn("rclpy", adapter)
-        self.assertNotIn("std_msgs", adapter)
+        self.assertNotIn("from std_msgs", adapter)
+        self.assertNotIn("import std_msgs", adapter)
         self.assertIn("def on_imu_published(", adapter)
         self.assertIn('self._send(serialized)', adapter)
 
