@@ -146,17 +146,95 @@ def audit(report):
     for key in ("absolute_mcu_camera_offset_validated", "spatial_imu_extrinsics_validated",
                 "gyro_noise_validated", "xrslam_ready"):
         _require(src.get(key) is False, "unsafe_source_claim:" + key)
+    # Optional new Stage 4B per-message trace. Older real Stage 4A logs
+    # contain only aggregate source/observer counters and remain auditable.
+    trace = report.get("stage4b_delivery_trace")
+    trace_verified = False
+    delivery_complete_in_run = False
+    matched = None
+    if trace is not None:
+        _require(isinstance(trace, dict) and
+                 trace.get("trace_schema") == "leroy_stage4b_imu_stamp_v1",
+                 "invalid_stage4b_trace_schema")
+        _require(trace.get("calibration_ready") is False and
+                 trace.get("not_physical_camera_imu_offset") is True and
+                 trace.get("not_proof_of_dds_packet_loss") is True,
+                 "unsafe_stage4b_trace_claim")
+        source_hooks = _int(trace.get("source_after_publish_callbacks"),
+                            "trace_source_hooks", 1)
+        observer_hooks = _int(trace.get("subscriber_receive_callbacks"),
+                              "trace_observer_hooks", 1)
+        matched = _int(trace.get("matched_exact_header_stamps"),
+                       "trace_matched_stamps", 1)
+        source_unmatched = _int(trace.get("source_unmatched_stamps"),
+                                "trace_source_unmatched")
+        observer_unmatched = _int(trace.get("subscriber_unmatched_stamps"),
+                                  "trace_subscriber_unmatched")
+        _require(source_hooks == published and observer_hooks == observed
+                 and matched + source_unmatched == published
+                 and matched + observer_unmatched == observed,
+                 "stage4b_trace_count_mismatch")
+        match_ratio = _finite(trace.get("match_fraction_of_source"),
+                              "trace_match_fraction", 0.0, 1.0)
+        _require(abs(match_ratio - matched / published) <= 0.000001,
+                 "stage4b_trace_match_fraction_mismatch")
+        _require(_int(trace.get("negative_host_monotonic_delays"),
+                      "trace_negative_delays") == 0 and
+                 trace.get("source_out_of_order") is False and
+                 trace.get("subscriber_out_of_order") is False,
+                 "stage4b_trace_timestamp_fault")
+        p50 = _finite(trace.get("callback_delivery_delay_ms_p50"),
+                      "trace_callback_p50_ms", 0)
+        p95 = _finite(trace.get("callback_delivery_delay_ms_p95"),
+                      "trace_callback_p95_ms", 0)
+        maximum = _finite(trace.get("callback_delivery_delay_ms_max"),
+                          "trace_callback_max_ms", 0)
+        _require(p50 <= p95 <= maximum, "stage4b_trace_delay_order")
+        trace_verified = True
+        delivery_complete_in_run = (
+            matched == published and source_unmatched == 0
+            and observer_unmatched == 0)
+    service = report.get("stage4b_executor_service")
+    executor_verified = False
+    if service is not None:
+        _require(trace_verified and isinstance(service, dict),
+                 "unattributed_executor_service")
+        iterations = _int(service.get("serial_loop_iterations"),
+                          "executor_serial_iterations", 1)
+        attempts = _int(service.get("nonblocking_spin_attempts"),
+                        "executor_spin_attempts", 1)
+        _require(iterations == published and
+                 iterations <= attempts <= 8 * iterations,
+                 "executor_spin_count_inconsistent")
+        # An individual callback is non-preemptible: do not treat the
+        # between-callback 8ms budget as a hard wall-clock deadline.
+        _finite(service.get("max_callback_burst_ms"),
+                "executor_max_burst_ms", 0)
+        _require(service.get("spin_attempts_are_not_callbacks") is True and
+                 service.get("physical_calibration_validated") is False,
+                 "unsafe_executor_claim")
+        executor_verified = True
+    blockers = [
+        "unknown_camera_exposure_to_imu_acquisition_offset",
+        "unverified_camera_imu_rigid_extrinsics",
+        "unverified_imu_noise_and_bias",
+        "no_validated_metric_VIO_or_pose_convention",
+    ]
+    if not trace_verified:
+        blockers.append("no_per_message_DDS_subscriber_matching_or_latency_trace")
+    elif not delivery_complete_in_run:
+        blockers.append("incomplete_exact_stamp_subscriber_delivery_in_this_run")
+    else:
+        blockers.append("end_to_end_delivery_not_qualified_across_loads_or_time")
     return {
         "audit": "STAGE4B_OFFLINE_STAGE4A_EVIDENCE_VALID",
         "stage4a_transport_pass": True,
         "stage4b_calibration_ready": False,
-        "stage4b_blockers": [
-            "unknown_camera_exposure_to_imu_acquisition_offset",
-            "unverified_camera_imu_rigid_extrinsics",
-            "unverified_imu_noise_and_bias",
-            "no_per_message_DDS_subscriber_matching_or_latency_trace",
-            "no_validated_metric_VIO_or_pose_convention",
-        ],
+        "stage4b_blockers": blockers,
+        "stage4b_exact_stamp_trace_verified": trace_verified,
+        "stage4b_delivery_complete_in_this_run": delivery_complete_in_run,
+        "stage4b_observed_exact_stamp_matches": matched,
+        "stage4b_executor_service_verified": executor_verified,
         "duration_s": duration,
         "receipt_overlap_s": overlap,
         "source_imu_received": received,
