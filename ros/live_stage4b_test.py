@@ -49,6 +49,42 @@ def example():
     }
 
 
+def example_stage4b():
+    # Fixture transcribed from the operator-provided 2026-10-28 live
+    # bounded scheduler retest. It is NOT a raw timing-record replay.
+    e = example()
+    e["counts"] = {"image": 1044, "imu": 3750, "info": 1512,
+                   "odom": 0, "tf": 0}
+    e["overlap_receipt_s"] = 74.957
+    e["source"]["clock_rate_estimate_ppm"] = -28.62
+    e["stage4b_delivery_trace"] = {
+        "trace_schema": "leroy_stage4b_imu_stamp_v1",
+        "calibration_ready": False,
+        "callback_delivery_delay_ms_max": 20.395,
+        "callback_delivery_delay_ms_p50": 0.69,
+        "callback_delivery_delay_ms_p95": 3.528,
+        "match_fraction_of_source": 1.0,
+        "matched_exact_header_stamps": 3750,
+        "negative_host_monotonic_delays": 0,
+        "not_physical_camera_imu_offset": True,
+        "not_proof_of_dds_packet_loss": True,
+        "source_after_publish_callbacks": 3750,
+        "source_out_of_order": False,
+        "source_unmatched_stamps": 0,
+        "subscriber_out_of_order": False,
+        "subscriber_receive_callbacks": 3750,
+        "subscriber_unmatched_stamps": 0,
+    }
+    e["stage4b_executor_service"] = {
+        "max_callback_burst_ms": 10.981,
+        "nonblocking_spin_attempts": 29916,
+        "physical_calibration_validated": False,
+        "serial_loop_iterations": 3750,
+        "spin_attempts_are_not_callbacks": True,
+    }
+    return e
+
+
 def transcript(report=None):
     from live_stage4b_evidence_audit import MARKERS
     report = example() if report is None else report
@@ -72,6 +108,64 @@ class OfflineAudit(unittest.TestCase):
         self.assertTrue(result["not_a_DDS_packet_loss_rate"])
         self.assertFalse(result["enable_metric_odometry"])
         self.assertFalse(result["enable_motors"])
+
+    def test_real_stage4b_complete_delivery_but_not_calibration(self):
+        r = audit(parse_text(transcript(example_stage4b())))
+        self.assertTrue(r["stage4b_exact_stamp_trace_verified"])
+        self.assertTrue(r["stage4b_delivery_complete_in_this_run"])
+        self.assertTrue(r["stage4b_executor_service_verified"])
+        self.assertEqual(r["stage4b_observed_exact_stamp_matches"], 3750)
+        self.assertFalse(r["stage4b_calibration_ready"])
+        self.assertFalse(r["enable_metric_odometry"])
+        self.assertFalse(r["enable_motors"])
+        self.assertIn(
+            "end_to_end_delivery_not_qualified_across_loads_or_time",
+            r["stage4b_blockers"])
+        self.assertNotIn(
+            "no_per_message_DDS_subscriber_matching_or_latency_trace",
+            r["stage4b_blockers"])
+
+    def test_real_stage4b_trace_inconsistencies_block_audit(self):
+        changes = (
+            ("stage4b_delivery_trace", "source_unmatched_stamps", 1),
+            ("stage4b_delivery_trace", "matched_exact_header_stamps", 3749),
+            ("stage4b_delivery_trace", "subscriber_receive_callbacks", 3749),
+            ("stage4b_delivery_trace", "source_after_publish_callbacks", 3749),
+            ("stage4b_delivery_trace", "match_fraction_of_source", 0.50),
+            ("stage4b_delivery_trace", "negative_host_monotonic_delays", 1),
+            ("stage4b_delivery_trace", "source_out_of_order", True),
+            ("stage4b_delivery_trace", "not_proof_of_dds_packet_loss", False),
+            ("stage4b_delivery_trace", "calibration_ready", True),
+            ("stage4b_delivery_trace", "callback_delivery_delay_ms_p95", 0.01),
+            ("stage4b_executor_service", "nonblocking_spin_attempts", 30001),
+            ("stage4b_executor_service", "serial_loop_iterations", 3749),
+            ("stage4b_executor_service", "physical_calibration_validated", True),
+        )
+        for outer, key, value in changes:
+            with self.subTest(field=(outer, key)):
+                e = example_stage4b()
+                e[outer][key] = value
+                with self.assertRaises(EvidenceError):
+                    audit(e)
+
+    def test_partial_exact_trace_is_not_full_delivery(self):
+        e = example_stage4b()
+        e["counts"]["imu"] = 1379
+        trace = e["stage4b_delivery_trace"]
+        trace["matched_exact_header_stamps"] = 1379
+        trace["subscriber_receive_callbacks"] = 1379
+        trace["source_unmatched_stamps"] = 2371
+        trace["match_fraction_of_source"] = 0.367733
+        trace["callback_delivery_delay_ms_p50"] = 80.236
+        trace["callback_delivery_delay_ms_p95"] = 81.65
+        trace["callback_delivery_delay_ms_max"] = 86.404
+        e.pop("stage4b_executor_service")
+        r = audit(e)
+        self.assertTrue(r["stage4b_exact_stamp_trace_verified"])
+        self.assertFalse(r["stage4b_delivery_complete_in_this_run"])
+        self.assertFalse(r["stage4b_executor_service_verified"])
+        self.assertIn("incomplete_exact_stamp_subscriber_delivery_in_this_run",
+                      r["stage4b_blockers"])
 
     def test_actual_lifecycle_sequence_is_not_duplicate_acceptance(self):
         raw = transcript()
