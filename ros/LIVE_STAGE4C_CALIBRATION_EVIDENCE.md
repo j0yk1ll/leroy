@@ -85,7 +85,8 @@ design-only document.
 
 ## New Stage 4C recorder candidate — offline-only, not commissioned
 
-This draft branch now includes:
+This draft branch now includes the following offline-only candidates
+(no sensor sessions or calibration are authorized):
 
 - `live_stage4c_capture_contract.py`: **pure-Python** validated receipt
   policy for exactly `/camera/image_rect` (`sensor_msgs/Image`),
@@ -105,11 +106,15 @@ This draft branch now includes:
 - `Dockerfile.live-stage4c-capture`: separate image FROM the accepted
   local Stage 4B image, no source or bridge modifications,
   `CMD ["/bin/false"]`. It installs the rosbag2 writer dependencies.
-- `live_stage4c_capture_test.py` and the Stage 4C GitHub
-  `no-device-contract` workflow: synthetic acceptance, missing source
-  metadata, fake MCU sequence corruption, bad/duplicate stamps,
-  quota, malformed JSON, unsafe topics, disk-write exception,
-  no-device and no-actuation contract checks.
+- `live_stage4c_capture_test.py` and
+  `live_stage4c_source_meta_test.py`, executed by the Stage 4C
+  GitHub `no-device-contract` workflow: **24/24 tests** on the
+  candidate branch. They exercise synthetic capture acceptance,
+  missing/invalid source metadata, MCU sequence and tick wrap,
+  source callback failure latching, timestamp regressions,
+  quota, malformed JSON, unsafe topics, disk-write exceptions,
+  the Python 3.14 `return`-in-`finally` regression,
+  and the no-device/no-actuation hard gate.
 
 **Hard live gate:** `LIVE_CAPTURE_COMMISSIONED = False` and
 `STAGE4C=BLOCKED_LIVE_CAPTURE_NOT_COMMISSIONED` by default. The
