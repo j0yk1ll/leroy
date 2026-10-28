@@ -168,6 +168,26 @@ class StampMatching(unittest.TestCase):
         self.assertEqual(r["negative_host_monotonic_delays"], 1)
         self.assertIsNone(r["callback_delivery_delay_ms_p95"])
 
+    def test_launcher_explicitly_selects_verified_stage4b_image(self):
+        launcher = (ROOT / "live_stage4_imu_sidecar.sh").read_text()
+        for token in (
+            "LEROY_STAGE4_IMU_IMAGE",
+            "localhost/leroy-ros:stage4-imu",
+            "localhost/leroy-ros:stage4b-imu",
+            "UNAPPROVED_STAGE4_IMAGE",
+            "STAGE4B_IMAGE_TRACE_NOT_INSTALLED",
+            "STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE",
+            "--network=none",
+            "--read-only",
+            'printf \'STAGE4A_SELECTED_IMAGE=%s',
+            "--device=\"$mcu:/dev/ttyACM0:rw\"",
+            "STAGE4_IMU_ONLY",
+            "LIVE_STAGE3_COSTMAP_NOT_ACCEPTED",
+        ):
+            self.assertIn(token, launcher)
+        self.assertNotIn("--network=host", launcher)
+        self.assertNotIn("--privileged", launcher)
+
     def test_integrated_image_stays_mcu_isolated(self):
         script = (ROOT / "live_stage4_imu_overlap.py").read_text()
         image = (ROOT / "Dockerfile.live-stage4-imu").read_text()
