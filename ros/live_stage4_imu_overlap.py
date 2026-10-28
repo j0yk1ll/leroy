@@ -19,6 +19,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image, CameraInfo, Imu
 from std_msgs.msg import Bool
+from tf2_msgs.msg import TFMessage
 
 from m18_imu_stream_contract import START, STOP, PORT
 from m18_imu_stream_source import (
@@ -51,12 +52,13 @@ class PassiveOverlap(Node):
     def __init__(self):
         super().__init__("leroy_stage4_passive_overlap", enable_rosout=False,
                          start_parameter_services=False)
-        self.counts = {"image": 0, "info": 0, "imu": 0, "odom": 0}
+        self.counts = {"image": 0, "info": 0, "imu": 0, "odom": 0, "tf": 0}
         self.spans = {"image": [None, None], "imu": [None, None]}
         self.first_stamp = {"image": None, "imu": None}
         self.last_stamp = {"image": None, "imu": None}
         self.failures = []
         self.valid_status = None
+        self.map_valid_status = None
         self._subs = [
             self.create_subscription(
                 Image, "/camera/image_rect",
@@ -74,7 +76,14 @@ class PassiveOverlap(Node):
                 Odometry, "/odom", self._odom,
                 QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)),
             self.create_subscription(
+                TFMessage, "/tf", self._tf,
+                QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)),
+            self.create_subscription(
                 Bool, "/xrslam/localization_valid", self._valid,
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.TRANSIENT_LOCAL)),
+            self.create_subscription(
+                Bool, "/xrslam/map_localization_valid", self._map_valid,
                 QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                            durability=DurabilityPolicy.TRANSIENT_LOCAL)),
         ]
@@ -114,10 +123,19 @@ class PassiveOverlap(Node):
         self.counts["odom"] += 1
         self.failures.append("unexpected_odom_message")
 
+    def _tf(self, _msg):
+        self.counts["tf"] += 1
+        self.failures.append("unexpected_dynamic_tf_message")
+
     def _valid(self, msg):
         self.valid_status = bool(msg.data)
         if msg.data:
             self.failures.append("unexpected_localization_authority")
+
+    def _map_valid(self, msg):
+        self.map_valid_status = bool(msg.data)
+        if msg.data:
+            self.failures.append("unexpected_map_localization_authority")
 
     def overlap_s(self):
         a, b = self.spans["image"], self.spans["imu"]
@@ -177,7 +195,9 @@ def run():
             rclpy.spin_once(observer, timeout_sec=0.05)
             if observer.failures:
                 raise RuntimeError(observer.failures[0])
-            if observer.graph_ready() and observer.valid_status is False:
+            if (observer.graph_ready() and observer.valid_status is False
+            and observer.map_valid_status is False
+                    and observer.map_valid_status is False):
                 break
         else:
             raise RuntimeError("required_stage3_graph_or_false_validity_not_ready")
@@ -240,6 +260,7 @@ def run():
             and counts.get("imu", 0) >= 500
             and counts.get("info", 0) >= 100
             and counts.get("odom", 0) == 0
+            and counts.get("tf", 0) == 0
             and overlap >= 15.0
             and observer.valid_status is False
             and not observer.failures
