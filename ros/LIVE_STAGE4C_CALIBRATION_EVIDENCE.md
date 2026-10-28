@@ -117,19 +117,30 @@ module's only approved executable path for now is
 `--contract-smoke`, which imports no ROS runtime, creates no
 output files, and connects to no hardware.
 
-**Critical remaining dependency:** Stage 4B's M18 post-publish
-callback sees original MCU `seq` and `t_us`, but its accepted
-source does **not** publish `/stage4c/imu_source_meta`.
-Stage 4C deliberately requires that provenance stream before
-claiming even a complete set of offline inputs. A future separately
-reviewed Stage 4C **source-side metadata adapter** must emit
-one `std_msgs/String` per actual successful IMU publication with
-schema `leroy_stage4c_mcu_v1`, exact original MCU sequence/ticks,
-mapped IMU stamp and source monotonic time, while preserving the
-existing serial STOP guarantee and hardware isolation.
-**No metadata publisher is implemented or approved here**.
-Faking ticks from ROS headers or using receive times as MCU ticks
-is forbidden.
+**Critical remaining integration dependency:** Stage 4B's M18
+post-publish callback sees original MCU `seq` and `t_us`,
+but its accepted runtime does **not** publish
+`/stage4c/imu_source_meta`. Stage 4C requires that real source
+feed before even describing a complete recorded input set.
+`live_stage4c_source_meta.py` is now a **pure-Python, source-only,
+fail-closed, unconnected** adapter for the accepted M18
+`on_imu_published(fields, stamp_ns, steady_ns)` hook. It validates
+original `seq`/`t_us`, uint32 wrap and source stamp order,
+takes a **new post-publication monotonic timestamp** (not the
+earlier clock-mapper observation), and passes canonical JSON to an
+injected sender. Synthetic tests prove the sequence, tick, timestamp
+and sender-failure latches. The module imports no ROS runtime,
+creates no publisher and has **not** been wired into M18 or the
+STM32 sidecar. A separate reviewed source-side ROS
+`std_msgs/String` publisher still needs to use it with
+the exact `leroy_stage4c_mcu_v1` schema and the accepted STOP
+contract. Faking ticks from ROS headers or treating callback
+receipts as MCU acquisition ticks is forbidden.
+
+The contract's `mcu_metadata_stamp_match_complete` refers to
+syntactic, per-sample agreement only; all reports retain
+`physical_source_authenticated=false` and
+`physical_camera_imu_offset_validated=false`.
 
 The policy limits payload to 900 MB of *serialized messages*,
 20,000 total records, at most 4 MB per message and 75 seconds.
@@ -149,8 +160,10 @@ git fetch origin feature/stage4c-calibration-evidence-plan
 git worktree add --detach ../leroy-stage4c \
   origin/feature/stage4c-calibration-evidence-plan
 cd ../leroy-stage4c/ros
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v live_stage4c_capture_test
-PYTHONDONTWRITEBYTECODE=1 python3 live_stage4c_passive_recorder.py --contract-smoke
+PYTHONDONTWRITEBYTECODE=1 python3 -Werror::SyntaxWarning -m unittest -v \
+  live_stage4c_capture_test live_stage4c_source_meta_test
+PYTHONDONTWRITEBYTECODE=1 python3 -Werror::SyntaxWarning \
+  live_stage4c_passive_recorder.py --contract-smoke
 ```
 
 Both commands require no third-party Python dependencies. The
@@ -172,10 +185,53 @@ podman run --rm --pull=never \
   /offline/live_stage4c_passive_recorder.py --contract-smoke
 ```
 
-The ROS bag writer adapter and proposed image are **source-only
-candidates** until they pass a separate network-isolated synthetic
-ROS bag read/write smoke test. Do not launch the candidate in the
-real sensor graph or remove the live hard gate based on unit tests.
+The recorder initially generated a Python 3.14 warning because its
+cleanup `finally` block contained a `return` and could suppress
+an exception. The branch now places the return **after** cleanup;
+the AST regression test rejects any recurrence.
+
+### Offline synthetic ROS 2 bag round-trip — no physical devices
+
+The proposed image includes
+`live_stage4c_rosbag_smoke.py`. It writes and reads
+**synthetic** Image, CameraInfo, Imu and original-tick-shaped
+metadata with Jazzy `rosbag2_py` in an automatically deleted
+SQLite bag inside an ephemeral `/tmp`. This tests preserved
+serialized CDR bytes, per-topic type names, header stamps,
+pixel content, MCU sequence and acquisition-tick fields. It
+**never** creates a ROS node, opens a camera/MCU or infers a
+physical offset.
+
+From the Stage 4C `ros` worktree, and only after source-only
+tests pass, you may build an offline candidate image (apt dependency
+resolution may require network during **build only**, not for the
+subsequent test):
+
+```bash
+podman build -f Dockerfile.live-stage4c-capture \
+  -t localhost/leroy-ros:stage4c-capture-offline .
+```
+
+Then run this deliberately disconnected, no-device smoke:
+
+```bash
+podman run --rm --pull=never \
+  --network=none --ipc=private --pid=private \
+  --read-only --cap-drop=all --security-opt=no-new-privileges \
+  --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  --entrypoint python3 localhost/leroy-ros:stage4c-capture-offline \
+  /opt/stage4c/live_stage4c_rosbag_smoke.py
+```
+
+Require
+`STAGE4C_SYNTHETIC_ROSBAG_ROUNDTRIP=PASS_NO_DEVICE` and
+`STAGE4C_PHYSICAL_CALIBRATION_VALIDATED=FALSE`.
+
+The ROS bag writer adapter and this new image remain **source-only
+candidates** until the actual disconnected smoke is independently
+run on the operator's local Podman installation. Do not launch
+the candidate in the real sensor graph or remove the hard live gate.
 
 ## Future capture contract — requires separate review/authorization
 
