@@ -44,7 +44,7 @@ def generate_launch_description():
         # but description.load_sensor_transforms correctly refuses symlinks.
         # Pass the immutable-at-build COPY as a real regular file instead.
         _include(
-            "leroy_description", "live_sensor_mounts.launch.py",
+            "leroy_description", "description.launch.py",
             launch_arguments={
                 "sensor_mounts_file": "/etc/leroy/sensor_mounts.yaml",
             }),

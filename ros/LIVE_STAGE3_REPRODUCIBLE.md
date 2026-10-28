@@ -25,8 +25,8 @@ started. **Motor-driver rails must be independently disconnected.**
 
 Your existing feature checkout contains uncommitted tracked deletions and
 untracked logs. Do **not** reset, clean or indiscriminately stash them. Once
-this scoped PR has been merged, obtain the reproducible main-branch startup
-in a **separate worktree**:
+the feature-to-main promotion PR is merged, obtain the full main-branch
+codebase in a **separate worktree**:
 
 ```bash
 cd /home/kevin/Code/leroy
@@ -35,8 +35,17 @@ git worktree add --detach ../leroy-stage3-main origin/main
 cd ../leroy-stage3-main/ros
 ```
 
-Do not use the old feature checkout as the source of a main-branch build.
-Run the static contracts without any hardware:
+This main branch will also contain motor-authority source and MCU firmware
+development. **Those files are not invoked by this Stage 3 runner** and their
+presence does not certify motor commissioning or permit physical movement.
+The feature branch's YAML-based `description.launch.py` is now the
+canonical sensor TF launcher; an additional
+`live_sensor_mounts.launch.py` offers an equivalent dedicated entry point.
+The older URDF file is kept as historical source only, and ordinary
+`robot.launch.py` is **not** part of this guarded diagnostic startup.
+
+Do not use the old dirty feature checkout as the source of a main-branch
+build. Run the static contracts without any hardware:
 
 ```bash
 bash -n live_stage3_build.sh live_stage3_start.sh live_stage3_monocular_sidecar.sh

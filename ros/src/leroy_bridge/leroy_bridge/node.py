@@ -8,20 +8,35 @@ import rclpy
 from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Imu
+from rclpy.qos import (
+    DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy,
+)
+from nav_msgs.msg import Odometry, OccupancyGrid
+from sensor_msgs.msg import Imu, Image
+from std_msgs.msg import String, Bool
 from tf2_ros import TransformBroadcaster
+from tf2_msgs.msg import TFMessage
 from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
 from leroy_bridge.command_ingress import command_to_bytes, CommandRejected
 from leroy_bridge.bridge_signed_audit import BridgeSignedAudit
 from leroy_bridge.bridge_diagnostic_supervisor import BridgeDiagnosticSupervisor
+from leroy_bridge.authorized_session import (
+    MotionEnvelope, RearmEnvelope, SessionVerifier,
+)
+from leroy_bridge.motor_authority import MotorAuthority, HEALTH_KEYS
+from leroy_bridge.motor_cdc_protocol import MotorCdcProtocol
+from leroy_bridge.motor_sensor_health import MotorSensorHealth
+from leroy_bridge.motor_gpio_feedback import PhysicalMotorFeedback
+from leroy_bridge.motor_signed_ingress import (
+    MotorInputRejected, parse_signed_envelope, read_protected_key,
+)
 
 import serial
 
 
+_MOTOR_STOP = object()
 _KEY_VALUE_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=(-?\d+)')
 class McuClock:
     """Wrap the hardware-clock estimator with the ROS clock and message type."""
@@ -80,6 +95,25 @@ class LeroyBridgeNode(Node):
                                descriptor=ParameterDescriptor(read_only=True))
         self.declare_parameter('max_pwm', 255,
                                descriptor=ParameterDescriptor(read_only=True))
+        # Both role keys must come from protected files. Empty-by-default
+        # means no signed actuator ROS ingress or signing session at all.
+        self.declare_parameter(
+            'motor_motion_key_file', '',
+            descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter(
+            'motor_operator_key_file', '',
+            descriptor=ParameterDescriptor(read_only=True))
+        # Read-only FEEDBACK from an independent external motor cutoff.
+        # No GPIO line IDs are invented: unconfigured means no motor release.
+        self.declare_parameter(
+            'motor_gpio_chip', '',
+            descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter(
+            'motor_estop_feedback_offset', -1,
+            descriptor=ParameterDescriptor(read_only=True))
+        self.declare_parameter(
+            'motor_power_feedback_offset', -1,
+            descriptor=ParameterDescriptor(read_only=True))
 
         # Encoder/odometry calibration. The right-side encoders are currently
         # unavailable, so odometry can explicitly run in a degraded mode using
@@ -145,15 +179,29 @@ class LeroyBridgeNode(Node):
             TransformBroadcaster(self)
             if self._degraded_odometry_enabled and self._publish_odom_tf else None
         )
-        # M22D deliberately has NO /cmd_vel subscription. Raw Twist commands
-        # are not an authorized actuator interface. No alternative motion
-        # ingress is enabled in this milestone.
+        # M22D deliberately has NO raw /cmd_vel subscription. The new
+        # signed-only motion/rearm interfaces are provisioned separately;
+        # without independent physical readiness they cannot reach CDC.
 
+        # The signed MotorAuthority handoff is now recognized by the sole
+        # CDC writer. This deployment has no trusted hardware interlock
+        # provider or key custody yet; production physical release remains
+        # structurally unavailable (not a user-togglable ROS parameter).
+        self._motor_authority = None
+        self._motor_cdc = None
+        self._motor_stop_requested = False
+        self._motor_feedback = None
+        self._motor_health = None
+        self._motor_hardware_release_verified = False
         self._serial_lock = threading.Lock()
         self._transport_fault = threading.Event()
         self._clock_mapper = McuClock(self)
         self._clock_fault = False
         self._stop_event = threading.Event()
+        # Firmware boots with watchdog DISABLED. Trust only MCU ACK.
+        self._motor_watchdog_ack = threading.Event()
+        # Validate optional signer custody BEFORE opening real MCU CDC.
+        self._configure_signed_motor_ingress()
         self._last_imu_seq: Optional[int] = None
         self._last_encoder_seq: Optional[int] = None
 
@@ -187,13 +235,19 @@ class LeroyBridgeNode(Node):
         )
         self._reader.start()
 
-        self._send_command(f'set_watchdog_ms {self._watchdog_ms}')
+        watchdog_write_ok = self._send_command(
+            f'set_watchdog_ms {self._watchdog_ms}')
+        if not watchdog_write_ok and self._motor_authority is not None:
+            self._motor_authority.stop()
         self._send_command(f'set_imu_stream_hz {self._imu_stream_hz}')
         self._send_command(f'set_encoder_stream_hz {self._encoder_stream_hz}')
 
         self._keepalive_timer = self.create_timer(
             self._keepalive_period_s, self._send_keepalive
         )
+        if self._motor_authority is not None:
+            # A single 20 Hz bridge-owned authority evaluator.
+            self._motor_timer = self.create_timer(0.05, self._motor_tick)
 
         if self._publish_odom_tf and not self._degraded_odometry_enabled:
             self.get_logger().warning(
@@ -214,15 +268,207 @@ class LeroyBridgeNode(Node):
         # No geometry, PWM gain, ROS remap or runtime parameter can
         # enable motion under the M22D CDC allowlist.
         self.get_logger().warning(
-            'M22D: raw /cmd_vel disabled; CDC permits ZERO wheel '
-            'commands and approved sensor/watchdog controls ONLY. '
-            'No motion-authority ingress is implemented.'
+            'M22D: raw /cmd_vel disabled; arbitrary string commands '
+            'remain ZERO-wheel only. Signed actuator topics are off '
+            'unless protected role keys are provisioned; independent '
+            'physical-interlock release is NOT implemented.'
         )
 
         self.get_logger().info(
             f'Connected to {self._serial_port}; IMU={self._imu_stream_hz} Hz, '
             f'encoders={self._encoder_stream_hz} Hz, watchdog={self._watchdog_ms} ms'
         )
+
+    def _configure_signed_motor_ingress(self) -> None:
+        """Accept signed ROS messages only with two protected local keys.
+
+        These inputs are NOT motor-power or E-stop assertions. The physical
+        motor release is deliberately false until a real independent
+        hardware interlock provider and sensor readiness exist.
+        """
+        motion_path = self.get_parameter('motor_motion_key_file').value
+        operator_path = self.get_parameter('motor_operator_key_file').value
+        if type(motion_path) is not str or type(operator_path) is not str:
+            raise ValueError('motor signing key paths must be strings')
+        if bool(motion_path) != bool(operator_path):
+            raise ValueError('both motor signing roles must be provisioned')
+        self._pending_motor_motion = None
+        self._motor_last_state = 'LATCHED'
+        if not motion_path:
+            return
+        if not self._kinematics_configured():
+            raise ValueError('motor authority requires configured geometry')
+        # A signed motor session must configure a short MCU timeout.
+        if not 1 <= self._watchdog_ms <= 500:
+            raise ValueError('signed motor authority requires watchdog <=500 ms')
+        if self._keepalive_period_s > 0.10:
+            raise ValueError('signed motor authority requires keepalive <=100 ms')
+        motion_key = read_protected_key(motion_path)
+        operator_key = read_protected_key(operator_path)
+        verifier = SessionVerifier(
+            motion_key=motion_key, operator_key=operator_key)
+        self._motor_authority = MotorAuthority(
+            verifier=verifier,
+            wheel_radius_m=float(self._wheel_radius_m),
+            half_wheelbase_m=float(self._half_wheelbase_m),
+            half_track_m=float(self._half_track_m),
+            pwm_per_rad_s=float(self._wheel_velocity_to_pwm_gain),
+            max_pwm=int(self._max_pwm))
+        self._motor_cdc = MotorCdcProtocol()
+        self._motor_health = MotorSensorHealth()
+        chip = self.get_parameter('motor_gpio_chip').value
+        estop_offset = self.get_parameter(
+            'motor_estop_feedback_offset').value
+        power_offset = self.get_parameter(
+            'motor_power_feedback_offset').value
+        if chip or estop_offset != -1 or power_offset != -1:
+            self._motor_feedback = PhysicalMotorFeedback(
+                chip, estop_offset, power_offset)
+        # Only real, typed source messages can advance a motor health gate.
+        observer_qos = QoSProfile(
+            depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        status_qos = QoSProfile(
+            depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=ReliabilityPolicy.RELIABLE)
+        self._motor_status_sub = self.create_subscription(
+            String, '/xrslam/tracking_status',
+            self._motor_health.tracking_state, status_qos)
+        self._motor_valid_sub = self.create_subscription(
+            Bool, '/xrslam/localization_valid',
+            self._motor_health.localization_state, status_qos)
+        self._motor_odom_sub = self.create_subscription(
+            Odometry, '/odom', self._motor_health.odom, observer_qos)
+        self._motor_depth_sub = self.create_subscription(
+            Image, '/depthart/depth', self._motor_health.depth, observer_qos)
+        self._motor_tf_sub = self.create_subscription(
+            TFMessage, '/tf', self._motor_health.dynamic_tf, observer_qos)
+        self._motor_costmap_sub = self.create_subscription(
+            OccupancyGrid, '/local_costmap/costmap',
+            self._motor_health.costmap, observer_qos)
+        self._motor_session_pub = self.create_publisher(
+            String, '/leroy/motor/session_id',
+            QoSProfile(
+                depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self._motor_session_pub.publish(
+            String(data=verifier.session_id))
+        self._motor_motion_sub = self.create_subscription(
+            String, '/leroy/motor/signed_motion',
+            self._on_signed_motor_motion, 10)
+        self._motor_rearm_sub = self.create_subscription(
+            String, '/leroy/motor/signed_rearm',
+            self._on_signed_motor_rearm, 10)
+        self.get_logger().warning(
+            'Signed motion ingress configured, but physical motor '
+            'interlock and validated sensor health are still unavailable; '
+            'nonzero serial release stays inhibited.')
+
+    def _motor_trusted_inputs(self):
+        """Sample local GPIO feedback and measured sensor/nav messages.
+
+        The GPIO inputs MUST come from an independent hardwired motor power
+        cutoff circuit. Software cannot substitute for that circuit.
+        ROS graph counts are collision checks, not authentication; signed
+        envelopes separately enforce session ownership.
+        """
+        estop, power = (False, False)
+        if self._motor_feedback is not None:
+            estop, power = self._motor_feedback.read()
+        health = (self._motor_health.state()
+                  if self._motor_health is not None
+                  else {key: False for key in HEALTH_KEYS})
+        source_counts_ok = (
+            self._motor_odom_sub.get_publisher_count() == 1
+            and self._motor_depth_sub.get_publisher_count() == 1
+            and self._motor_costmap_sub.get_publisher_count() == 1
+            and self._motor_valid_sub.get_publisher_count() == 1
+        ) if self._motor_health is not None else False
+        controller_ok = (
+            self._motor_motion_sub.get_publisher_count() == 1
+            if hasattr(self, '_motor_motion_sub') else False
+        )
+        if not source_counts_ok:
+            health = {key: False for key in HEALTH_KEYS}
+        transport_ok = (
+            not self._transport_fault.is_set()
+            and self._motor_watchdog_ack.is_set()
+            and self._motor_cdc is not None
+            and self._motor_cdc.healthy)
+        # This software release flag is advisory; the power cutoff itself
+        # operates independently of Linux, ROS and the MCU.
+        self._motor_hardware_release_verified = bool(
+            estop and power and source_counts_ok and controller_ok
+            and all(health.values()) and transport_ok
+            and not self._clock_fault and not self._stop_event.is_set())
+        return dict(
+            health=health,
+            estop_released=estop,
+            motor_rails_verified=power,
+            transport_healthy=transport_ok,
+            clock_healthy=not self._clock_fault,
+            bridge_running=not self._stop_event.is_set(),
+            single_controller=controller_ok,
+        )
+
+    def _on_signed_motor_motion(self, message):
+        if self._motor_authority is None:
+            return
+        try:
+            self._pending_motor_motion = parse_signed_envelope(
+                message.data, MotionEnvelope)
+        except MotorInputRejected as exc:
+            self._pending_motor_motion = None
+            self._motor_authority.stop()
+            self.get_logger().error(
+                f'Signed motor proposal rejected and authority revoked: {exc}')
+
+    def _on_signed_motor_rearm(self, message):
+        if self._motor_authority is None:
+            return
+        try:
+            grant = parse_signed_envelope(message.data, RearmEnvelope)
+        except MotorInputRejected as exc:
+            self._motor_authority.stop()
+            self.get_logger().error(
+                f'Signed operator grant malformed; authority revoked: {exc}')
+            return
+        decision = self._motor_authority.rearm(
+            grant=grant, now_ns=time.monotonic_ns(),
+            **self._motor_trusted_inputs())
+        self.get_logger().info(
+            f'Motor rearm result: {decision.state} {decision.reason}')
+
+    def _motor_tick(self):
+        if self._motor_authority is None:
+            return
+        if self._motor_cdc.expired(now_ns=time.monotonic_ns()):
+            self._motor_authority.stop()
+        motion = self._pending_motor_motion
+        self._pending_motor_motion = None
+        decision = self._motor_authority.step(
+            motion=motion, now_ns=time.monotonic_ns(),
+            **self._motor_trusted_inputs())
+        # A freshly signed ZERO Twist is an explicit motor-stop command.
+        # Forward it through the same single-use authority handoff and
+        # sequenced MCU path, which disables wheel drivers on zero duty.
+        # 'nonzero_candidate' must never be used as a serial gate here:
+        # doing so can leave a previous nonzero PWM active while a fresh
+        # zero command incorrectly keeps the session heartbeat valid.
+        if (decision.state == 'ARMED'
+                and decision.reason == 'FRESH_SIGNED_CONTROLLER_COMMAND'):
+            if not self._send_command(decision):
+                self._motor_authority.stop()
+        if decision.state == 'ARMED':
+            self._motor_stop_requested = False
+        if (self._motor_last_state == 'ARMED'
+                and decision.state in ('LATCHED', 'TERMINAL')):
+            if not self._motor_stop_requested:
+                self._motor_stop_requested = True
+                # Independent MCU stop request; the reader must correlate its
+                # ACK, otherwise the session stays terminally inhibited.
+                if not self._send_command(_MOTOR_STOP):
+                    self._motor_authority.stop()
+        self._motor_last_state = decision.state
 
     def _validate_parameters(self) -> None:
         allowed_stream_hz = {0, 10, 20, 50, 100}
@@ -304,10 +550,51 @@ class LeroyBridgeNode(Node):
         )
 
     def _send_command(self, command: str) -> bool:
+        # Raw strings ALWAYS take the unchanged M22D zero-only allowlist.
+        # A non-string command must be the exact identity-bound one-shot
+        # MotorAuthority decision, with independent verified hardware
+        # release. No ROS message or arbitrary PWM string can bypass it.
+        authority = None
+        is_stop = False
         try:
-            payload = command_to_bytes(command)
+            if type(command) is str:
+                # No later in-process call may silently lengthen or
+                # disable a watchdog protecting an active signed session.
+                if (getattr(self, '_motor_authority', None) is not None
+                        and command.startswith('set_watchdog_ms ')
+                        and command != f'set_watchdog_ms {self._watchdog_ms}'):
+                    raise CommandRejected(
+                        'cannot weaken signed-session MCU watchdog')
+                if getattr(self, '_motor_authority', None) is not None:
+                    if (command == 'keepalive'
+                            and (not self._motor_watchdog_ack.is_set()
+                                 or not self._motor_cdc.healthy
+                                 or not self._motor_authority.heartbeat_allowed(
+                                     now_ns=time.monotonic_ns()))):
+                        raise CommandRejected('signed motion heartbeat stale')
+                    if (command.startswith('set_watchdog_ms ')
+                            and self._motor_watchdog_ack.is_set()):
+                        raise CommandRejected(
+                            'signed session MCU watchdog is already configured')
+                payload = command_to_bytes(command)
+            elif command is _MOTOR_STOP:
+                # STOP may be transmitted after the motion session latches.
+                is_stop = True
+                if self._motor_cdc is None:
+                    raise CommandRejected('MCU stop protocol unavailable')
+                payload = None
+            else:
+                authority = getattr(self, '_motor_authority', None)
+                release = getattr(
+                    self, '_motor_hardware_release_verified', False)
+                if authority is None or release is not True:
+                    raise CommandRejected(
+                        'physical motor authority release unavailable')
+                # Consume only inside the serial lock, immediately before
+                # the one actual .write(), to avoid stale queued duties.
+                payload = None
         except CommandRejected as exc:
-            self.get_logger().error(f'M22D blocked unsafe CDC command: {exc}')
+            self.get_logger().error(f'Motor CDC command rejected: {exc}')
             return False
         # M22G: once a serial write/flush/short-write/read error occurs,
         # this process cannot resume CDC writes, even for a STOP packet.
@@ -316,6 +603,36 @@ class LeroyBridgeNode(Node):
             return False
         with self._serial_lock:
             if self._transport_fault.is_set():
+                return False
+            if (type(command) is str and command == 'keepalive'
+                    and self._motor_authority is not None
+                    and (not self._motor_cdc.healthy
+                         or not self._motor_authority.heartbeat_allowed(
+                             now_ns=time.monotonic_ns()))):
+                return False
+            if is_stop:
+                payload = self._motor_cdc.stop(now_ns=time.monotonic_ns())
+            elif authority is not None:
+                # Recheck the independent physical feedback at the final
+                # locked writer boundary. Old software readiness booleans
+                # cannot authorize transmission after power loss / E-stop.
+                if (self._motor_feedback is None
+                        or self._motor_feedback.read() != (True, True)
+                        or not self._motor_hardware_release_verified):
+                    authority.stop()
+                    return False
+                # The signed decision alone cannot supply arbitrary serial
+                # bytes. Its identity-bound one-time payload must match the
+                # exact PWM tuple before the MCU transaction is constructed.
+                candidate = authority.consume_serial_payload(
+                    command, now_ns=time.monotonic_ns())
+                if candidate == (command.packet + '\n').encode('ascii'):
+                    payload = self._motor_cdc.wheels(
+                        command.wheel_pwm, now_ns=time.monotonic_ns())
+            if payload is None:
+                self.get_logger().error(
+                    'Motor CDC packet blocked: invalid/spent decision, '
+                    'unacknowledged transaction or exhausted sequence')
                 return False
             try:
                 written = self._serial.write(payload)
@@ -327,6 +644,8 @@ class LeroyBridgeNode(Node):
                     OSError) as exc:
                 self._transport_fault.set()
                 self._stop_event.set()
+                if getattr(self, '_motor_authority', None) is not None:
+                    self._motor_authority.stop()
                 self.get_logger().error(
                     f'Terminal MCU transport fault; CDC inhibited until '
                     f'bridge restart: {exc}'
@@ -335,9 +654,18 @@ class LeroyBridgeNode(Node):
         return True
 
     def _send_keepalive(self) -> None:
-        # On a clock fault, withhold keepalives so the MCU's independent
-        # watchdog stops motion even if the immediate stop packet is lost.
-        if self._clock_fault or self._transport_fault.is_set():
+        # MCU watchdog accepts any keepalive, even when control is stale.
+        # Once a motor authority exists, only a fresh signed ARMED session
+        # can extend motion. The keyless M22D telemetry bridge is unchanged.
+        if (self._clock_fault or self._transport_fault.is_set()
+                or self._stop_event.is_set()):
+            return
+        authority = getattr(self, '_motor_authority', None)
+        if authority is not None and (
+                not self._motor_watchdog_ack.is_set()
+                or self._motor_cdc.expired(now_ns=time.monotonic_ns())
+                or not authority.heartbeat_allowed(
+                    now_ns=time.monotonic_ns())):
             return
         self._send_command('keepalive')
 
@@ -353,6 +681,8 @@ class LeroyBridgeNode(Node):
                     with self._serial_lock:
                         self._transport_fault.set()
                         self._stop_event.set()
+                        if getattr(self, '_motor_authority', None) is not None:
+                            self._motor_authority.stop()
                     self.get_logger().error(
                         f'Terminal MCU read fault; CDC inhibited until '
                         f'bridge restart: {exc}'
@@ -378,8 +708,11 @@ class LeroyBridgeNode(Node):
             except ClockSyncError as exc:
                 # Fail closed. Never silently re-anchor a rebooted/stepped
                 # sensor clock into the same VIO or odometry session.
-                self._clock_fault = True
-                self._stop_event.set()
+                with self._serial_lock:
+                    self._clock_fault = True
+                    self._stop_event.set()
+                    if getattr(self, '_motor_authority', None) is not None:
+                        self._motor_authority.stop()
                 self._send_command('set_wheels 0 0 0 0')
                 self.get_logger().error(
                     f'MCU clock synchronization fault: {exc}; '
@@ -395,6 +728,16 @@ class LeroyBridgeNode(Node):
         return {key: int(value) for key, value in _KEY_VALUE_RE.findall(line)}
 
     def _handle_line(self, line: str) -> None:
+        if self._motor_cdc is not None and self._motor_cdc.receive(
+                line, now_ns=time.monotonic_ns()):
+            if not self._motor_cdc.healthy:
+                with self._serial_lock:
+                    self._motor_authority.stop()
+            return
+        if line == 'ok set_watchdog_ms':
+            # MCU accepted the timeout; this is NOT a stop acknowledgement.
+            self._motor_watchdog_ack.set()
+            return
         if line.startswith('telemetry imu '):
             self._publish_imu(self._fields(line))
             return
@@ -402,9 +745,20 @@ class LeroyBridgeNode(Node):
             self._publish_encoders(self._fields(line))
             return
         if line == 'event watchdog_stop':
-            self.get_logger().warning('MCU watchdog stopped the platform')
+            if self._motor_authority is not None:
+                with self._serial_lock:
+                    self._motor_authority.stop()
+                    self._motor_cdc.abort('MCU_WATCHDOG_STOP')
+            self.get_logger().warning(
+                'MCU reported watchdog stop; signed motor session revoked')
             return
         if line.startswith('error '):
+            if (self._motor_authority is not None
+                    and (line.startswith('error set_wheels_tx')
+                         or line.startswith('error stop_wheels_tx'))):
+                with self._serial_lock:
+                    self._motor_authority.stop()
+                    self._motor_cdc.abort('MCU_REJECTED_MOTOR_TRANSACTION')
             self.get_logger().error(f'MCU: {line}')
             return
         # Command acknowledgements are intentionally quiet; they would be very
@@ -588,6 +942,20 @@ class LeroyBridgeNode(Node):
             self._tf_broadcaster.sendTransform(transform)
 
     def destroy_node(self):
+        # Revoke any outstanding motor decision before serial teardown.
+        if getattr(self, '_motor_authority', None) is not None:
+            self._motor_authority.stop()
+            # Request MCU driver disable, retaining the reader briefly to
+            # collect its sequence-matched stop ACK. Timeout is NOT a stop.
+            if not self._transport_fault.is_set():
+                if self._send_command(_MOTOR_STOP):
+                    end = time.monotonic() + 0.15
+                    while (time.monotonic() < end and
+                           not self._motor_cdc.stop_confirmed):
+                        time.sleep(0.005)
+                if not self._motor_cdc.stop_confirmed:
+                    self.get_logger().error(
+                        'MCU motor STOP unconfirmed; independent cutoff required')
         # Stop asynchronous telemetry before ROS context teardown.
         # After a transport fault the zero/stream-disable writes below
         # are intentionally refused by _send_command. This does NOT
@@ -603,6 +971,8 @@ class LeroyBridgeNode(Node):
                 self._reader.join(timeout=1.0)
             if hasattr(self, '_serial') and self._serial.is_open:
                 self._serial.close()
+            if self._motor_feedback is not None:
+                self._motor_feedback.close()
         return super().destroy_node()
 
 
