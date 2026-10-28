@@ -73,8 +73,9 @@ class PureCaptureContract(unittest.TestCase):
                 stamp, seq=k, ticks=k * 20_000, source_mono=1000 + k))
         report = self.c.report()
         self.assertEqual(report["readiness"],
-                         "COMPLETE_INPUTS_FOR_OFFLINE_ANALYSIS")
-        self.assertTrue(report["source_metadata_provenance_verified"])
+                         "INPUT_FORMAT_COMPLETE_UNVERIFIED")
+        self.assertTrue(report["mcu_metadata_stamp_match_complete"])
+        self.assertFalse(report["physical_source_authenticated"])
         self.assertEqual(report["matched_imu_metadata_stamps"], 500)
         self.assertFalse(report["physical_camera_imu_offset_validated"])
         self.assertFalse(report["motor_commands_sent"])
