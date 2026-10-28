@@ -1,4 +1,5 @@
 """Stage 4C passive capture candidate: pure no-device validation and guards."""
+import ast
 import json
 from pathlib import Path
 import unittest
@@ -185,6 +186,22 @@ class StaticNonActuation(unittest.TestCase):
         self.assertNotIn("os.system(", script)
         self.assertNotIn("--arm", script)
         self.assertNotIn("ros2 launch", script)
+
+    def test_no_return_in_recorder_finally_block(self):
+        # Python 3.14 warns because return in finally could swallow a
+        # critical capture, cleanup or disk error.
+        tree = ast.parse((HERE / "live_stage4c_passive_recorder.py").read_text())
+        recorder = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                        and n.name == "_run_live")
+        for node in ast.walk(recorder):
+            if isinstance(node, ast.Try):
+                self.assertFalse(any(
+                    isinstance(descendant, ast.Return)
+                    for stmt in node.finalbody for descendant in ast.walk(stmt)
+                ), "A return inside finally can suppress capture faults")
+        self.assertEqual(len([
+            n for n in recorder.body if isinstance(n, ast.Return)
+        ]), 1)
 
     def test_dockerfile_defaults_to_no_action(self):
         docker = (HERE / "Dockerfile.live-stage4c-capture").read_text()
