@@ -16,6 +16,7 @@ from sensor_msgs.msg import PointCloud2
 
 DURATION_S = 90
 REQUIRED_CLOUDS = 3
+PROGRESS_INTERVAL_S = 5.0
 
 
 class LiveCostmapProbe(Node):
@@ -143,6 +144,7 @@ def main():
         previous_state = None
         previous_detail = None
         seen_ready = False
+        last_progress = time.monotonic()
         while rclpy.ok() and time.monotonic() < deadline:
             rclpy.spin_once(node, timeout_sec=0.5)
             state, detail = node.graph_status()
@@ -153,6 +155,15 @@ def main():
                 print("LIVE_DEPTH_COSTMAP=BLOCKED_UNSAFE_GRAPH " + detail,
                       flush=True)
                 return 2
+            if time.monotonic() - last_progress >= PROGRESS_INTERVAL_S:
+                print(
+                    "LIVE_DEPTH_COSTMAP_PROGRESS=" +
+                    f"graph={state} clouds={node.cloud_count} " +
+                    f"grids={node.grid_count} lethal={node.lethal} " +
+                    f"unknown={node.unknown} frame={node.grid_frame} " +
+                    f"last_cloud_age_s={node.last_cloud_age}",
+                    flush=True)
+                last_progress = time.monotonic()
             if state == "WAITING":
                 if seen_ready:
                     print("LIVE_DEPTH_COSTMAP=BLOCKED_GRAPH_LOST " + detail,
@@ -177,7 +188,8 @@ def main():
         print("LIVE_DEPTH_COSTMAP=INCOMPLETE " +
               f"graph={previous_state} details={previous_detail} " +
               f"clouds={node.cloud_count} grids={node.grid_count} " +
-              f"lethal={node.lethal} unknown={node.unknown}",
+              f"lethal={node.lethal} unknown={node.unknown} " +
+              f"frame={node.grid_frame} last_cloud_age_s={node.last_cloud_age}",
               flush=True)
         return 2
     finally:
