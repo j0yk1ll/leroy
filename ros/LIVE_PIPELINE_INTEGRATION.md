@@ -135,11 +135,11 @@ alignment is accepted. No map, controller, planner, navigation goals,
 serial IMU or motor driver is part of this experiment.
 
 The operator's current host checkout has **uncommitted tracked deletions
-and many untracked diagnostic logs**; preserve them. The accepted
-sidecar was run from a fetched temporary-directory snapshot rather
-than resetting/cleaning the host working tree. Do not recommend
+and many untracked diagnostic logs**; preserve them. The temporary-directory source-fetch method was recommended earlier,
+but the operator's most recent outputs do not establish exactly how
+the XRSLAM launcher files were obtained. Do not recommend
 `git reset --hard`, `git clean`, or an unconditional `git pull`
-against that checkout.
+against this checkout.
 
 For one final **read-only** gate, while the sidecar is still active:
 
