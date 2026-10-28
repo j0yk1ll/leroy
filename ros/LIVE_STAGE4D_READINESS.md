@@ -72,6 +72,17 @@ filesystem quota; journal/metadata overhead remains. An additional
 source/safety/disk-failure review is required before modifying any
 physical capture launcher.
 
+## Verified source-only CI result
+
+On the Stage 4D draft PR, the new regression workflow passed
+**15/15 Stage 4D tests** (virtual 75-second 12,000-message
+accounting and fault injection) and separately reran **36/36 Stage 4C
+tests** successfully: **51/51 source-only tests total**.
+The other two triggered repository checks also passed.
+This is GitHub source-only CI; it does **not** run the native
+paced DDS+SQLite smoke or authenticate any physical data.
+The latter remains **OPERATOR TEST REQUIRED**.
+
 ## Offline acceptance commands — no devices
 
 The Stage 4D branch is a *new* worktree stacked on the Stage 4C source:
