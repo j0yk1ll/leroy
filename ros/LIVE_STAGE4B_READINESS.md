@@ -160,7 +160,20 @@ subscriber delivery passed.
 containing the single Stage 4A JSON and acceptance markers. It fails on
 missing/contradictory/duplicate markers, missing STOP ACK, nonzero
 integrity faults, wrong IMU publisher, unexpected odometry/dynamic TF,
-or any attempt to report calibrated VIO authority.
+or any attempt to report calibrated VIO authority. When a
+`stage4b_delivery_trace` is present, the auditor additionally checks
+that source/observer counts, exact-stamp matches, unmatched counts,
+match ratio, clock-order flags and callback-delay ordering agree with
+the source and observer summaries. Optional
+`stage4b_executor_service` must match bounded serial-loop/spin
+attempt counts and cannot claim physical calibration. Earlier Stage 4A
+transcripts without this new trace remain auditable and are explicitly
+reported as having no exact-stamp delivery evidence.
+
+A Stage 4B report may state
+`stage4b_delivery_complete_in_this_run=true`, but will always retain
+`stage4b_calibration_ready=false`. It does **not** establish sustained
+loss-free performance across workloads.
 
 It produces a transparent report:
 
@@ -172,9 +185,9 @@ STAGE4B_RESULT=TRANSPORT_AUDITED_CALIBRATION_BLOCKED
 Run only against an **existing** locally saved transcript, if available:
 
 ```bash
-cd /home/kevin/Code/leroy/ros
-python3 -m unittest -v live_stage4b_test
-python3 live_stage4b_evidence_audit.py /path/to/existing/stage4a-console.log
+cd /home/kevin/Code/leroy-stage4b/ros
+python3 -m unittest -v live_stage4b_test live_stage4_contract_test
+python3 live_stage4b_evidence_audit.py /home/kevin/stage4b-spin-TUzS1iDh.log
 ```
 
 Change the `cd` target to your Stage 4B worktree if needed.
