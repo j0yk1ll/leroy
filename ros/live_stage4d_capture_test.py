@@ -191,6 +191,12 @@ class IntegrationGuards(unittest.TestCase):
         self.assertIn('STAGE4C=BLOCKED_LIVE_CAPTURE_NOT_COMMISSIONED', recorder)
         self.assertNotIn("serial.Serial(", recorder)
         self.assertNotIn("create_publisher(", recorder)
+        docker = (HERE / "Dockerfile.live-stage4c-capture").read_text()
+        self.assertIn(
+            "COPY live_stage4d_capture_ingress.py "
+            "/opt/stage4c/live_stage4d_capture_ingress.py", docker)
+        self.assertIn(
+            "/opt/stage4c/live_stage4d_capture_ingress.py", docker)
 
     def test_ingress_has_no_device_ros_or_filesystem_imports(self):
         code = (HERE / "live_stage4d_capture_ingress.py").read_text()
