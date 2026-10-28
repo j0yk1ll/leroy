@@ -29,8 +29,14 @@ case "${LEROY_STAGE4_IMU_IMAGE:-localhost/leroy-ros:stage4-imu}" in
         image=localhost/leroy-ros:stage4-imu ;;
     localhost/leroy-ros:stage4b-imu)
         image=localhost/leroy-ros:stage4b-imu ;;
+    localhost/leroy-ros:stage4c-capture-offline)
+        [[ "${LEROY_STAGE4C_SOURCE_META-}" == 1 ]] || fail SOURCE_METADATA_OPT_IN_REQUIRED
+        image=localhost/leroy-ros:stage4c-capture-offline ;;
     *) fail UNAPPROVED_STAGE4_IMAGE ;;
 esac
+if [[ "${LEROY_STAGE4C_SOURCE_META:-0}" != 0 ]]; then
+    [[ "${LEROY_STAGE4C_SOURCE_META}" == 1 && "$image" == localhost/leroy-ros:stage4c-capture-offline ]] || fail SOURCE_METADATA_IMAGE_MISMATCH
+fi
 podman image exists "$image" || fail STAGE4A_IMAGE_NOT_BUILT
 # Read-only, zero-device preflight for the Stage 4B image, BEFORE opening
 # the motor-capable MCU or prompting for a new physical attempt.
@@ -44,6 +50,16 @@ if [[ "$image" == localhost/leroy-ros:stage4b-imu ]]; then
         grep -Fq "service_callbacks(" /opt/stage4/live_stage4_imu_overlap.py
       ' || fail STAGE4B_IMAGE_TRACE_NOT_INSTALLED
     echo 'STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE'
+fi
+if [[ "$image" == localhost/leroy-ros:stage4c-capture-offline ]]; then
+    podman run --rm --pull=never --network=none       --read-only --cap-drop=all --security-opt=no-new-privileges       --entrypoint /bin/sh "$image" -c '
+        test -s /opt/stage4c/live_stage4c_source_meta_ros.py
+        test -s /opt/stage4c/live_stage4c_source_meta.py
+        grep -Fq "SourceMetadataRosAdapter(source)" /opt/stage4/live_stage4_imu_overlap.py
+        grep -Fq "source_metadata_requires_capture_only_session" /opt/stage4/live_stage4_imu_overlap.py
+        grep -Fq "LIVE_CAPTURE_COMMISSIONED = False" /opt/stage4c/live_stage4c_passive_recorder.py
+      ' || fail SOURCE_METADATA_IMAGE_NOT_COMMISSIONED
+    echo 'STAGE4C_M18_METADATA_IMAGE=VERIFIED_OFFLINE'
 fi
 [[ "$(podman inspect --format '{{.State.Running}}' "$parent" 2>/dev/null)" == true ]] ||
     fail STAGE3_PARENT_NOT_RUNNING
@@ -101,6 +117,8 @@ timeout --foreground --signal=INT --kill-after=30s 130s \
   -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   -e LEROY_STAGE4_IMU_ONLY=1 \
+  -e LEROY_STAGE4C_SOURCE_META="${LEROY_STAGE4C_SOURCE_META:-0}" \
+  -e LEROY_STAGE4C_CAPTURE_ONLY="${LEROY_STAGE4C_SOURCE_META:-0}" \
   -e LEROY_NAV2_DRY_RUN=1 \
   -e ROS_LOG_DIR=/tmp/stage4a-ros \
   -e XDG_CACHE_HOME=/tmp/stage4a-cache \
