@@ -1,9 +1,10 @@
 # Stage 4B — offline evidence audit and IMU delivery instrumentation
 
-**Status:** Stage 4A physical transport PASS, Stage 4B calibration NOT READY.
-This branch makes source/receiver comparisons testable without touching
-hardware. It **does not** calibrate camera–IMU time, extrinsics, sensor noise,
-XRSLAM pose, or authorize motion.
+**Status:** Stage 4A physical transport PASS; Stage 4B exact-stamp
+subscriber delivery **PASS in the 2026-10-28 bounded live retest** after
+a callback-scheduling fix. Stage 4B camera–IMU temporal, spatial and
+noise **CALIBRATION NOT READY**. No validated XRSLAM VIO, metric odometry,
+navigation or motor authority.
 
 ## What the accepted Stage 4A evidence actually proves
 
@@ -86,12 +87,72 @@ maximum callback burst. Spin attempts are *not* messages delivered.
 All existing graph-fault checks and MCU STOP-finally/ACK requirements
 remain intact.
 
-This patch is **NO-DEVICE TESTED ONLY** until a new explicitly supervised
-physical trial. Rebuild the Stage 4B image after fetching the new branch
-commit; an image built before this patch still contains the previous
-one-spin-per-MCU-line implementation. Neither the new code nor the
-source-only tests authorize VIO, odom, dynamic TF, camera–IMU calibration
-or motor power.
+This bounded callback scheduler has now passed one separately
+authorized supervised physical trial, as documented below. Images built
+before the patch remain stale and are blocked by the launcher image
+preflight. This successful live delivery test does **not** authorize
+VIO, odom, dynamic TF, camera–IMU calibration claims or motor power.
+
+## Second supervised Stage 4B result — bounded callback scheduler PASS (2026-10-28)
+
+After rebuilding the Stage 4B image with `live_stage4b_spin_budget.py`,
+the operator performed a **new separately approved 75-second physical
+sensor-only session** in the same isolated Stage 3 rootless DDS graph.
+The exact current source of evidence is the **operator-pasted run output**;
+its full local text log is
+`/home/kevin/stage4b-spin-TUzS1iDh.log`, which this documentation
+update did not read directly. Physical motor/manipulator rail isolation was
+operator-attested, not electrically measured by the program.
+
+The fresh read-only pre-serial costmap probe passed with 3 real depth clouds,
+3 costmap grids, `lethal_cells=true`, `unknown_cells=true`,
+`cloud_age_last_s=1.044`, and provisional frame `base_link`.
+The stream returned START ACK=PASS, STOP ACK=PASS,
+`STAGE4A_IMU_OVERLAP=PASS_TRANSPORT_ONLY`,
+`STAGE4A_PROCESS_RC=0` and host `TEST_EXIT=0`.
+The MCU reported **zero** malformed packets, sequence gaps, timestamp
+faults, stale/future withholding, uncalibrated samples, unexpected lines,
+odometry, dynamic TF and motor commands. XRSLAM remained monocular;
+no VIO mode was started.
+
+| Metric | Before scheduler patch | After scheduler patch |
+| --- | ---: | ---: |
+| Session | 75.0 s | 75.0 s |
+| Source published IMU samples | 3,750 | 3,750 |
+| Observed exact IMU timestamp matches | 1,379 | **3,750** |
+| Source stamps not observed | 2,371 | **0** |
+| Subscriber-only unmatched stamps | 0 | 0 |
+| Observed match fraction | 36.7733% | **100.0000%** |
+| Matched post-publication callback p50 | 80.236 ms | **0.690 ms** |
+| Matched callback p95 | 81.650 ms | **3.528 ms** |
+| Matched callback max | 86.404 ms | **20.395 ms** |
+| Rectified images / CameraInfo | 993 / 1,421 | 1,044 / 1,512 |
+| Receipt overlap | 74.916 s | 74.957 s |
+| MCU host-relative clock rate | −31.20 ppm | −28.62 ppm |
+| Order/negative-delay faults | 0 | 0 |
+
+`stage4b_executor_service` reports 3,750 serial iterations,
+**29,916 nonblocking spin attempts**, and a maximum callback burst of
+**10.981 ms**. The configured 8 ms budget is checked **between**
+callbacks and is not a hard execution-time deadline: one ROS callback
+can run past the threshold before control returns. Spin attempts are
+not the same as delivered messages.
+
+**Interpretation:** This within-setup, pre/post comparison strongly supports
+the earlier hypothesis that the one-`spin_once()`-per-MCU-line
+callback servicing was starving passive subscribers. The patched runner
+observed **all** source publications in this bounded trial, including
+all 3,750 exact-stamp matches, while retaining fault/STOP protection.
+This is not a guarantee of lossless DDS performance in other CPU loads
+or longer tests. No DDS transport-loss percentage is inferred from
+earlier aggregate callback counts.
+
+**Calibration remains BLOCKED.** Host monotonic delay from the M18
+post-publish hook to a subscriber is not camera exposure phase,
+MCU acquisition timestamp accuracy, camera–IMU extrinsics or IMU
+bias/noise calibration. Do not enable `monocular_imu` XRSLAM,
+publish `/odom` or dynamic map TF, or reconnect motor power because
+subscriber delivery passed.
 
 ## Offline audit: NO ROS, camera, serial or motor access
 
@@ -228,10 +289,10 @@ Do not change Stage 3's live camera or XRSLAM namespaces to make it work.
 
 ## Calibration evidence still missing
 
-1. **Source-to-subscriber delivery:** repeat with exact-stamp matching
-   after software-only review. Investigate missing/late callbacks and
-   available callback service/CPU occupancy before making a throughput
-   claim.
+1. **Source-to-subscriber delivery:** bounded exact-stamp matching
+   passed 3,750/3,750 after the callback-service fix. Preserve this
+   baseline, and revalidate under different operating loads before
+   asserting sustained production throughput or hard latency bounds.
 2. **Camera–IMU temporal phase:** collect a correlated *physical*
    visual/inertial motion event with traceable camera timestamp semantics,
    raw MCU acquisition ticks, independently justified sign convention,
