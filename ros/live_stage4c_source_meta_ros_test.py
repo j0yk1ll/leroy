@@ -137,6 +137,30 @@ class RosAdapterSimulation(unittest.TestCase):
         self.assertIn("source_node.create_publisher(", wrapper)
         self.assertIn("metadata_topic_remapped", wrapper)
 
+    def test_guarded_real_capture_stays_uncommissioned(self):
+        wrapper = (HERE / "live_stage4_imu_sidecar.sh").read_text()
+        recorder = (HERE / "live_stage4c_passive_recorder.py").read_text()
+        for token in (
+            'record_mode="${LEROY_STAGE4C_RECORD:-0}"',
+            "CAPTURE_REVIEW_ATTESTATION_REQUIRED",
+            "RECORDER_REQUIRES_SOURCE_METADATA_IMAGE",
+            "CAPTURE_OPERATOR_CONSENT_MISSING",
+            'grep -Fqx "LIVE_CAPTURE_COMMISSIONED = True"',
+            "RECORDER_FAILED_BEFORE_MCU_OPEN",
+            "STAGE4C_REAL_FOUR_TOPIC_RECORDING=COMPLETE_UNCALIBRATED",
+            "timeout 110s podman wait",
+        ):
+            self.assertIn(token, wrapper)
+        self.assertIn("LIVE_CAPTURE_COMMISSIONED = False", recorder)
+        self.assertIn("if not LIVE_CAPTURE_COMMISSIONED:", recorder)
+        # No hardware passthrough or motor command in the recorder segment.
+        recorder_run = wrapper.split('    trap cleanup_capture EXIT', 1)[1].split(
+            "printf 'STAGE4A_SELECTED_IMAGE", 1)[0]
+        self.assertNotIn("--device=", recorder_run)
+        self.assertNotIn("/cmd_vel", recorder_run)
+        self.assertIn('test ! -e /dev/ttyACM0', recorder_run)
+
+
 
 if __name__ == "__main__":
     unittest.main()
