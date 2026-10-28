@@ -25,6 +25,74 @@ The MCU clock-rate estimate (−31.55 ppm) measures relative clock rate,
 **not** the camera-exposure-to-IMU-acquisition offset. Reported
 receipt-time overlap is **not** physical timestamp synchronization.
 
+## First supervised exact-stamp result — 2026-10-28
+
+The operator independently ran the Stage 4B image inside the existing Stage 3
+rootless isolated DDS graph; the motor/arm power isolation and physical
+E-stop/chassis safety were operator-attested (not software-measured).
+This is one run, **not** a calibration.
+
+Acceptance markers: `STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE`,
+`STAGE4A_PRE_SERIAL_DDS_GRAPH=PASS`,
+`STAGE4A_IMU_START_ACK=PASS`, `STAGE4A_IMU_STOP_ACK=PASS`,
+`STAGE4A_IMU_OVERLAP=PASS_TRANSPORT_ONLY`,
+`STAGE4A_PROCESS_RC=0`. Pre-serial real DepthART/costmap diagnostic
+passed. No odometry/dynamic TF and no reported motor commands.
+
+| Observed signal | Real physical run |
+| --- | ---: |
+| Session and concurrent camera/IMU receipt overlap | 75.0 s / 74.916 s |
+| MCU source packets / post-publish callbacks | 3,750 / 3,750 |
+| Source rate / host-relative clock estimate | 50.0 Hz / −31.2 ppm |
+| Passive IMU exact-stamp matches / unmatched | 1,379 / 2,371 |
+| Subscriber-only unmatched stamps | 0 |
+| Source matched fraction | 0.367733 |
+| Rectified image callbacks / CameraInfo callbacks | 993 / 1,421 |
+| Total observed sensor subscription callbacks | 3,793 (≈50.57/s) |
+| Matched post-publish→subscriber delay p50 / p95 / maximum | 80.236 / 81.650 / 86.404 ms |
+| Negative monotonic latency / stamp-order faults | 0 / 0 |
+| MCU packet integrity, timestamp, serial faults | all 0 |
+| ROS odom / dynamic TF messages | 0 / 0 |
+| Camera–IMU temporal/extrinsic/noise calibration | all **UNVALIDATED** |
+
+Full operator transcript was saved locally as
+`/home/kevin/stage4b-imu-mucER3tK.log`. Only the pasted transcript was
+reviewed remotely; no local file was opened by this change.
+
+**Strong scheduling hypothesis:** `live_stage4_imu_overlap.py` originally
+called **one** `rclpy.spin_once(observer, timeout_sec=0.002)` per
+50 Hz serial `readline()`, while three sensor topics competed for callback
+execution. The observed aggregate callback count ≈50.6/s is close to
+the serial packet rate, as that design predicts. The approx. 80 ms
+post-publication callback delay is also consistent with queue contention
+but is not diagnostic of a particular DDS transport cause.
+
+**Important distinction:** the 2,371 unmatched publications in this
+75-second trace are not a measured DDS network packet loss count, and
+a post-publication callback delay is not physical acquisition latency.
+The root cause must be tested by changing callback servicing and repeating
+only under separate physical authorization.
+
+### Follow-up source-only mitigation candidate
+
+To address the observed callback-service bottleneck, this same Stage 4B
+branch now includes `live_stage4b_spin_budget.py`: the serial loop
+processes the MCU line first, then attempts up to **eight** nonblocking
+ROS `spin_once(timeout_sec=0.0)` operations within an **8 ms**
+budget (budget checked between callbacks because individual callbacks
+cannot be interrupted). The code records
+`stage4b_executor_service` with spin attempts, serial iterations and
+maximum callback burst. Spin attempts are *not* messages delivered.
+All existing graph-fault checks and MCU STOP-finally/ACK requirements
+remain intact.
+
+This patch is **NO-DEVICE TESTED ONLY** until a new explicitly supervised
+physical trial. Rebuild the Stage 4B image after fetching the new branch
+commit; an image built before this patch still contains the previous
+one-spin-per-MCU-line implementation. Neither the new code nor the
+source-only tests authorize VIO, odom, dynamic TF, camera–IMU calibration
+or motor power.
+
 ## Offline audit: NO ROS, camera, serial or motor access
 
 `live_stage4b_evidence_audit.py` takes a bounded, existing *text transcript*
