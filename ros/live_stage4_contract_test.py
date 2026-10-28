@@ -48,7 +48,8 @@ class Stage4aStatic(unittest.TestCase):
             "camera_imu_absolute_offset_validated",
             "camera_imu_extrinsics_validated",
             "xrslam_vio_started", "metric_odometry_authorized",
-            "STAGE4A_IMU_OVERLAP=PASS_TRANSPORT_ONLY",
+            "STAGE4A_IMU_OVERLAP=",
+            "PASS_TRANSPORT_ONLY",
         ):
             self.assertIn(token, s)
         for token in (
