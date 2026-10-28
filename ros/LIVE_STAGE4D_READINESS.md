@@ -111,6 +111,46 @@ DDS/SQLite test. A repeat disk I/O error requires investigation of
 temporary storage and rosbag2 SQLite lifecycle, not increasing
 device permissions, relaxing caps or ignoring readback errors.
 
+## Second native paced DDS run: SQLite reopened; CDR verification blocked
+
+The operator's second Stage 4D native no-device run fixed the
+prior SQLite lifecycle failure: the database logged both
+`READ_WRITE` and `READ_ONLY` opens successfully. It then failed
+with `CaptureError: stage4d_bag_payload_or_count_mismatch`
+at the end of replay. **This second native run also did NOT PASS**.
+
+Inspection revealed that the synthetic test built its expected SHA-256
+hashes by calling `serialize_message(msg)` a *second time* after
+`CaptureIngress` had already serialized, validated and passed
+an earlier buffer to `writer.write`. Independent CDR
+serializations are not a reliable byte-for-byte oracle, in
+particular if padding bytes differ. The failure therefore does
+**not**, without a per-record comparison, establish that SQLite
+corrupted the bag. Neither should it be dismissed without exact
+readback verification.
+
+Stage 4D now includes a pure-Python `ExactWriteBagAudit`, which:
+- computes expected SHA-256 from the **exact CDR bytes passed to
+  the SQLite writer** by the existing validated ingress;
+- commits an expected digest **only after** the writer succeeds;
+- rejects duplicate writes, missing, extra, duplicated and
+  byte-changed replay records, with topic-specific failure markers;
+- releases its own bound writer reference on `close()`, in
+  addition to the already reviewed ingress close, **before**
+  reopening the SQLite file read-only.
+
+The test callback now performs **one ROS serialization per received
+message**. Replay must match that actual written byte sequence;
+no semantic-only comparison or weakened hash check is accepted.
+Separate fault-injection regressions deliberately vary a second
+serialization, corrupt bytes and omit records to verify that
+these cases are distinguishable.
+
+**Status remains BLOCKED until the operator reruns the paced
+native smoke and posts a successful, exact-write audited readback.**
+If it still fails, the new audit identifies the first implicated
+topic; preserve the full traceback to investigate.
+
 ## Offline acceptance commands — no devices
 
 The Stage 4D branch is a *new* worktree stacked on the Stage 4C source:
