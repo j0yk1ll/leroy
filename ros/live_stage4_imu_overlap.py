@@ -152,7 +152,7 @@ class PassiveOverlap(Node):
             return 0.0
         return max(0.0, min(a[1], b[1]) - max(a[0], b[0]))
 
-    def graph_ready(self):
+    def graph_ready(self, *, require_source_meta=False):
         names = {n for n, _ in self.get_node_names_and_namespaces()}
         topics = {topic for topic, _ in self.get_topic_names_and_types()}
         if names & FORBIDDEN_NODES or topics & FORBIDDEN_TOPICS:
@@ -162,13 +162,32 @@ class PassiveOverlap(Node):
         if not REQUIRED_NODES <= names:
             return False
         pub = self.get_publishers_info_by_topic("/imu/data_raw")
-        return (len(pub) == 1
-                and pub[0].node_name == "m18_imu_source"
-                and pub[0].node_namespace == "/"
-                and pub[0].topic_type == "sensor_msgs/msg/Imu")
+        imu_ready = (len(pub) == 1
+                     and pub[0].node_name == "m18_imu_source"
+                     and pub[0].node_namespace == "/"
+                     and pub[0].topic_type == "sensor_msgs/msg/Imu")
+        if not require_source_meta:
+            return imu_ready
+        metadata_publishers = self.get_publishers_info_by_topic(
+            "/stage4c/imu_source_meta")
+        return (imu_ready and len(metadata_publishers) == 1
+                and metadata_publishers[0].node_name == "m18_imu_source"
+                and metadata_publishers[0].node_namespace == "/"
+                and metadata_publishers[0].topic_type == "std_msgs/msg/String")
+
+
+def source_metadata_enabled():
+    """Explicit opt-in only; the accepted Stage 4A/B path stays unchanged."""
+    requested = os.environ.get("LEROY_STAGE4C_SOURCE_META", "0")
+    if requested not in ("0", "1"):
+        raise RuntimeError("invalid_source_metadata_mode")
+    if requested == "1" and os.environ.get("LEROY_STAGE4C_CAPTURE_ONLY") != "1":
+        raise RuntimeError("source_metadata_requires_capture_only_session")
+    return requested == "1"
 
 
 def run():
+    metadata_enabled = source_metadata_enabled()
     for name, value in EXPECTED.items():
         if os.environ.get(name) != value:
             raise RuntimeError("blocked_environment_" + name)
@@ -190,7 +209,7 @@ def run():
         previous[sig] = signal.getsignal(sig)
         signal.signal(sig, interrupt)
 
-    source = observer = None
+    source = observer = metadata_adapter = None
     trace = DeliveryTrace()
     spin_stats = {"serial_loop_iterations": 0, "spin_attempts": 0,
                   "max_callback_burst_s": 0.0}
@@ -200,8 +219,18 @@ def run():
     try:
         # The pre-existing M18 callback fires only after successful ROS
         # publication. It sends metadata, never another MCU command or image.
-        source = ImuStreamSource(on_imu_published=lambda fields, stamp, steady:
-                                 trace.source(stamp, time.monotonic_ns()))
+        def after_imu_publish(fields, stamp, steady):
+            # Reuse M18 after-publish callback; never duplicate IMU/serial.
+            trace.source(stamp, time.monotonic_ns())
+            if metadata_adapter is not None:
+                metadata_adapter.on_imu_published(fields, stamp, steady)
+
+        source = ImuStreamSource(on_imu_published=after_imu_publish)
+        if metadata_enabled:
+            # Same physical M18 publisher node; constructed before serial.
+            # Any callback failure latches the M18 source and attempts STOP.
+            from live_stage4c_source_meta_ros import SourceMetadataRosAdapter
+            metadata_adapter = SourceMetadataRosAdapter(source)
         observer = PassiveOverlap(trace=trace)
         # Before opening the motor-capable serial port, prove the camera,
         # depth, XRSLAM and this source are present in the shared DDS graph.
@@ -210,7 +239,8 @@ def run():
             rclpy.spin_once(observer, timeout_sec=0.05)
             if observer.failures:
                 raise RuntimeError(observer.failures[0])
-            if (observer.graph_ready() and observer.valid_status is False
+            if (observer.graph_ready(require_source_meta=metadata_enabled)
+                    and observer.valid_status is False
                     and observer.map_valid_status is False):
                 break
         else:
@@ -248,7 +278,7 @@ def run():
                     spin_stats["spin_attempts"] += attempts
                     spin_stats["max_callback_burst_s"] = max(
                         spin_stats["max_callback_burst_s"], elapsed)
-                    if not observer.graph_ready():
+                    if not observer.graph_ready(require_source_meta=metadata_enabled):
                         raise RuntimeError("sensor_graph_changed")
                 complete = (not quitting[0] and time.monotonic() >= end
                             and source.terminal_fault is None)
@@ -294,6 +324,10 @@ def run():
             and observer.valid_status is False
             and observer.map_valid_status is False
             and not observer.failures
+            and (not metadata_enabled or (
+                metadata_adapter is not None
+                and metadata_adapter.tap.count ==
+                result["counts"]["published_imu_messages"]))
         )
         print("STAGE4A_RESULT_JSON=" + json.dumps({
             "duration_s": DURATION_S, "start_ack": started, "stop_ack": stopped,
@@ -308,6 +342,10 @@ def run():
                 "spin_attempts_are_not_callbacks": True,
                 "physical_calibration_validated": False,
             },
+            "real_source_metadata_mode": metadata_enabled,
+            "original_mcu_metadata_published": (
+                metadata_adapter.tap.count if metadata_adapter is not None
+                else 0),
             "camera_imu_absolute_offset_validated": False,
             "camera_imu_extrinsics_validated": False,
             "xrslam_vio_started": False,
