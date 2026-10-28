@@ -31,13 +31,16 @@ jobs:
             ros/live_stage4c_source_meta_ros.py \
             ros/live_stage4d_capture_ingress.py \
             ros/live_stage4d_capture_test.py \
+            ros/live_stage4d_bag_audit.py \
+            ros/live_stage4d_bag_audit_test.py \
             ros/live_stage4d_synthetic_load.py \
             ros/live_stage4d_synthetic_load_test.py
       - name: Pure 75-second virtual load and injected faults
         run: |
           cd ros
           python -Werror::SyntaxWarning -m unittest -v \
-            live_stage4d_capture_test live_stage4d_synthetic_load_test
+            live_stage4d_capture_test live_stage4d_bag_audit_test \
+            live_stage4d_synthetic_load_test
       - name: Stage 4C source no-device regressions remain green
         run: |
           cd ros
