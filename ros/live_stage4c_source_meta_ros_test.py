@@ -129,7 +129,11 @@ class RosAdapterSimulation(unittest.TestCase):
         for token in ("serial.Serial(", "device.write(", "/cmd_vel", "rclpy.init("):
             self.assertNotIn(token, wrapper)
         self.assertNotIn("live_stage4c_source_meta_ros", m18)
-        self.assertNotIn("live_stage4c_source_meta_ros", runner)
+        self.assertIn("live_stage4c_source_meta_ros", runner)
+        self.assertIn("SourceMetadataRosAdapter(source)", runner)
+        self.assertIn('os.environ.get("LEROY_STAGE4C_SOURCE_META", "0")', runner)
+        self.assertIn("source_metadata_requires_capture_only_session", runner)
+        self.assertIn("require_source_meta=metadata_enabled", runner)
         self.assertIn("source_node.create_publisher(", wrapper)
         self.assertIn("metadata_topic_remapped", wrapper)
 
