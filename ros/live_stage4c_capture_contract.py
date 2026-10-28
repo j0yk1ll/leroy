@@ -157,8 +157,9 @@ class CaptureContract:
             "matched_imu_metadata_stamps": matched,
             "unmatched_imu_stamps": imu_count - matched,
             "unmatched_metadata_stamps": meta_count - matched,
-            "source_metadata_provenance_verified": complete,
-            "readiness": "COMPLETE_INPUTS_FOR_OFFLINE_ANALYSIS" if complete
+            "mcu_metadata_stamp_match_complete": complete,
+            "physical_source_authenticated": False,
+            "readiness": "INPUT_FORMAT_COMPLETE_UNVERIFIED" if complete
                          else "BLOCKED_INCOMPLETE_CAPTURE",
             "camera_exposure_semantics_validated": False,
             "physical_camera_imu_offset_validated": False,
