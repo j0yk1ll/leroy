@@ -22,6 +22,7 @@ from std_msgs.msg import Bool
 from tf2_msgs.msg import TFMessage
 
 from m18_imu_stream_contract import START, STOP, PORT
+from live_stage4b_delivery_trace import DeliveryTrace
 from m18_imu_stream_source import (
     ImuStreamSource, send_only_whitelisted_serial_command, wait_ack,
 )
@@ -49,7 +50,7 @@ FORBIDDEN_TOPICS = {
 
 
 class PassiveOverlap(Node):
-    def __init__(self):
+    def __init__(self, trace=None):
         super().__init__("leroy_stage4_passive_overlap", enable_rosout=False,
                          start_parameter_services=False)
         self.counts = {"image": 0, "info": 0, "imu": 0, "odom": 0, "tf": 0}
@@ -57,6 +58,7 @@ class PassiveOverlap(Node):
         self.first_stamp = {"image": None, "imu": None}
         self.last_stamp = {"image": None, "info": None, "imu": None}
         self.failures = []
+        self.trace = trace
         self.valid_status = None
         self.map_valid_status = None
         self._subs = [
@@ -112,6 +114,12 @@ class PassiveOverlap(Node):
             self.failures.append("empty_image")
             return
         self.counts[stream] += 1
+        if stream == "imu" and self.trace is not None:
+            # Exact header-stamp matching against the POST-PUBLISH M18 hook.
+            # Callback time is host monotonic, NOT physical sensor acquisition.
+            self.trace.subscriber(
+                int(msg.header.stamp.sec) * 1_000_000_000
+                + int(msg.header.stamp.nanosec), time.monotonic_ns())
         if stream in self.spans:
             if self.spans[stream][0] is None:
                 self.spans[stream][0] = time.monotonic()
@@ -182,12 +190,16 @@ def run():
         signal.signal(sig, interrupt)
 
     source = observer = None
+    trace = DeliveryTrace()
     started = stopped = False
     complete = False
     error = None
     try:
-        source = ImuStreamSource()
-        observer = PassiveOverlap()
+        # The pre-existing M18 callback fires only after successful ROS
+        # publication. It sends metadata, never another MCU command or image.
+        source = ImuStreamSource(on_imu_published=lambda fields, stamp, steady:
+                                 trace.source(stamp, time.monotonic_ns()))
+        observer = PassiveOverlap(trace=trace)
         # Before opening the motor-capable serial port, prove the camera,
         # depth, XRSLAM and this source are present in the shared DDS graph.
         deadline = time.monotonic() + 25.0
@@ -273,6 +285,7 @@ def run():
             "duration_s": DURATION_S, "start_ack": started, "stop_ack": stopped,
             "overlap_receipt_s": round(overlap, 3), "counts": counts,
             "source": result, "error": error,
+            "stage4b_delivery_trace": trace.report(),
             "camera_imu_absolute_offset_validated": False,
             "camera_imu_extrinsics_validated": False,
             "xrslam_vio_started": False,
