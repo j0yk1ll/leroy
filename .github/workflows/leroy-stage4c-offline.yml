@@ -1,0 +1,41 @@
+name: Leroy Stage 4C passive capture candidate (no devices)
+
+on:
+  pull_request:
+    paths:
+      - 'ros/live_stage4c_*'
+      - 'ros/Dockerfile.live-stage4c-capture'
+      - 'ros/LIVE_STAGE4C_CALIBRATION_EVIDENCE.md'
+      - '.github/workflows/leroy-stage4c-offline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ros/live_stage4c_*'
+      - 'ros/Dockerfile.live-stage4c-capture'
+
+jobs:
+  no-device-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile no-device Stage 4C candidate
+        run: |
+          python -m compileall -q \
+            ros/live_stage4c_capture_contract.py \
+            ros/live_stage4c_passive_recorder.py \
+            ros/live_stage4c_capture_test.py
+      - name: Pure no-device fault and safety contracts
+        run: |
+          cd ros
+          python -m unittest -v live_stage4c_capture_test
+      - name: Block accidental Stage 4C runtime activation
+        run: |
+          grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = False' ros/live_stage4c_passive_recorder.py
+          grep -Fq 'if not LIVE_CAPTURE_COMMISSIONED:' ros/live_stage4c_passive_recorder.py
+          grep -Fqx 'CMD ["/bin/false"]' ros/Dockerfile.live-stage4c-capture
+          ! grep -Eq '^(ENTRYPOINT|CMD \["/opt/stage4c)' ros/Dockerfile.live-stage4c-capture
