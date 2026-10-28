@@ -25,6 +25,10 @@ RUN bash -lc 'set -e; \
     colcon build --symlink-install \
        --packages-select leroy_description leroy_nav2_costmap_fixture leroy_nav2_perception; \
     source /leroy_ws/install/setup.bash; \
+    # A source-only YAML test can pass while the ROS share config is stale. \
+    # Validate the exact file passed via Node(parameters=[...]) at runtime. \
+    cmp -s /leroy_ws/src/leroy_nav2_perception/config/live_diagnostic_costmap.yaml \
+      /leroy_ws/install/leroy_nav2_perception/share/leroy_nav2_perception/config/live_diagnostic_costmap.yaml; \
     ros2 pkg executables leroy_nav2_costmap_fixture | grep -Fx \
        "leroy_nav2_costmap_fixture costmap_fixture"; \
     ros2 pkg executables leroy_nav2_perception | grep -Fx \
