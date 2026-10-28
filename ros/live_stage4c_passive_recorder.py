@@ -309,7 +309,9 @@ def _run_live(name):
         print("STAGE4C_CAPTURE_JSON=" + json.dumps(manifest, sort_keys=True),
               flush=True)
         print("STAGE4C_CALIBRATION=BLOCKED_NOT_VALIDATED", flush=True)
-        return 0 if failure is None else 2
+    # Never return from finally: that would suppress an unexpected exception
+    # and could incorrectly report capture success on a cleanup failure.
+    return 0 if failure is None else 2
 
 
 def _contract_smoke():
