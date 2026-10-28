@@ -52,7 +52,8 @@ def example():
 def transcript(report=None):
     from live_stage4b_evidence_audit import MARKERS
     report = example() if report is None else report
-    lines = ["LIVE_DEPTH_COSTMAP=PASS ..."]
+    lines = ["LIVE_DEPTH_COSTMAP=PASS ...",
+             "STAGE4A=STARTING_PHYSICAL_IMU_ONLY"]
     for key, value in MARKERS.items():
         lines.append(key + "=" + value)
     lines.append("STAGE4A_RESULT_JSON=" + json.dumps(report, sort_keys=True))
@@ -71,6 +72,15 @@ class OfflineAudit(unittest.TestCase):
         self.assertTrue(result["not_a_DDS_packet_loss_rate"])
         self.assertFalse(result["enable_metric_odometry"])
         self.assertFalse(result["enable_motors"])
+
+    def test_actual_lifecycle_sequence_is_not_duplicate_acceptance(self):
+        raw = transcript()
+        self.assertIn("STAGE4A=STARTING_PHYSICAL_IMU_ONLY", raw)
+        self.assertEqual(audit(parse_text(raw))["source_imu_published"], 3750)
+        raw = raw.replace("STAGE4A=STARTING_PHYSICAL_IMU_ONLY",
+                          "STAGE4A=BLOCKED_FAILURE")
+        with self.assertRaises(EvidenceError):
+            parse_text(raw)
 
     def test_missing_or_duplicate_marker(self):
         valid = transcript()
