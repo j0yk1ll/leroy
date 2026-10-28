@@ -255,6 +255,10 @@ def run():
             and result["counts"]["timestamp_faults"] == 0
             and result["counts"]["malformed_imu_packets"] == 0
             and result["counts"]["sequence_gap_samples"] == 0
+            and result["counts"]["stale_or_future_withheld"] == 0
+            and result["counts"]["calibration_withheld"] == 0
+            and result["counts"]["invalid_ascii_lines"] == 0
+            and result["counts"]["unexpected_serial_lines"] == 0
             and counts.get("image", 0) >= 100
             and counts.get("imu", 0) >= 500
             and counts.get("info", 0) >= 100
