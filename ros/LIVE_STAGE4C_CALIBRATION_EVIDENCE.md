@@ -217,6 +217,16 @@ podman build -f Dockerfile.live-stage4c-capture \
   -t localhost/leroy-ros:stage4c-capture-offline .
 ```
 
+The first candidate image build failed at STEP 8 because its
+`rosbag2_py` import check ran in a bare Python process without sourcing
+ROS Jazzy. The apt install step had completed; ROS-managed Python
+paths were not on `sys.path`. The Dockerfile now sources
+`/opt/ros/jazzy/setup.bash` and
+`/leroy_ws/install/setup.bash` before its ROS import check,
+and a source-only regression asserts the setup order.
+**The corrected image still needs an operator rebuild** and has not
+yet passed a native Jazzy bag read/write test on the host.
+
 Then run this deliberately disconnected, no-device smoke:
 
 ```bash
@@ -225,8 +235,12 @@ podman run --rm --pull=never \
   --read-only --cap-drop=all --security-opt=no-new-privileges \
   --tmpfs /tmp:rw,nosuid,nodev,size=128m \
   -e PYTHONDONTWRITEBYTECODE=1 \
-  --entrypoint python3 localhost/leroy-ros:stage4c-capture-offline \
-  /opt/stage4c/live_stage4c_rosbag_smoke.py
+  --entrypoint bash localhost/leroy-ros:stage4c-capture-offline -lc '
+    set -e
+    source /opt/ros/jazzy/setup.bash
+    source /leroy_ws/install/setup.bash
+    python3 /opt/stage4c/live_stage4c_rosbag_smoke.py
+  '
 ```
 
 Require
