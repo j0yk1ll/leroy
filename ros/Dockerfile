@@ -52,6 +52,15 @@ RUN python3 -m pip install \
       "torchvision==${TORCHVISION_VERSION}" \
       --index-url https://download.pytorch.org/whl/cpu
 
+# Ubuntu Noble's python3-libgpiod is libgpiod v1; the guarded
+# independent motor-power feedback adapter requires the official v2 API.
+# Pin a verified manylinux CPython 3.12 wheel. This installs no GPIO
+# pin configuration and does NOT activate motors.
+RUN python3 -m pip install \
+      --no-cache-dir \
+      --break-system-packages \
+      "gpiod==2.2.2"
+
 # Minimal dependencies required by DepthART metric PyTorch inference.
 # OpenCV and NumPy are provided by Ubuntu/ROS.
 RUN python3 -m pip install \

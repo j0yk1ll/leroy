@@ -1,0 +1,18 @@
+# Experimental live camera -> DepthART -> optical point-cloud integration.
+# Deliberately NO serial/STM32 device or motor-controller launch.
+FROM localhost/leroy-ros:jazzy
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ros-jazzy-sensor-msgs-py \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY src/leroy_nav2_perception /leroy_ws/src/leroy_nav2_perception
+
+RUN bash -lc 'set -e; \
+    source /opt/ros/jazzy/setup.bash; \
+    source /leroy_ws/install/setup.bash; \
+    cd /leroy_ws; \
+    colcon build --symlink-install --packages-select leroy_nav2_perception; \
+    source /leroy_ws/install/setup.bash; \
+    ros2 pkg executables leroy_nav2_perception | grep -F "leroy_nav2_perception depth_obstacles"; \
+    ros2 pkg executables leroy_nav2_perception | grep -F "leroy_nav2_perception live_pipeline_probe"'

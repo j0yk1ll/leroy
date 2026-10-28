@@ -9,17 +9,29 @@ leroy_bridge:
     keepalive_period_s: 0.10
     cmd_vel_timeout_s: 0.25
 
+    # Signed motor ingress is OPT-IN; provision distinct protected
+    # 32-byte key files outside Git. No key material belongs in YAML.
+    motor_motion_key_file: ''
+    motor_operator_key_file: ''
+
+    # Absolute /dev/gpiochipN path and separate read-only active-high
+    # feedback offsets from an INDEPENDENT hardwired motor-power cutoff.
+    # No pinout is assumed; blank/-1 = fail-closed motor release.
+    motor_gpio_chip: ''
+    motor_estop_feedback_offset: -1
+    motor_power_feedback_offset: -1
+
     imu_frame_id: imu_link
 
     wheel_radius_m: 0.020
     half_wheelbase_m: 0.180
     half_track_m: 0.275
 
-    # M22D: legacy calibration record ONLY; cannot enable motion.
-    # The current bridge has NO raw /cmd_vel subscription and its unique
-    # serial writer rejects ALL nonzero set_wheels packets.
-    # 12.75 remains a provisional PWM/(wheel rad/s) reference for M22C
-    # synthetic math tests, NOT an active movement configuration.
+    # Stage 3/M22D: raw /cmd_vel and nonzero legacy set_wheels remain
+    # disabled. Signed motor sessions use the separately sequenced MCU
+    # command path only after all live interlock/sensor gates are met.
+    # This is PROVISIONAL calibration; measure wheel response on the robot
+    # before trusting any duty-to-velocity relationship.
     wheel_velocity_to_pwm_gain: 12.75
     # Independent 25%-of-full-scale motor duty ceiling.
     max_pwm: 64
