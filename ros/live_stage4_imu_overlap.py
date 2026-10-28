@@ -55,7 +55,7 @@ class PassiveOverlap(Node):
         self.counts = {"image": 0, "info": 0, "imu": 0, "odom": 0, "tf": 0}
         self.spans = {"image": [None, None], "imu": [None, None]}
         self.first_stamp = {"image": None, "imu": None}
-        self.last_stamp = {"image": None, "imu": None}
+        self.last_stamp = {"image": None, "info": None, "imu": None}
         self.failures = []
         self.valid_status = None
         self.map_valid_status = None
