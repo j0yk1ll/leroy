@@ -87,6 +87,12 @@ def _run_live(name):
     if any(Path(p).exists() for p in ("/dev/ttyACM0", "/dev/video2", "/dev/gpiochip0")):
         raise CaptureError("device_visible_to_recorder")
     path = safe_bag_path(name)
+    # One-run synchronization with the existing M18 sidecar. The recorder
+    # creates this marker only after the SQLite writer and subscriptions are
+    # armed; it is NOT a physical calibration or movement authorization.
+    armed_path = Path("/capture") / (name + "-armed")
+    if armed_path.exists() or armed_path.is_symlink():
+        raise CaptureError("stale_capture_armed_marker")
 
     # Delayed ROS imports: --contract-smoke works without ROS/hardware.
     import rclpy
@@ -205,6 +211,7 @@ def _run_live(name):
         signal.signal(sig, interrupt)
 
     bag_open = False
+    armed_created = False
     failure = None
     result = None
     try:
@@ -230,6 +237,13 @@ def _run_live(name):
         node.writer = writer
         bag_open = True
         node.running = True
+        # The MCU source must never start first: make a one-run, exclusive
+        # readiness marker visible to its READ-ONLY /capture mount only
+        # after the recorder is actually receiving and able to write.
+        with armed_path.open("x", encoding="ascii") as marker:
+            marker.write("STAGE4C_RECORDER_ARMED=1\n")
+        armed_created = True
+        print("STAGE4C_RECORDER_ARMED=PASS", flush=True)
         end = time.monotonic() + 75
         last_graph_check = 0.0
         while running[0] and time.monotonic() < end:
@@ -250,6 +264,14 @@ def _run_live(name):
         failure = type(exc).__name__ + ":" + str(exc)
     finally:
         node.running = False
+        # The marker is a startup handshake, not a retained acceptance
+        # artifact. Remove it regardless of writer success/failure.
+        if armed_created:
+            try:
+                armed_path.unlink()
+            except OSError as exc:
+                if failure is None:
+                    failure = "capture_armed_marker_cleanup_failed:" + str(exc)
         # Disarm callbacks and release any injected writer reference before
         # finalizing the SQLite bag or recording a failure manifest.
         node.ingress.close()
