@@ -1,6 +1,8 @@
 # Stage 4A — real STM32 IMU transport alongside Stage 3, WITHOUT VIO or motion
 
-Status: **code candidate / NO live trial performed under this change**.
+Status: **operator-observed physical Stage 4A transport PASS (2026-10-28);
+not VIO, calibration or navigation acceptance**. The implementation remains
+in PR #160 until reviewed and merged.
 
 Stage 3 already passed with real USB camera → rectification → CPU DepthART
 → raw optical PointCloud2 → diagnostic Nav2 costmap, while XRSLAM's
@@ -123,6 +125,71 @@ using suitable sensor motion/correlation or calibrated test data in a
 later dedicated step. **Never invent `camera_imu_offset_sec=0`** to
 bypass XRSLAM's VIO guard.
 
+## Observed physical Stage 4A acceptance — 2026-10-28
+
+The operator ran the candidate code on Arch Linux using the real STM32F401
+CDC device at its checked stable `/dev/serial/by-id/` path (resolving to
+`/dev/ttyACM0`), and the already running Stage 3 rootless costmap and
+monocular XRSLAM containers. The physical motor-rail isolation was
+**operator-attested**, not measured by software. No hardware actuation was
+authorized.
+
+The pre-serial, read-only real DepthART/Nav2 costmap probe returned
+`LIVE_DEPTH_COSTMAP=PASS` with 3 optical clouds, 3 grids,
+`cloud_age_last_s=1.075`, `lethal_cells=true`,
+`unknown_cells=true`, frame `base_link` (lethal surfaces remain
+**unclassified**, not for physical navigation).
+
+Exact acceptance markers:
+
+```text
+STAGE4A_PRE_SERIAL_DDS_GRAPH=PASS
+STAGE4A_IMU_START_ACK=PASS
+STAGE4A_IMU_STOP_ACK=PASS
+STAGE4A_IMU_OVERLAP=PASS_TRANSPORT_ONLY
+STAGE4A_PROCESS_RC=0
+STAGE4A=PASS_TRANSPORT_ONLY_NOT_VIO_OR_CALIBRATION
+```
+
+The operator-supplied `STAGE4A_RESULT_JSON` reported:
+
+| Signal / gate | Observed |
+| --- | --- |
+| Bounded session | 75.0 s |
+| Real MCU packets received | 3,750 |
+| ROS IMU messages published by M18 source | 3,750 |
+| Source IMU rate | 50.0 Hz |
+| Passive ROS IMU messages observed | 1,533 |
+| Rectified camera images observed | 727 |
+| CameraInfo messages observed | 1,490 |
+| Concurrent receipt overlap | 74.896 s |
+| MCU clock-rate estimate | -31.55 ppm, ready |
+| Source acquisition age (last / max) | 0.0031 / 0.0091 s |
+| Packet malformed, sequence, gaps, calibration withheld | 0 each |
+| Timestamp / stale/future / ASCII / unexpected serial faults | 0 each |
+| Odometry messages | 0 |
+| Dynamic TF messages | 0 |
+| START / STOP acknowledgements | both true |
+| Terminal fault / error | null / null |
+| Camera–IMU absolute offset validated | false |
+| Camera–IMU extrinsics / gyro noise validated | false |
+| XRSLAM VIO started / metric odometry authorized | false / false |
+
+**Scope of PASS:** The 3,750 IMU publications versus 1,533 received by the
+passive observer reflect this observer's callback servicing under a
+concurrent CPU DepthART load; this single run does **not** establish the
+cause of the difference or end-to-end loss-free 50 Hz subscriber delivery.
+The source achieved 50.0 Hz and all source-integrity faults stayed zero.
+Receipt-time overlap is **not** calibrated camera/IMU acquisition-time
+alignment. The -31.55 ppm estimate describes MCU/host *clock rate* only,
+not their absolute epoch/latency relationship.
+
+This operator result completes **Stage 4A transport acceptance only**.
+Do not enable `sensor.mode=monocular_imu`, invent a camera–IMU offset,
+permit `/odom`, `map -> odom`, navigation goals or motor power based on
+this evidence. Physical sensors and their timing still need independent
+calibration.
+
 ## Next steps after live Stage 4A PASS
 
 1. Characterize the IMU noise and camera–IMU temporal alignment with
@@ -135,5 +202,7 @@ bypass XRSLAM's VIO guard.
 4. Keep the Nav2 costmap diagnostic, no odom, no planner/controller
    and motor power disconnected until independent qualification.
 
-The Stage 4A code remains unverified on the physical MCU until the
-operator runs it and provides the above evidence.
+The physical Stage 4A transport run is accepted as above. Remaining
+uncertainties are camera–IMU temporal phase, intrinsic/extrinsic calibration,
+noise characteristics, end-to-end subscriber delivery and actual VIO
+tracking. The candidate has not been deployed as a production runtime.
