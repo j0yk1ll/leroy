@@ -83,6 +83,100 @@ MCU's motor-capable CDC interface require their **own physical safety
 review**. Do not move the rover or its sensor assembly based on this
 design-only document.
 
+## New Stage 4C recorder candidate — offline-only, not commissioned
+
+This draft branch now includes:
+
+- `live_stage4c_capture_contract.py`: **pure-Python** validated receipt
+  policy for exactly `/camera/image_rect` (`sensor_msgs/Image`),
+  `/camera/camera_info` (`CameraInfo`),
+  `/imu/data_raw` (`Imu`) and
+  `/stage4c/imu_source_meta` (`std_msgs/String`).
+  Checks expected frames, ordered per-stream ROS stamps, bounded
+  serialized payload and total record count, publication/receipt
+  monotonic times, MCU sequence continuity (including uint32 wrap),
+  `t_us` and exact image/IMU-to-source stamp matching.
+- `live_stage4c_passive_recorder.py`: candidate subscriber-only
+  ROS 2 `rosbag2_py` CDR/SQLite writer with per-topic publisher
+  graph checks, denied motor/nav/odom/dynamic TF graph, prohibited
+  visible devices, finite 75-second session, a single new
+  `/capture/stage4c-*` output directory, no overwrite, file hashes
+  and an explicitly **uncalibrated** manifest.
+- `Dockerfile.live-stage4c-capture`: separate image FROM the accepted
+  local Stage 4B image, no source or bridge modifications,
+  `CMD ["/bin/false"]`. It installs the rosbag2 writer dependencies.
+- `live_stage4c_capture_test.py` and the Stage 4C GitHub
+  `no-device-contract` workflow: synthetic acceptance, missing source
+  metadata, fake MCU sequence corruption, bad/duplicate stamps,
+  quota, malformed JSON, unsafe topics, disk-write exception,
+  no-device and no-actuation contract checks.
+
+**Hard live gate:** `LIVE_CAPTURE_COMMISSIONED = False` and
+`STAGE4C=BLOCKED_LIVE_CAPTURE_NOT_COMMISSIONED` by default. The
+module's only approved executable path for now is
+`--contract-smoke`, which imports no ROS runtime, creates no
+output files, and connects to no hardware.
+
+**Critical remaining dependency:** Stage 4B's M18 post-publish
+callback sees original MCU `seq` and `t_us`, but its accepted
+source does **not** publish `/stage4c/imu_source_meta`.
+Stage 4C deliberately requires that provenance stream before
+claiming even a complete set of offline inputs. A future separately
+reviewed Stage 4C **source-side metadata adapter** must emit
+one `std_msgs/String` per actual successful IMU publication with
+schema `leroy_stage4c_mcu_v1`, exact original MCU sequence/ticks,
+mapped IMU stamp and source monotonic time, while preserving the
+existing serial STOP guarantee and hardware isolation.
+**No metadata publisher is implemented or approved here**.
+Faking ticks from ROS headers or using receive times as MCU ticks
+is forbidden.
+
+The policy limits payload to 900 MB of *serialized messages*,
+20,000 total records, at most 4 MB per message and 75 seconds.
+Serialized payload is **not** an exact on-disk quota; SQLite
+overhead, journal files and metadata may use additional space.
+Real-world resource and sensor callback-load validation is pending,
+and the eventual launcher must bound the actual writable mount.
+
+### Reproduce source-only no-device tests
+
+This requires **no camera, ROS graph, STM32 or motors**.
+In a new detached worktree so the accepted Stage 4B one is untouched:
+
+```bash
+cd /home/kevin/Code/leroy
+git fetch origin feature/stage4c-calibration-evidence-plan
+git worktree add --detach ../leroy-stage4c \
+  origin/feature/stage4c-calibration-evidence-plan
+cd ../leroy-stage4c/ros
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v live_stage4c_capture_test
+PYTHONDONTWRITEBYTECODE=1 python3 live_stage4c_passive_recorder.py --contract-smoke
+```
+
+Both commands require no third-party Python dependencies. The
+`--contract-smoke` output is
+`STAGE4C_OFFLINE_CAPTURE_CONTRACT=PASS_NO_DEVICE` and
+`STAGE4C_LIVE_CAPTURE_AUTHORIZED=FALSE`.
+
+To validate within the previously accepted no-device image instead
+(without rebuilding it), run from the **new worktree's** `ros`
+directory:
+
+```bash
+podman run --rm --pull=never \
+  --network=none --ipc=private --pid=private \
+  --read-only --cap-drop=all --security-opt=no-new-privileges \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -v "$PWD:/offline:ro" \
+  --entrypoint python3 localhost/leroy-ros:stage4b-imu \
+  /offline/live_stage4c_passive_recorder.py --contract-smoke
+```
+
+The ROS bag writer adapter and proposed image are **source-only
+candidates** until they pass a separate network-isolated synthetic
+ROS bag read/write smoke test. Do not launch the candidate in the
+real sensor graph or remove the live hard gate based on unit tests.
+
 ## Future capture contract — requires separate review/authorization
 
 Any eventual implementation must first pass no-device, simulated-ROS
