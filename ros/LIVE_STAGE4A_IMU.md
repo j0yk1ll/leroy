@@ -175,10 +175,12 @@ The operator-supplied `STAGE4A_RESULT_JSON` reported:
 | Camera–IMU extrinsics / gyro noise validated | false |
 | XRSLAM VIO started / metric odometry authorized | false / false |
 
-**Scope of PASS:** The 3,750 IMU publications versus 1,533 received by the
-passive observer reflect this observer's callback servicing under a
-concurrent CPU DepthART load; this single run does **not** establish the
-cause of the difference or end-to-end loss-free 50 Hz subscriber delivery.
+**Scope of PASS:** The 3,750 IMU publications and 1,533 messages
+received by the passive observer are counts at different pipeline stages
+during a concurrent CPU DepthART run. This single test does **not** determine
+whether the disparity arose from DDS delivery, subscription queues, callback
+scheduling or some combination, nor does it establish loss-free 50 Hz
+subscriber delivery.
 The source achieved 50.0 Hz and all source-integrity faults stayed zero.
 Receipt-time overlap is **not** calibrated camera/IMU acquisition-time
 alignment. The -31.55 ppm estimate describes MCU/host *clock rate* only,
