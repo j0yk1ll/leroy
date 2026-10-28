@@ -227,6 +227,8 @@ class StampMatching(unittest.TestCase):
             "localhost/leroy-ros:stage4b-imu",
             "UNAPPROVED_STAGE4_IMAGE",
             "STAGE4B_IMAGE_TRACE_NOT_INSTALLED",
+            "/opt/stage4/live_stage4b_spin_budget.py",
+            'grep -Fq "service_callbacks("',
             "STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE",
             "--network=none",
             "--read-only",
