@@ -11,6 +11,7 @@ RUN apt-get update \
 
 COPY live_stage4c_capture_contract.py /opt/stage4c/live_stage4c_capture_contract.py
 COPY live_stage4c_passive_recorder.py /opt/stage4c/live_stage4c_passive_recorder.py
+COPY live_stage4d_capture_ingress.py /opt/stage4c/live_stage4d_capture_ingress.py
 COPY live_stage4c_source_meta.py /opt/stage4c/live_stage4c_source_meta.py
 COPY live_stage4c_rosbag_smoke.py /opt/stage4c/live_stage4c_rosbag_smoke.py
 ENV PYTHONPATH=/opt/stage4c
@@ -24,6 +25,7 @@ RUN bash -lc 'set -e; \
     python3 -m py_compile \
       /opt/stage4c/live_stage4c_capture_contract.py \
       /opt/stage4c/live_stage4c_passive_recorder.py \
+      /opt/stage4c/live_stage4d_capture_ingress.py \
       /opt/stage4c/live_stage4c_source_meta.py \
       /opt/stage4c/live_stage4c_rosbag_smoke.py; \
     python3 -c "import rosbag2_py; import rclpy"; \
