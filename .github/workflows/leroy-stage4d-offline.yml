@@ -1,0 +1,52 @@
+name: Leroy Stage 4D offline recorder reliability contracts
+
+on:
+  pull_request:
+    paths:
+      - 'ros/live_stage4d_*'
+      - 'ros/live_stage4c_passive_recorder.py'
+      - 'ros/LIVE_STAGE4D_READINESS.md'
+      - '.github/workflows/leroy-stage4d-offline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ros/live_stage4d_*'
+
+jobs:
+  stage4d-no-device:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Stage 4C and Stage 4D candidate files (no ROS required)
+        run: |
+          python -Werror::SyntaxWarning -m compileall -q \
+            ros/live_stage4c_capture_contract.py \
+            ros/live_stage4c_passive_recorder.py \
+            ros/live_stage4c_source_meta.py \
+            ros/live_stage4c_source_meta_ros.py \
+            ros/live_stage4d_capture_ingress.py \
+            ros/live_stage4d_capture_test.py \
+            ros/live_stage4d_synthetic_load.py \
+            ros/live_stage4d_synthetic_load_test.py
+      - name: Pure 75-second virtual load and injected faults
+        run: |
+          cd ros
+          python -Werror::SyntaxWarning -m unittest -v \
+            live_stage4d_capture_test live_stage4d_synthetic_load_test
+      - name: Stage 4C source no-device regressions remain green
+        run: |
+          cd ros
+          python -Werror::SyntaxWarning -m unittest -v \
+            live_stage4c_capture_test live_stage4c_source_meta_test \
+            live_stage4c_source_meta_ros_test live_stage4c_synthetic_dds_test
+      - name: Explicit live gate and unchanged serial runtime
+        run: |
+          grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = False' ros/live_stage4c_passive_recorder.py
+          grep -Fq 'self.ingress.accept(topic, msg)' ros/live_stage4c_passive_recorder.py
+          ! grep -Eq 'serial\.Serial\(|device\.write\(|create_publisher\(' ros/live_stage4d_capture_ingress.py
+          grep -Fqx 'CMD ["/bin/false"]' ros/Dockerfile.live-stage4c-capture
