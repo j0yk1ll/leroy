@@ -241,8 +241,8 @@ def _run_live(name):
         # readiness marker visible to its READ-ONLY /capture mount only
         # after the recorder is actually receiving and able to write.
         with armed_path.open("x", encoding="ascii") as marker:
+            armed_created = True
             marker.write("STAGE4C_RECORDER_ARMED=1\n")
-        armed_created = True
         print("STAGE4C_RECORDER_ARMED=PASS", flush=True)
         end = time.monotonic() + 75
         last_graph_check = 0.0
