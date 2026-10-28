@@ -83,8 +83,13 @@ def parse_text(raw):
         for key in (*MARKERS, "STAGE4A_RESULT_JSON"):
             prefix = key + "="
             if line.startswith(prefix):
-                _require(key not in seen, "duplicate_marker_" + key)
                 value = line[len(prefix):]
+                # A real supervised session prints this STARTING lifecycle
+                # marker before the final STAGE4A=PASS/blocked result. It is
+                # not a second acceptance result.
+                if key == "STAGE4A" and value == "STARTING_PHYSICAL_IMU_ONLY":
+                    break
+                _require(key not in seen, "duplicate_marker_" + key)
                 seen[key] = value
                 if key == "STAGE4A_RESULT_JSON":
                     try:
