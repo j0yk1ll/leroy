@@ -95,6 +95,79 @@ podman run --rm --network none --entrypoint bash \
   '
 ```
 
+## Observed Stage 3 monocular integration — PASS for concurrent ingress (2026-10-28)
+
+The operator retained the functioning real camera/DepthART/diagnostic
+costmap parent with **isolated network, shareable IPC, private parent PID**,
+then started the XRSLAM monocular sidecar sharing the parent's network,
+IPC and PID namespaces. Unlike the earlier anonymous Fast DDS graph, the
+live output identified `/leroy_xrslam` by name in Stage 2, and reported
+a publisher of `/xrslam/tracking_status` owned by `leroy_xrslam`.
+The ROS latched tracking status was received **in both containers**:
+
+```text
+XRSLAM: Create XRSLAM v0.1.0 successfully
+Submitted 1 camera frames to XRSLAM (monocular)
+Submitted 300 camera frames to XRSLAM (monocular)
+...
+Submitted 6000 camera frames to XRSLAM (monocular)
+XRSLAM internal tracking status: data: initializing
+XRSLAM status read from costmap container: data: initializing
+TRACKING_ECHO_RC=0 (both containers)
+LIVE_DEPTH_COSTMAP_GRAPH=READY required_publishers_verified
+LIVE_DEPTH_COSTMAP=PASS real_optical_clouds=3 costmap_grids=1 cloud_age_last_s=0.892 lethal_cells=true unknown_cells=true frame=base_link
+LIVE_DEPTH_COSTMAP_NOTE=provisional_TF_marks_unclassified_surfaces_not_for_motion
+```
+
+**ACCEPTED:** single live camera, rectified CameraInfo and static TF
+can initialize the genuine native XRSLAM estimator; at least 6,000
+camera frames reached its actual native submission API; identified
+DDS node and latched message transport work in *both* containers;
+Nav2 diagnostic costmap still marks real DepthART samples concurrently.
+These observations establish app/DDS integration, not tracking quality.
+The supplied console outputs do not include a fresh
+`/xrslam/localization_valid` message or a bounded zero-`/odom`
+observation. The adapter was started with
+`pose_convention_validated=false` and `enable_map_tf=false`; keep
+these gates unchanged. The monocular run is **still initializing**, so
+neither metric odometry nor dynamic `odom -> base_link` nor SLAM map
+alignment is accepted. No map, controller, planner, navigation goals,
+serial IMU or motor driver is part of this experiment.
+
+The operator's current host checkout has **uncommitted tracked deletions
+and many untracked diagnostic logs**; preserve them. The accepted
+sidecar was run from a fetched temporary-directory snapshot rather
+than resetting/cleaning the host working tree. Do not recommend
+`git reset --hard`, `git clean`, or an unconditional `git pull`
+against that checkout.
+
+For one final **read-only** gate, while the sidecar is still active:
+
+```bash
+podman exec leroy-live-costmap bash -lc '
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  timeout 10s ros2 topic echo /xrslam/localization_valid std_msgs/msg/Bool \
+    --once --qos-reliability reliable --qos-durability transient_local
+  echo "LOCALIZATION_VALID_ECHO_RC=$?"
+  timeout 6s ros2 topic echo /odom nav_msgs/msg/Odometry --once
+  rc=$?
+  echo "ODOM_ONE_MESSAGE_RC=$rc (124 = no message within 6s)"
+  exit 0
+'
+```
+
+The expected safety state is `data: false`, and the negative
+`/odom` test should time out. A ROS `/odom` publisher endpoint alone
+is not evidence of odometry messages: the XRSLAM adapter constructs
+the publisher during initialization but gates publishing. If either
+gate fails, investigate; do not enable pose TF to force PASS.
+Next substantive stage is genuine **visual-inertial tracking** using
+the previously tested protected STM32 IMU stream, with a new supervised
+hardware session, independent power isolation, and calibration gates
+for temporal phase and camera/IMU extrinsics. **Do not launch the IMU
+or motor-capable MCU from this camera-only script.**
+
 ## Observed Stage 2 result — PASS (2026-10-27)
 
 The operator successfully completed the isolated, real camera DepthART
