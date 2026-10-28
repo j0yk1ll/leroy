@@ -1,6 +1,6 @@
 # Stage 4D — offline recorder load and fail-closed fault evidence
 
-**Status: CODE CANDIDATE; NO PHYSICAL RUN, NO CALIBRATION AUTHORITY.**
+**Status (2026-10-28): SHORT DISCONNECTED SYNTHETIC DDS/SQLITE LOAD PASS; LIVE CAPTURE AND PHYSICAL CALIBRATION BLOCKED.**
 
 This is deliberately stacked on the still-draft Stage 4C source branch.
 It does not change the accepted Stage 4B MCU/serial source, STOP-ACK
@@ -74,14 +74,16 @@ physical capture launcher.
 
 ## Verified source-only CI result
 
-On the Stage 4D draft PR, the new regression workflow passed
-**15/15 Stage 4D tests** (virtual 75-second 12,000-message
-accounting and fault injection) and separately reran **36/36 Stage 4C
-tests** successfully: **51/51 source-only tests total**.
+On the Stage 4D draft PR, the updated regression workflow passed
+**27/27 Stage 4D tests** (75-second virtual-time 12,000-message
+accounting, ingress/writer lifecycle and exact-write CDR audit
+fault injection), and separately reran **36/36 Stage 4C
+tests** successfully: **63/63 source-only tests total**.
 The other two triggered repository checks also passed.
-This is GitHub source-only CI; it does **not** run the native
-paced DDS+SQLite smoke or authenticate any physical data.
-The latter remains **OPERATOR TEST REQUIRED**.
+This is GitHub source-only CI and does **not** authenticate physical
+sensor data or certify an actual 75-second DDS/camera/MCU session.
+A separate short, paced native DDS+SQLite operator smoke is now
+reported PASS below.
 
 ## First native paced DDS run: SQLite readback blocked, lifecycle fix
 
@@ -146,10 +148,42 @@ Separate fault-injection regressions deliberately vary a second
 serialization, corrupt bytes and omit records to verify that
 these cases are distinguishable.
 
-**Status remains BLOCKED until the operator reruns the paced
-native smoke and posts a successful, exact-write audited readback.**
-If it still fails, the new audit identifies the first implicated
-topic; preserve the full traceback to investigate.
+The operator subsequently completed the retest successfully, as
+documented below. These first and second failed runs are retained as
+engineering evidence of the defects that were addressed.
+
+## Third operator native paced DDS run: PASS (synthetic only)
+
+On 2026-10-28, the operator reported the corrected, paced, **disconnected
+no-device** Stage 4D smoke output below. SQLite successfully opened
+the temporary bag in both `READ_WRITE` and `READ_ONLY` modes.
+The exact-write CDR audit completed with no missing, extra,
+duplicate or mismatched replay records.
+
+```text
+STAGE4D_SYNTHETIC_DDS_LOAD=PASS_NO_DEVICE
+STAGE4D_DDS_COUNTS_JSON={"/camera/camera_info": 150, "/camera/image_rect": 150, "/imu/data_raw": 250, "/stage4c/imu_source_meta": 250}
+STAGE4D_DDS_CALLBACK_DELAY_MS_P95=2.756
+STAGE4D_LIVE_CAPTURE_AUTHORIZED=FALSE
+STAGE4D_PHYSICAL_CALIBRATION_VALIDATED=FALSE
+```
+
+This is **operator-pasted local stdout**, not an independently
+retrieved host log. The confirmed scope is a nominal 5-second synthetic
+run of 250 IMU messages at 50 Hz, 250 source-metadata strings,
+150 640x480 mono8 images and 150 CameraInfo messages (30 Hz mean):
+**800 recorded-and-replayed messages**. The measured 2.756 ms p95
+is a synthetic local publish-to-subscription callback delay,
+**not** physical camera exposure-to-IMU acquisition time phase.
+The data use a fabricated M18-named ROS node and simulated MCU fields.
+
+**STAGE4D_OFFLINE_NATIVE_SHORT_LOAD=PASS_SYNTHETIC_ONLY**.
+**STAGE4D_PHYSICAL_CALIBRATION=BLOCKED**. A full-duration
+75-second physical-source session, real M18 source metadata publisher,
+USB camera exposure semantics, hard offline recorder lifecycle,
+storage cap under actual physical recording load and STOP ACK
+remain **unverified/uncommissioned**. No physical capture, motor
+power, odometry, XRSLAM VIO or navigation authorization follows.
 
 ## Offline acceptance commands — no devices
 
@@ -163,7 +197,8 @@ git worktree add --detach ../leroy-stage4d \
 cd ../leroy-stage4d/ros
 
 PYTHONDONTWRITEBYTECODE=1 python3 -Werror::SyntaxWarning -m unittest -v \
-  live_stage4d_capture_test live_stage4d_synthetic_load_test
+  live_stage4d_capture_test live_stage4d_bag_audit_test \
+  live_stage4d_synthetic_load_test
 
 PYTHONDONTWRITEBYTECODE=1 python3 -Werror::SyntaxWarning -m unittest -v \
   live_stage4c_capture_test live_stage4c_source_meta_test \
@@ -209,10 +244,10 @@ STAGE4D_LIVE_CAPTURE_AUTHORIZED=FALSE
 STAGE4D_PHYSICAL_CALIBRATION_VALIDATED=FALSE
 ```
 
-No real-run output is claimed until the operator posts their
-result. An interrupted run, incomplete count, DDS graph change,
-bad bag replay or disk-full is a **BLOCK**, not a reason to relax
-the hard gate.
+The above short native synthetic test was operator-reported PASS on
+2026-10-28. A future interrupted run, incomplete count, DDS graph
+change, bad bag replay or disk-full is still a **BLOCK**, not a
+reason to relax the hard gate.
 
 ## Absolute safety and authorization boundaries
 
