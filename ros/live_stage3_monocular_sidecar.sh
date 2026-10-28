@@ -5,6 +5,15 @@
 set -Eeuo pipefail
 cd "$(dirname "$0")"
 
+# Interactive by default; the supervised one-command startup uses --detach.
+run_flags=(--rm -it)
+if [[ "${1-}" == --detach && $# -eq 1 ]]; then
+    run_flags=(--rm --detach)
+elif [[ $# -ne 0 ]]; then
+    printf 'Usage: %s [--detach]\n' "$0" >&2
+    exit 2
+fi
+
 fail() { printf 'LIVE_STAGE3_XRSLAM=BLOCKED_%s\n' "$1" >&2; exit 2; }
 [[ "$(id -u)" != 0 ]] || fail ROOT_HOST
 command -v podman >/dev/null || fail PODMAN_MISSING
@@ -52,7 +61,7 @@ printf 'LIVE_STAGE3_XRSLAM=STARTING_MONOCULAR_DIAGNOSTIC_ONLY\n'
 # between identical numeric PIDs in the two containers.
 # Never join host network, host IPC or host PID, and do not start
 # another camera, DepthART, or static TF publisher.
-exec podman run --rm -it --pull=never --name "$sidecar" \
+exec podman run "${run_flags[@]}" --pull=never --name "$sidecar" \
     --network "container:$parent" --ipc "container:$parent" \
     --pid "container:$parent" \
     --read-only --cap-drop=all --security-opt=no-new-privileges \
