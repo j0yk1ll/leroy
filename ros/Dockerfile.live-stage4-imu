@@ -17,8 +17,10 @@ RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; \
 COPY m18_imu_stream_contract.py /opt/stage4/m18_imu_stream_contract.py
 COPY m18_imu_stream_source.py /opt/stage4/m18_imu_stream_source.py
 COPY live_stage4_imu_overlap.py /opt/stage4/live_stage4_imu_overlap.py
+COPY live_stage4b_delivery_trace.py /opt/stage4/live_stage4b_delivery_trace.py
 ENV PYTHONPATH=/opt/stage4
 RUN python3 -m py_compile /opt/stage4/m18_imu_stream_source.py \
     /opt/stage4/m18_imu_stream_contract.py \
-    /opt/stage4/live_stage4_imu_overlap.py
+    /opt/stage4/live_stage4_imu_overlap.py \
+    /opt/stage4/live_stage4b_delivery_trace.py
 CMD ["/bin/false"]
