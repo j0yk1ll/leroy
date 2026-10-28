@@ -11,13 +11,13 @@ HERE = Path(__file__).resolve().parent
 class LiveStage3ReproducibilityTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.run = (HERE / "live_stage3_start.sh").read_text()
+        cls.start_script = (HERE / "live_stage3_start.sh").read_text()
         cls.build = (HERE / "live_stage3_build.sh").read_text()
         cls.sidecar = (HERE / "live_stage3_monocular_sidecar.sh").read_text()
         cls.costmap = (HERE / "src/leroy_nav2_perception/config/live_diagnostic_costmap.yaml").read_text()
 
     def test_isolated_parent_owns_only_camera(self):
-        s = self.run
+        s = self.start_script
         for token in (
             "--network=none", "--ipc=shareable", "--pid=private",
             "--shm-size=256m", "--device=/dev/video2",
@@ -40,7 +40,7 @@ class LiveStage3ReproducibilityTest(unittest.TestCase):
             self.assertNotIn(forbidden, s)
 
     def test_both_height_filter_windows_are_required(self):
-        s = self.run
+        s = self.start_script
         self.assertIn('layer["min_obstacle_height"]', s)
         self.assertIn('layer["max_obstacle_height"]', s)
         self.assertIn('source["min_obstacle_height"]', s)
@@ -51,7 +51,7 @@ class LiveStage3ReproducibilityTest(unittest.TestCase):
         self.assertGreaterEqual(self.costmap.count("max_obstacle_height: 3.0"), 2)
 
     def test_xrslam_stays_monocular_gated(self):
-        s = self.run
+        s = self.start_script
         self.assertIn('live_stage3_monocular_sidecar.sh --detach', s)
         self.assertIn("Submitted 1 camera frames to XRSLAM (monocular)", s)
         self.assertIn("/xrslam/localization_valid", s)
@@ -72,11 +72,11 @@ class LiveStage3ReproducibilityTest(unittest.TestCase):
             "Dockerfile.live-costmap", "Dockerfile.xrslam",
         ):
             self.assertIn("-f " + f + " -t localhost/leroy-ros:", self.build)
-        self.assertIn("cleanup_if_failed", self.run)
-        self.assertIn("LIVE_STAGE3_START=FAILED_ROLLING_BACK", self.run)
-        self.assertIn("podman stop leroy-live-xrslam", self.run)
-        self.assertIn("podman stop leroy-live-costmap", self.run)
-        self.assertIn("EXISTING_CONTAINER_NAME_IN_USE", self.run)
+        self.assertIn("cleanup_if_failed", self.start_script)
+        self.assertIn("LIVE_STAGE3_START=FAILED_ROLLING_BACK", self.start_script)
+        self.assertIn("podman stop leroy-live-xrslam", self.start_script)
+        self.assertIn("podman stop leroy-live-costmap", self.start_script)
+        self.assertIn("EXISTING_CONTAINER_NAME_IN_USE", self.start_script)
 
 
 if __name__ == "__main__":
