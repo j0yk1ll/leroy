@@ -363,7 +363,9 @@ def run():
             source.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-        return 0 if passed else 2
+    # Do not return from finally: cleanup failures must propagate to the
+    # top-level BLOCKED handler rather than being silently suppressed.
+    return 0 if passed else 2
 
 
 if __name__ == "__main__":
