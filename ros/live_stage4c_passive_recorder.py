@@ -260,7 +260,7 @@ def _run_live(name):
         if not running[0]:
             raise CaptureError("capture_interrupted")
         result = node.policy.report()
-        if result["readiness"] != "COMPLETE_INPUTS_FOR_OFFLINE_ANALYSIS":
+        if result["readiness"] != "INPUT_FORMAT_COMPLETE_UNVERIFIED":
             raise CaptureError("incomplete_sensor_or_raw_tick_capture")
     except Exception as exc:
         failure = type(exc).__name__ + ":" + str(exc)
