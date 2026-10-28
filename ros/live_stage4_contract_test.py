@@ -40,6 +40,21 @@ class Stage4aStatic(unittest.TestCase):
         for name in ("image", "info", "imu"):
             self.assertIn(f'self._take("{name}"', self.supervisor)
 
+    def test_run_cannot_suppress_shutdown_exceptions(self):
+        """Returning from finally could hide STOP/ROS cleanup failures."""
+        runner = next(n for n in self.run_ast.body
+                      if isinstance(n, ast.FunctionDef) and n.name == "run")
+        for node in ast.walk(runner):
+            if isinstance(node, ast.Try):
+                self.assertFalse(
+                    any(isinstance(child, ast.Return)
+                        for statement in node.finalbody
+                        for child in ast.walk(statement)),
+                    "return_inside_finally_suppresses_cleanup_exception")
+        self.assertTrue(
+            any(isinstance(n, ast.Return) for n in runner.body),
+            "run_must_return_a_verdict_after_cleanup")
+
     def test_only_prevalidated_m18_serial_commands(self):
         self.assertEqual(m18.START, b"set_imu_stream_hz 50\r\n")
         self.assertEqual(m18.STOP, b"set_imu_stream_hz 0\r\n")
