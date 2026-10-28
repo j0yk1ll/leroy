@@ -13,8 +13,11 @@ COPY live_stage4c_capture_contract.py /opt/stage4c/live_stage4c_capture_contract
 COPY live_stage4c_passive_recorder.py /opt/stage4c/live_stage4c_passive_recorder.py
 COPY live_stage4d_capture_ingress.py /opt/stage4c/live_stage4d_capture_ingress.py
 COPY live_stage4c_source_meta.py /opt/stage4c/live_stage4c_source_meta.py
+COPY live_stage4c_source_meta_ros.py /opt/stage4c/live_stage4c_source_meta_ros.py
+# Keep the original Stage 4B M18 source and MCU command handling unchanged.
+COPY live_stage4_imu_overlap.py /opt/stage4/live_stage4_imu_overlap.py
 COPY live_stage4c_rosbag_smoke.py /opt/stage4c/live_stage4c_rosbag_smoke.py
-ENV PYTHONPATH=/opt/stage4c
+ENV PYTHONPATH=/opt/stage4c:/opt/stage4
 
 # ROS Python bindings are under /opt/ros/jazzy and the installed overlay,
 # not the bare system Python search path. Source the exact Jazzy/overlay
@@ -27,6 +30,8 @@ RUN bash -lc 'set -e; \
       /opt/stage4c/live_stage4c_passive_recorder.py \
       /opt/stage4c/live_stage4d_capture_ingress.py \
       /opt/stage4c/live_stage4c_source_meta.py \
+      /opt/stage4c/live_stage4c_source_meta_ros.py \
+      /opt/stage4/live_stage4_imu_overlap.py \
       /opt/stage4c/live_stage4c_rosbag_smoke.py; \
     python3 -c "import rosbag2_py; import rclpy"; \
     python3 /opt/stage4c/live_stage4c_passive_recorder.py --contract-smoke'
