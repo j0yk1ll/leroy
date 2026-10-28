@@ -17,8 +17,9 @@ import sys
 import time
 
 from live_stage4c_capture_contract import (
-    CaptureContract, CaptureError, METADATA_TOPIC, TOPICS, source_metadata,
+    CaptureContract, CaptureError, METADATA_TOPIC, TOPICS,
 )
+from live_stage4d_capture_ingress import CaptureIngress
 
 # Deliberately hard-disabled in this source candidate. No environment
 # variable or command line parameter can bypass this block.
@@ -108,6 +109,10 @@ def _run_live(name):
                 enable_rosout=False, start_parameter_services=False)
             self.policy = CaptureContract()
             self.writer = None
+            self.ingress = CaptureIngress(
+                contract=self.policy, serialize=serialize_message,
+                write=lambda topic, payload, stamp: self.writer.write(
+                    topic, payload, stamp))
             self.failures = []
             self.running = False
             self.valid = None
@@ -183,30 +188,9 @@ def _run_live(name):
             if not self.running or self.failures:
                 return
             try:
-                meta = None
-                if topic == METADATA_TOPIC:
-                    meta = source_metadata(msg.data)
-                    stamp = meta["imu_stamp_ns"]
-                    frame = None
-                else:
-                    stamp = (int(msg.header.stamp.sec) * 1_000_000_000
-                             + int(msg.header.stamp.nanosec))
-                    frame = msg.header.frame_id
-                if topic == "/camera/image_rect":
-                    if not msg.data or not msg.width or not msg.height:
-                        raise CaptureError("empty_image")
-                if topic == "/imu/data_raw":
-                    values = (
-                        msg.angular_velocity.x, msg.angular_velocity.y,
-                        msg.angular_velocity.z, msg.linear_acceleration.x,
-                        msg.linear_acceleration.y, msg.linear_acceleration.z,
-                    )
-                    if not all(math.isfinite(x) for x in values):
-                        raise CaptureError("invalid_imu_values")
-                raw = serialize_message(msg)
-                self.policy.accept(
-                    topic, stamp, frame, raw, time.monotonic_ns(),
-                    self.writer.write, metadata=meta)
+                # Same fail-closed payload validation and disk-write path
+                # exercised by Stage 4D no-device synthetic-load tests.
+                self.ingress.accept(topic, msg)
             except Exception as exc:
                 self.failures.append(type(exc).__name__ + ":" + str(exc))
 
@@ -266,6 +250,9 @@ def _run_live(name):
         failure = type(exc).__name__ + ":" + str(exc)
     finally:
         node.running = False
+        # Disarm callbacks and release any injected writer reference before
+        # finalizing the SQLite bag or recording a failure manifest.
+        node.ingress.close()
         if node.writer is not None:
             del node.writer
             node.writer = None
