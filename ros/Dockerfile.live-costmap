@@ -32,7 +32,7 @@ RUN bash -lc 'set -e; \
        "leroy_nav2_costmap_fixture costmap_fixture"; \
     ros2 pkg executables leroy_nav2_perception | grep -Fx \
        "leroy_nav2_perception live_costmap_probe"; \
-    grep -Fq "static_transform_publisher" /leroy_ws/install/leroy_description/share/leroy_description/launch/description.launch.py; \
+    grep -Fq "static_transform_publisher" /leroy_ws/install/leroy_description/share/leroy_description/launch/live_sensor_mounts.launch.py; \
     test -f /etc/leroy/sensor_mounts.yaml; \
     test ! -L /etc/leroy/sensor_mounts.yaml; \
     cmp -s /etc/leroy/sensor_mounts.yaml /leroy_ws/src/leroy_description/config/sensor_mounts.yaml; \
