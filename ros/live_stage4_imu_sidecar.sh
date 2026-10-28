@@ -39,6 +39,15 @@ podman exec leroy-live-xrslam test ! -e /dev/ttyACM0 ||
     fail MOTOR_CAPABLE_MCU_VISIBLE_TO_XRSLAM
 podman container exists "$sidecar" && fail SIDECAR_NAME_IN_USE
 
+# Before touching the motor-capable serial port, establish a FRESH read-only
+# real camera/depth/diagnostic costmap acceptance in the existing parent.
+timeout 100s podman exec "$parent" bash -lc '
+  set -e
+  source /opt/ros/jazzy/setup.bash
+  source /leroy_ws/install/setup.bash
+  ros2 run leroy_nav2_perception live_costmap_probe
+' || fail LIVE_STAGE3_COSTMAP_NOT_ACCEPTED
+
 printf '%s\n' \
   'Stage 4A: standalone 75s IMU ROS overlap test, NO visual-inertial XRSLAM.' \
   'The STM32 CDC interface can address motor hardware even if this code only' \
