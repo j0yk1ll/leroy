@@ -64,6 +64,14 @@ class LiveCostmapStaticTest(unittest.TestCase):
         self.assertIn("static_transform_publisher", recipe)
         self.assertIn("COPY src/leroy_description/config/sensor_mounts.yaml /etc/leroy/sensor_mounts.yaml", recipe)
         self.assertIn("test ! -L /etc/leroy/sensor_mounts.yaml", recipe)
+        # Build must fail when the tested source YAML and installed
+        # package-share YAML (actually passed to launch) do not match.
+        self.assertIn(
+            "cmp -s /leroy_ws/src/leroy_nav2_perception/config/live_diagnostic_costmap.yaml",
+            recipe)
+        self.assertIn(
+            "/leroy_ws/install/leroy_nav2_perception/share/leroy_nav2_perception/config/live_diagnostic_costmap.yaml",
+            recipe)
 
     def test_probe_fails_on_motor_topics(self):
         probe = (ROOT / "leroy_nav2_perception/live_costmap_probe.py").read_text()
