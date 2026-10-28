@@ -52,7 +52,9 @@ if [[ "$image" == localhost/leroy-ros:stage4b-imu ]]; then
     echo 'STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE'
 fi
 if [[ "$image" == localhost/leroy-ros:stage4c-capture-offline ]]; then
-    podman run --rm --pull=never --network=none       --read-only --cap-drop=all --security-opt=no-new-privileges       --entrypoint /bin/sh "$image" -c '
+    podman run --rm --pull=never --network=none \
+      --read-only --cap-drop=all --security-opt=no-new-privileges \
+      --entrypoint /bin/sh "$image" -c '
         test -s /opt/stage4c/live_stage4c_source_meta_ros.py
         test -s /opt/stage4c/live_stage4c_source_meta.py
         grep -Fq "SourceMetadataRosAdapter(source)" /opt/stage4/live_stage4_imu_overlap.py
