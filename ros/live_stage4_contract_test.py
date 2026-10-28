@@ -1,0 +1,115 @@
+"""No-device source and explicit Stage 4A safety regression tests.
+
+Does NOT open a serial port or import ROS runtime. Executes only parser logic.
+"""
+import ast
+import pathlib
+import sys
+import unittest
+
+HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import m18_imu_stream_contract as m18
+
+
+class Stage4aStatic(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.supervisor = (HERE / "live_stage4_imu_overlap.py").read_text()
+        cls.sidecar = (HERE / "live_stage4_imu_sidecar.sh").read_text()
+        cls.dockerfile = (HERE / "Dockerfile.live-stage4-imu").read_text()
+        cls.run_ast = ast.parse(cls.supervisor)
+
+    def test_only_prevalidated_m18_serial_commands(self):
+        self.assertEqual(m18.START, b"set_imu_stream_hz 50\r\n")
+        self.assertEqual(m18.STOP, b"set_imu_stream_hz 0\r\n")
+        self.assertEqual(m18.PORT, "/dev/ttyACM0")
+        s = self.supervisor
+        self.assertIn("send_only_whitelisted_serial_command(device, START)", s)
+        self.assertIn("send_only_whitelisted_serial_command(device, STOP)", s)
+        self.assertIn("stopped = wait_ack(device", s)
+        self.assertIn("STAGE4A_IMU_STOP_ACK=", s)
+        self.assertIn("STAGE4A_MCU_STOP_STATE=UNVERIFIED_PHYSICALLY_ISOLATE", s)
+        # No alternate serial writer or motor bridge node.
+        self.assertNotIn("device.write(", s)
+        self.assertNotIn("leroy_bridge.node", s)
+        self.assertNotIn("subprocess.", s)
+        self.assertNotIn("os.system(", s)
+        self.assertIn("if not stopped:", s)
+
+    def test_fail_closed_runtime_and_auditing(self):
+        s = self.supervisor
+        for token in (
+            "FORBIDDEN_TOPICS", "FORBIDDEN_NODES",
+            "self.count_publishers(\"/imu/data_raw\") > 1",
+            'pub[0].node_name == "m18_imu_source"',
+            "unexpected_odom_message", "unexpected_localization_authority",
+            "stage3_graph_or_false_validity_not_ready",
+            "camera_imu_absolute_offset_validated",
+            "camera_imu_extrinsics_validated",
+            "xrslam_vio_started", "metric_odometry_authorized",
+            "STAGE4A_IMU_OVERLAP=PASS_TRANSPORT_ONLY",
+        ):
+            self.assertIn(token, s)
+        for token in (
+            "ros2 lifecycle set", "XRSLAM_SENSOR", "/cmd_vel", "/odom",
+        ):
+            # Except deliberate denial/monitoring in source, no commands.
+            if token in ("ros2 lifecycle set", "XRSLAM_SENSOR"):
+                self.assertNotIn(token, s)
+
+    def test_guarded_serial_is_in_separate_contained_process(self):
+        s = self.sidecar
+        for token in (
+            "LEROY_STAGE4_MOTOR_ISOLATION_ATTESTED",
+            "LEROY_STAGE4_MCU_BY_ID",
+            "/dev/serial/by-id/",
+            "STAGE4_IMU_ONLY",
+            "STAGE3_PARENT_NOT_RUNNING",
+            "MOTOR_CAPABLE_MCU_VISIBLE_TO_PARENT",
+            "MOTOR_CAPABLE_MCU_VISIBLE_TO_XRSLAM",
+            "--network \"container:$parent\"",
+            "--ipc \"container:$parent\"",
+            "--pid \"container:$parent\"",
+            '--device="$mcu:/dev/ttyACM0:rw"',
+            "--cap-drop=all", "--security-opt=no-new-privileges",
+            "--read-only",
+            "timeout --foreground", "--signal=INT",
+            "LEROY_STAGE4_IMU_ONLY=1",
+            "LEROY_NAV2_DRY_RUN=1",
+        ):
+            self.assertIn(token, s)
+        for forbidden in (
+            "--network=host", "--pid=host", "--ipc=host",
+            "--privileged", "--device=/dev/video2", "--device=/dev/gpiochip",
+            "ros2 launch leroy_bridge",
+        ):
+            self.assertNotIn(forbidden, s)
+
+    def test_no_runtime_permission_from_image(self):
+        s = self.dockerfile
+        self.assertIn("FROM localhost/leroy-ros:costmap", s)
+        self.assertIn("m18_imu_stream_source.py", s)
+        self.assertIn("m18_imu_stream_contract.py", s)
+        self.assertIn('CMD ["/bin/false"]', s)
+        self.assertNotIn("ENTRYPOINT", s)
+        self.assertNotIn("CMD [\"/usr/local/bin/leroy-entrypoint\"]", s)
+
+    def test_existing_m18_packet_sequence_contract(self):
+        fields = {
+            "seq": 17, "t_us": 1_000_000, "cal": 1,
+            "af_mm_s2": 100, "al_mm_s2": 200, "au_mm_s2": 9900,
+            "gr_mrad_s": 1, "gp_mrad_s": 2, "gy_mrad_s": 3,
+            "mag_valid": 0, "mx_raw": 0, "my_raw": 0, "mz_raw": 0,
+        }
+        line = "telemetry imu " + " ".join(f"{k}={fields[k]}" for k in m18.FIELD_NAMES)
+        self.assertEqual(m18.parse_packet(line), fields)
+        self.assertEqual(m18.sequence_gap(17, 18), 0)
+        with self.assertRaises(m18.PacketError):
+            m18.sequence_gap(18, 18)
+        with self.assertRaises(m18.PacketError):
+            m18.parse_packet(line + " unexpected=3")
+
+
+if __name__ == "__main__":
+    unittest.main()
