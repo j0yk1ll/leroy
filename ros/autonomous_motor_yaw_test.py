@@ -169,7 +169,21 @@ class ActuatedCalibrationContracts(unittest.TestCase):
         self.assertNotIn("set_wheels", source)
         self.assertNotIn("create_publisher(Twist", source)
         self.assertIn('SIGNED_MOTION = "/leroy/motor/signed_motion"', source)
+        self.assertIn('BRIDGE_AUTHORITY = "/leroy/motor/authority_status"', source)
+        self.assertIn("self.bridge_armed_session == self.session_id", source)
+        self.assertIn("BRIDGE_MOTOR_REARM_NOT_ACKNOWLEDGED", source)
+        self.assertIn("self.last_control_heading_receipt", source)
         self.assertIn('LEASE_TOPIC = "/leroy/safety/rotation_lease"', source)
+
+    def test_bridge_reports_real_motor_authority_not_elapsed_time(self):
+        bridge = (ROOT/"src/leroy_bridge/leroy_bridge/node.py").read_text()
+        ast.parse(bridge)
+        self.assertIn("'/leroy/motor/authority_status'", bridge)
+        self.assertIn("'schema': 'leroy_motor_bridge_authority_v1'", bridge)
+        self.assertIn("'physical_release_verified'", bridge)
+        self.assertIn("'watchdog_acknowledged'", bridge)
+        self.assertIn("'motor_cdc_healthy'", bridge)
+        self.assertIn("'state': decision.state", bridge)
 
     def test_actuating_launcher_cannot_map_cdc_or_bypass_monitor(self):
         script = ROOT / "live_actuated_yaw_calibration.sh"
