@@ -244,15 +244,27 @@ class MotorYawCalibration:
             return MotorYawDecision(
                 "ZERO_DWELL", "WAIT_FOR_STOP_CONFIRMATION", 0.0, None, False)
 
+        # Never continue driving open loop on an unchanged/stale IMU
+        # sample; a 20 Hz controller tick is not a new physical heading.
         proposed = (status.diagnostic_wz_rad_s
-                    if status.state == "TRACKING" else 0.0)
+                    if (heading is not None and status.state == "TRACKING")
+                    else 0.0)
+        if (heading is not None
+                and status.observed_rate_rad_s is not None
+                and abs(status.observed_rate_rad_s)
+                > self.lease.max_yaw_rate_rad_s * 1.5 + 0.10):
+            self.abort("OBSERVED_YAW_RATE_EXCEEDS_VERIFIED_LIMIT")
+            return MotorYawDecision(
+                "LATCHED", self.fault, 0.0, None, True)
         max_wz = min(HARD_MAX_YAW_RATE_RAD_S,
                      self.lease.max_yaw_rate_rad_s)
         proposed = max(-max_wz, min(max_wz, proposed))
         max_delta = HARD_MAX_RATE_CHANGE_RAD_S2 * dt
         wz = max(self.last_wz - max_delta,
                  min(self.last_wz + max_delta, proposed))
-        if status.state == "SETTLING":
+        if status.state == "SETTLING" or heading is None:
+            # Unchanged feedback forces immediate signed ZERO, not a
+            # ramped continuation of previously nonzero wheel commands.
             wz = 0.0
         self.last_wz = wz
         return MotorYawDecision(
