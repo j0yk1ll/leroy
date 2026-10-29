@@ -5,6 +5,17 @@ All parameters are fictitious laboratory values, NOT Leroy calibration.
 No ROS, device, motor, or command topic access.
 """
 
+# TODO(AUTONOMY) [measured mecanum odometry]: Replace this synthetic
+# fixture's values with separately tested encoder counts/signs, measured
+# wheel radius, track/wheelbase, roller orientation and slip compensation.
+# TODO(AUTONOMY) [pose fusion]: Fuse wheel velocities and real IMU yaw
+# with validated camera/metric localization, published covariances and
+# single ownership of odom->base_link. Detect jumps, encoder loss and
+# nonholonomic slip without silently trusting guessed physical scale.
+# Acceptance: measured driving/rotation against external ground truth,
+# repeated stop/start and encoder faults remain within recorded error bounds.
+
+
 from dataclasses import dataclass
 import math
 
