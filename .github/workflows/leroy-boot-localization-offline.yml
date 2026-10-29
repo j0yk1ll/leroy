@@ -6,6 +6,8 @@ on:
       - 'ros/boot_localization_*.py'
       - 'ros/boot_yaw_*.py'
       - 'ros/boot_auto_calibration_*.py'
+      - 'ros/autonomous_motor_yaw_*.py'
+      - 'ros/live_actuated_yaw_calibration*'
       - 'ros/live_manual_yaw_witness*'
       - 'ros/live_boot_yaw*'
       - 'ros/live_boot_imu_service.py'
@@ -27,6 +29,8 @@ on:
       - 'ros/boot_localization_*.py'
       - 'ros/boot_yaw_*.py'
       - 'ros/boot_auto_calibration_*.py'
+      - 'ros/autonomous_motor_yaw_*.py'
+      - 'ros/live_actuated_yaw_calibration*'
       - 'ros/live_manual_yaw_witness*'
       - 'ros/live_boot_yaw*'
       - 'ros/live_boot_imu_service.py'
@@ -77,6 +81,9 @@ jobs:
       - name: Live yaw tracking witness and zero-command boundaries
         working-directory: ros
         run: python3 -m unittest -v boot_yaw_tracking_test
+      - name: Signed actuating yaw control and authenticated physical safety interlocks
+        working-directory: ros
+        run: python3 -m unittest -v autonomous_motor_yaw_test
       - name: Deterministic no-hardware diagnostic simulation
         working-directory: ros
         run: |
