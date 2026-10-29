@@ -431,7 +431,13 @@ separately issued safety lease, then sends HMAC-signed
 `/leroy/motor/signed_rearm` and `/leroy/motor/signed_motion`
 messages. The M22 bridge retains independent MCU watchdog, wheel
 packet sequencing, zero and STOP acknowledgments, key custody and
-its own physical interlocks. There is **no raw /cmd_vel fallback**.
+its own physical interlocks. The bridge now also publishes the actual
+`/leroy/motor/authority_status` from its internal `MotorAuthority`
+evaluation, including the current session, `ARMED` state,
+`physical_release_verified`, MCU watchdog acknowledgment, CDC health,
+and fresh monotonic stamp. The controller **requires** this fresh,
+bridge-owned state after operator rearm; elapsed time alone never
+enables a signed nonzero command. There is **no raw /cmd_vel fallback**.
 
 **Continuous independent physical safety lease:** the new
 `autonomous_motor_yaw_core.py` accepts `leroy_swept_safety_lease_v1`
@@ -448,6 +454,12 @@ independently reported stop state and settled IMU heading, with a
 signed zero command and latched shutdown after completion. Velocity
 limits and rate slew are capped in software but must also remain
 within the safety monitor's physically measured operating envelope.
+
+A 20Hz command tick which sees no *new* IMU heading sends
+signed zero, rather than driving on a repeated timestamp. The
+controller also latches if measured yaw rate exceeds the rate
+authorized by the physical monitor. Stop release requires sustained
+zero output and independently reported wheel/chassis stopping.
 
 The rootless entrypoint `live_actuated_yaw_calibration.sh` requires:
 a live, separately commissioned bridge container named
