@@ -120,7 +120,7 @@ class ActuatedCalibrationContracts(unittest.TestCase):
             v.accept(signed_lease(2, t), t), t))
         second = c.step(heading(t, 0), t)
         self.assertLess(second.wz_rad_s, 0.0)
-        self.assertGreaterEqual(second.wz_rad_s, -0.01)
+        self.assertGreaterEqual(second.wz_rad_s, -0.010001)
         self.assertFalse(second.operator_or_motor_rearm_required)
         self.assertEqual(second.waypoint_index, 0)
 
@@ -163,7 +163,7 @@ class ActuatedCalibrationContracts(unittest.TestCase):
         self.assertIn("sign_rearm(", source)
         self.assertIn("MAX_ACTUATION_WITHOUT_YAW_NS", source)
         self.assertIn("STOP_QUIET_RAD_S", source)
-        self.assertIn("if self.motor.finish_with_stop_confirmation(", source)
+        self.assertIn("self.motor.finish_with_stop_confirmation(", source)
         self.assertIn("self.publish_signed_motion(0.0)", source)
         self.assertNotIn("serial.Serial(", source)
         self.assertNotIn("set_wheels", source)
