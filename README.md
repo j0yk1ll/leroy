@@ -71,9 +71,24 @@ point clouds, activated Nav2 diagnostic costmap, and real XRSLAM
 monocular process. XRSLAM reported `initializing` and
 `/xrslam/localization_valid=false`; no `/odom` message was
 observed in the six-second check. This confirms the current Stage 3
-nonactuating startup path, **not** Stage 4 IMU session or autonomous
-motor/navigation readiness. The owner-reported result has not been
+nonactuating startup path. The owner-reported result has not been
 independently replicated by CI or this assistant.
+
+**Clean-clone persistent IMU acceptance (2026-10-29):** Using the same
+reconstructed checkout and the existing Stage 3 graph, the operator also
+reported `BOOT_LIVE_SESSION=IMU_STREAM_READY`,
+`BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY`, and
+`BOOT_AUTO_CALIBRATION=PASS_STATIONARY_GYRO_CONSISTENCY_ONLY`.
+The calibration status identified the physical STM32 50 Hz IMU,
+an uninterrupted eight-second window with 401 samples and no resets,
+a yaw drift of 0.0816 degrees and gyro-Z noise of approximately
+0.002389 rad/s. It deliberately reported
+`physical_motion_authorized=false`. This verifies the observed
+**startup and calibration portion** of the sensor-only Stage 4 runtime.
+The pasted output did **not** include the final IMU STOP acknowledgment:
+shutdown completion remains unverified for this fresh-clone run.
+Neither run authorizes motor use, validates metric localization, or
+establishes camera–IMU extrinsics.
 
 ## Run the accepted, non-actuating physical runtime
 
