@@ -84,7 +84,7 @@ class PersistentBootService(unittest.TestCase):
         self.assertIn("len(pubs) == 1", source_text)
         self.assertNotIn("--device=", source_text)
         self.assertNotIn("--privileged", source_text)
-        embedded = source_text.split("<<'PY'\\n", 1)[1].rsplit("\\nPY", 1)[0]
+        embedded = source_text.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
         program = ast.parse(embedded)
         ros_publishers = [
             call for call in ast.walk(program)
