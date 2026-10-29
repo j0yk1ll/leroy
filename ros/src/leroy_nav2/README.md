@@ -1,7 +1,7 @@
 # Leroy Nav2 — HISTORICAL Milestone 1: isolated inspection
 
 **Historical test instructions, not the active robot startup path.**
-See [`ros/CURRENT_LIVE_RUNTIME.md`](../../../CURRENT_LIVE_RUNTIME.md)
+See [`ros/CURRENT_LIVE_RUNTIME.md`](../../CURRENT_LIVE_RUNTIME.md)
 for the operator-verified Stage 3/4C system and current migration work.
 
 **Not a driving stack.** The original M1 isolated Nav2 experiment did
