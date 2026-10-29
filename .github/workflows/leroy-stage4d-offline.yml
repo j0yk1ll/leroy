@@ -47,9 +47,9 @@ jobs:
           python -Werror::SyntaxWarning -m unittest -v \
             live_stage4c_capture_test live_stage4c_source_meta_test \
             live_stage4c_source_meta_ros_test live_stage4c_synthetic_dds_test
-      - name: Explicit live gate and unchanged serial runtime
+      - name: Explicit commissioning and unchanged device-free ingress
         run: |
-          grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = False' ros/live_stage4c_passive_recorder.py
+          grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' ros/live_stage4c_passive_recorder.py
           grep -Fq 'self.ingress.accept(topic, msg)' ros/live_stage4c_passive_recorder.py
           ! grep -Eq 'serial\.Serial\(|device\.write\(|create_publisher\(' ros/live_stage4d_capture_ingress.py
           grep -Fqx 'CMD ["/bin/false"]' ros/Dockerfile.live-stage4c-capture
