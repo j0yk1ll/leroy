@@ -44,12 +44,13 @@ class CurrentLivePath(unittest.TestCase):
         self.assertIn("'motor_power_feedback_offset', -1", source)
         self.assertIn("self._motor_authority = None", source)
 
-    def test_old_nav2_readme_does_not_claim_raw_bridge_cmd_vel(self):
-        source = (ROOT / "src/leroy_nav2/README.md").read_text()
-        self.assertIn("HISTORICAL Milestone 1", source)
-        self.assertIn("../../CURRENT_LIVE_RUNTIME.md", source)
+    def test_single_root_readme_preserves_motion_inhibition(self):
+        source = (ROOT.parent / "README.md").read_text()
+        self.assertIn("single README", source)
+        self.assertIn("hardware.disabled.yaml", source)
+        self.assertIn("motor", source.lower())
+        self.assertIn("not an operative deployment path", source)
         self.assertNotIn("The bridge subscribes to absolute", source)
-        self.assertIn("no raw", source)
 
     def test_live_guide_distinguishes_active_from_historical(self):
         guide = GUIDE.read_text()
