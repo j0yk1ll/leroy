@@ -1,4 +1,4 @@
-name: Leroy portable current checkout (no devices)
+name: Leroy integrated runtime - no-device source and regression checks
 
 on:
   pull_request:
@@ -10,14 +10,16 @@ permissions:
   contents: read
 
 jobs:
-  checkout-portability:
+  integrated-runtime:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Current image source contract and standalone boot regressions
+          python-version: '3.12'
+      - name: Install static contract dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML
+      - name: One checkout and all retained camera/IMU/no-device regressions
         working-directory: ros
-        run: bash ./check_current_checkout.sh
+        run: bash ./leroy.sh check
