@@ -74,13 +74,36 @@ reason `STATIONARY_GYRO_CONSISTENCY_PASSED_ONLY`. As designed,
 `physical_motion_authorized`, and `motor_motion_authorized`
 were all false.
 
-**Scope:** This is operator-reported real-source IMU/yaw startup and
-eight-second stationary gyro acceptance from the rebuilt repository.
-The provided transcript ends while the session is running, **before**
-`BOOT_IMU_SOURCE_STOP_ACK=PASS` or a full shutdown outcome.
-Consequently the fresh-clone MCU IMU STOP handshake is still unverified.
-No metric SLAM localization, Nav2 motion, full physical stop, or motor
-bridge commissioning is implied.
+### Clean `main` completed IMU-stream shutdown acceptance (2026-10-29)
+
+The operator then interrupted the same running session with Ctrl+C.
+The actual reported terminal output concluded:
+
+```text
+BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY
+BOOT_LIVE_MOTION=BLOCKED_NO_ACTUATION
+BOOT_IMU_SOURCE_START_ACK=PASS
+BOOT_IMU_SOURCE_STOP_ACK=PASS
+BOOT_IMU_SOURCE_RESULT=PASS_OPERATOR_STOPPED
+BOOT_LIVE_SESSION=STOPPED_NO_MOTION_AUTHORITY
+```
+
+The last `leroy_boot_yaw_v1` status was `HEADING_ACTIVE`, with
+`accepted_samples=55743`, `yaw_relative_deg=0.5137217008341133`,
+`last_stamp_delta_s=0.019999159000000002`, and
+`motor_motion_authorized=false`. These are real IMU stream and
+relative-heading observations, **not** independently validated absolute
+orientation accuracy.
+
+**Scope:** The operator has now demonstrated fresh-checkout image
+reconstruction, physical Stage 3 camera/depth/costmap/XRSLAM diagnostics,
+physical STM32 IMU START, real eight-second stationary gyro
+verification, and a successful IMU stream STOP acknowledgment on
+supervised shutdown. The source is the operator-supplied terminal logs.
+This is a **sensor-stream STOP**, not a verified wheel or power cutoff,
+motor-driver braking response, collision protection, metric SLAM
+localization, or Nav2 autonomous motion. The signed motor bridge
+remains uncommissioned.
 
 
 ## Actual software interfaces for the next live milestone
