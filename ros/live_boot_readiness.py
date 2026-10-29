@@ -17,6 +17,7 @@ CLOUD = "/leroy_nav2/diagnostics/raw_depth_points"
 STATUS = "/xrslam/tracking_status"
 VALID = "/xrslam/localization_valid"
 YAW = "/leroy_boot/relative_yaw_status"
+AUTO_IMU = "/leroy_boot/auto_imu_calibration_status"
 EXPECTED = {
     IMAGE: ("rectify_node", "/camera"),
     INFO: ("usb_cam", "/camera"),
@@ -51,6 +52,50 @@ def graph_report(node):
                          and pubs[0].node_name == owner
                          and pubs[0].node_namespace == namespace)
     return report
+
+
+def parse_auto_imu_candidate(text, now_ns):
+    """Parse strictly recent automatic stationary consistency only.
+
+    The ROS subscriber separately validates the physical publisher owner.
+    Success is not a motor, absolute-heading or camera-IMU calibration grant.
+    """
+    try:
+        if type(text) is not str or len(text) > 4096:
+            return None
+        d = json.loads(text)
+        if (type(d) is not dict
+                or d.get("schema") != "leroy_auto_imu_calibration_v1"
+                or d.get("source") != "live_ros_m18_imu"
+                or d.get("state") != "VERIFIED_STATIONARY_CANDIDATE"
+                or d.get("owner_verified") is not True
+                or d.get("motor_motion_authorized") is not False
+                or d.get("physical_motion_authorized") is not False
+                or d.get("physical_heading_accuracy_validated") is not False
+                or d.get("absolute_heading_validated") is not False
+                or d.get("camera_imu_extrinsics_validated") is not False
+                or d.get("samples", 0) < 350
+                or d.get("window_elapsed_s", 0) < 8.0):
+            return None
+        stamp = d.get("monotonic_status_ns")
+        if type(stamp) is not int or not 0 <= now_ns - stamp <= 350_000_000:
+            return None
+        keys = (
+            "independent_bias_rad_s", "heading_bias_rad_s",
+            "bias_disagreement_rad_s", "split_bias_delta_rad_s",
+            "gyro_z_noise_std_rad_s", "yaw_drift_deg")
+        if any(type(d.get(k)) not in (int, float)
+               or not math.isfinite(d[k]) for k in keys):
+            return None
+        return {
+            "samples": d["samples"],
+            "window_elapsed_s": d["window_elapsed_s"],
+            "gyro_z_noise_std_rad_s": d["gyro_z_noise_std_rad_s"],
+            "bias_disagreement_rad_s": d["bias_disagreement_rad_s"],
+            "yaw_drift_deg": d["yaw_drift_deg"],
+        }
+    except (ValueError, TypeError, OverflowError):
+        return None
 
 
 def run():
@@ -88,6 +133,15 @@ def run():
             self.boot_yaw = None
             self.boot_yaw_at = None
             self.boot_yaw_count = 0
+            self.auto_imu_calibration = None
+            self.auto_imu_calibration_at = None
+            self._auto_cal_sub = self.create_subscription(
+                String, AUTO_IMU, self.on_auto_calibration,
+                QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
+                           reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.VOLATILE))
+            if self._auto_cal_sub.topic_name != AUTO_IMU:
+                raise RuntimeError("BOOT_LIVE_AUTO_CALIBRATION_REMAP_DENIED")
             self._yaw_sub = self.create_subscription(
                 String, YAW, self.on_yaw,
                 QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
@@ -109,6 +163,22 @@ def run():
             ]
             if {sub.topic_name for sub in self._boot_subscriptions} != set(EXPECTED):
                 raise RuntimeError("BOOT_LIVE_SUBSCRIPTION_REMAP_DENIED")
+
+        def on_auto_calibration(self, msg):
+            # Same already-verified yaw node, separate diagnostic publisher.
+            pubs = self.get_publishers_info_by_topic(AUTO_IMU)
+            self.auto_imu_calibration = None
+            self.auto_imu_calibration_at = None
+            if (len(pubs) != 1
+                    or pubs[0].node_name != "leroy_live_boot_yaw"
+                    or pubs[0].node_namespace != "/"
+                    or pubs[0].topic_type != "std_msgs/msg/String"):
+                return
+            result = parse_auto_imu_candidate(
+                msg.data, time.monotonic_ns())
+            if result is not None:
+                self.auto_imu_calibration = result
+                self.auto_imu_calibration_at = time.monotonic()
 
         def on_yaw(self, msg):
             pubs = self.get_publishers_info_by_topic(YAW)
@@ -191,6 +261,10 @@ def run():
                 and now - node.boot_yaw_at > 0.35):
             node.boot_yaw = None
             node.boot_yaw_at = None
+        if (node.auto_imu_calibration_at is not None
+                and now - node.auto_imu_calibration_at > 0.35):
+            node.auto_imu_calibration = None
+            node.auto_imu_calibration_at = None
         owners = graph_report(node)
         ages = {
             topic: (None if topic not in node.received_at
@@ -241,7 +315,10 @@ def run():
             "xrslam_localization_valid": node.local_valid,
             "imu_publisher_count": node.count_publishers("/imu/data_raw"),
             "boot_relative_yaw_samples": node.boot_yaw_count,
-            "boot_relative_yaw_rad": node.boot_yaw,
+            "boot_relative_yaw_rad": node.boot_y,
+            "auto_imu_stationary_candidate_observed": (
+                node.auto_imu_calibration is not None),
+            "auto_imu_stationary_candidate": node.auto_imu_calibration,
             "odom_publisher_count": node.count_publishers("/odom"),
             "read_only": True,
             "source_calibration_validated": False,
