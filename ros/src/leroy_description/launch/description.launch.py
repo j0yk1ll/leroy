@@ -4,6 +4,15 @@ No URDF, Xacro, robot_state_publisher, MCU, camera or motor interface.
 This launch starts only standard tf2_ros/static_transform_publisher nodes.
 Do not launch a second TF owner for these children at the same time.
 """
+
+# TODO(AUTONOMY) [TF authority]: Replace the provisional mount YAML with
+# measured sensor-to-body transforms and validate exact single ROS publisher
+# ownership of every static edge in the integrated navigation graph.
+# Audit separate dynamic odom->base_link and map->odom publishers for
+# correct axis conventions, timestamp validity and discontinuity handling.
+# Acceptance: no duplicate TF, zero placeholder extrinsics, backwards-time
+# transforms or uncalibrated pose frame can authorize production navigation.
+
 import math
 from pathlib import Path
 
