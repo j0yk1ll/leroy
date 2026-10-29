@@ -175,6 +175,39 @@ class BootYawTests(unittest.TestCase):
                                accel=acc, gyro=gyro)
                 self.assertEqual(e.state, "FAULT_LATCHED")
 
+    def test_real_rotation_acceleration_transient_keeps_yaw(self):
+        # Accelerometer magnitude can depart from gravity while a human
+        # rotates the chassis. Pure relative yaw integrates gyro Z.
+        est, stamp, mono = samples()
+        e = est.update(stamp + 20_000_000,
+                       mono + 20_000_000,
+                       accel=(12.0, 1.0, 9.8),
+                       gyro=(0.0, 0.0, 0.003 + 0.2))
+        self.assertEqual(e.state, "HEADING_ACTIVE")
+        self.assertIsNotNone(e.relative_yaw_rad)
+        self.assertEqual(e.dynamic_accel_samples, 1)
+        self.assertGreater(e.last_accel_norm_m_s2, 10.8)
+
+    def test_still_rejects_invalid_active_acceleration(self):
+        for accel in ((0.0, 0.0, 0.0), (80.0, 0.0, 9.8)):
+            with self.subTest(accel=accel):
+                est, stamp, mono = samples()
+                e = est.update(stamp+20_000_000, mono+20_000_000,
+                               accel=accel, gyro=(0, 0, 0.003))
+                self.assertEqual(e.state, "FAULT_LATCHED")
+                self.assertEqual(e.reason, "ACCEL_SENSOR_OUT_OF_RANGE")
+                self.assertIsNone(e.relative_yaw_rad)
+
+    def test_stationary_bias_still_requires_gravity(self):
+        est = BootYaw()
+        e = est.update(100_000_000, 100_000_000,
+                       accel=(12.0, 1.0, 9.8),
+                       gyro=(0.0, 0.0, 0.003))
+        self.assertEqual(e.state, "FAULT_LATCHED")
+        self.assertEqual(
+            e.reason, "ACCEL_MAGNITUDE_IMPLAUSIBLE_BIAS_WINDOW")
+        self.assertIsNone(e.relative_yaw_rad)
+
     def test_yaw_rate_out_of_range_latches(self):
         est, stamp, mono = samples()
         e = est.update(stamp+20_000_000, mono+20_000_000,
