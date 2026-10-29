@@ -237,8 +237,10 @@ class BootYawTests(unittest.TestCase):
                 if isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and node.func.attr == "create_publisher"]
-        self.assertEqual(len(pubs), 1)
-        self.assertEqual(ast.unparse(pubs[0].args[1]), "STATUS_TOPIC")
+        self.assertEqual(len(pubs), 2)
+        self.assertEqual(
+            {ast.unparse(pub.args[1]) for pub in pubs},
+            {"STATUS_TOPIC", "CALIBRATION_TOPIC"})
         self.assertIn("EXPECTED_OWNER", src)
         self.assertIn("physical_heading_accuracy_validated", src)
         self.assertIn('"motor_motion_authorized": False', src)

@@ -344,6 +344,72 @@ envelope have been physically verified and reviewed.
 The present read-only integration deliberately uses **no
 fabricated safety flags** to pretend these checks passed.
 
+## Automatic real-IMU calibration at session startup
+
+The persistent real M18/yaw service now automatically performs an
+**additional stationary gyro quality check** after it establishes
+`HEADING_ACTIVE`. There is no second operator command or new MCU/USB
+owner. It uses the existing 50 Hz STM32 IMU messages and the
+existing live relative-yaw estimator in the same device-free ROS yaw
+container.
+
+`ros/boot_auto_calibration_core.py` collects at least 350 real IMU
+samples in a **continuous eight-second stationary holdout** after the
+initial 2.5-second gyro bias. It checks:
+
+- magnitude of gravity and low gyro rate during that holdout, resetting
+  the incomplete window when the chassis is moved (at most four resets);
+- consecutive timestamp and receipt continuity, with regression faults;
+- gyro-Z sample standard deviation and consistency between first and
+  second halves of the stationary holdout;
+- independent *later-sample* gyro-Z mean versus the startup bias; and
+- yaw drift across the stationary interval.
+
+If the observed measurements fall within **provisional diagnostic
+thresholds**, the existing persistent yaw process emits
+
+```text
+BOOT_AUTO_CALIBRATION=PASS_STATIONARY_GYRO_CONSISTENCY_ONLY
+BOOT_AUTO_CALIBRATION_JSON={...}
+```
+
+and publishes structured JSON `std_msgs/msg/String` on
+`/leroy_boot/auto_imu_calibration_status` in ROS domain 170.
+The existing read-only `live_boot_readiness.py` now consumes this
+topic from the single expected live yaw node, verifies recent status,
+minimum sample/window evidence and non-authorizing fields, and reports
+`auto_imu_stationary_candidate_observed` plus measured
+`auto_imu_stationary_candidate` metrics. It still reports
+`source_calibration_validated=false` and
+`physical_motion_authorized=false`; an 8-second gyro holdout is not
+camera–IMU calibration or physical motion release.
+This separate status never sets `physical_heading_accuracy_validated`,
+`absolute_heading_validated`, `camera_imu_extrinsics_validated` or
+`motor_motion_authorized` to true. If Leroy moves too early, the
+calibration is withheld/reset rather than filled with hypothetical
+stationary samples. Invalid stamps or repeatedly fragmented windows
+latch a calibration-specific fault.
+
+**To use it**, fetch `feature/autonomous-imu-calibration` and start
+the **same** already commissioned `live_boot_session.sh` with the
+existing physically disconnected motor rails. Remain stationary
+during the initial automatic holdout (~11 seconds from first valid
+IMU acquisition). The stream keeps running afterwards. No new
+manual ±90° witness or stationary capture campaign is required.
+
+This is **autonomous stationary sensor calibration/verification**, not
+an autonomous powered chassis calibration turn. The successful
+operator-observed approximately 90° clockwise manual turn provides
+a yaw sign/rough scale reference but cannot calibrate actual wheel
+speed, PID gains, stopping distance, camera–IMU clock phase or stereo/
+monocular metric scale. Those require their own measured physical
+signals. The current deprecated GPIO interlocks must not be spoofed:
+the user-reported whole-robot hardwired E-stop remains the physical
+cutoff, and returning power never grants a motor session. Until
+the independent power-stop, complete swept-space observation and
+exclusive signed motor controller are integrated against the actual
+robot, the auto-calibration result is **not a motion permit**.
+
 ## Shortest path to a physical autonomous yaw sweep
 
 1. **Identify the deployed drive/motor safety interface**, not old YAML guesses: current independent cutoff and E-stop mechanism, motor safe-state and test evidence, command owner, motion protocol, and what the wheel/heading feedback actually is. Record verified hardware facts in a separate current configuration, not as magic `True` booleans. No implicit enable.
