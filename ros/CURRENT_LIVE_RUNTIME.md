@@ -295,6 +295,39 @@ envelope returns `MANUAL_YAW_SWEEP=BLOCKED_...`, with
 `MANUAL_YAW_MOTOR=BLOCKED_NO_COMMAND_PATH`. This witness
 never stops or modifies the independent IMU-source session.
 
+### First live manual yaw witness observation (2026-10-29)
+
+The operator turned the unpowered chassis clockwise and counterclockwise
+several times while the new `live_manual_yaw_witness.sh` listened to
+the real IMU-relative heading. The observer successfully changed from
+`AWAITING_HEADING` to `TRACKING` on the expected single live yaw
+source, with the first target near `-90.2°` (origin-relative target
+`-90°`). Live feedback showed both direction signs and tracking
+errors, including:
+
+- `error_deg=-175.09`: observed yaw was approximately `+84.89°`
+  relative to the IMU's session origin, opposite the requested clockwise
+  first waypoint.
+- `error_deg=-0.19`: observed heading was almost exactly at the
+  first target, but measured yaw rate was `+0.416 rad/s`; the state
+  correctly remained `TARGET_MOVING_NOT_SETTLED`.
+- `error_deg=+4.57`: observed yaw was about `4.57°` past the target,
+  outside the witness's `±3°` hold band.
+
+No `SETTLING`, waypoint advance or `DONE` occurred in the
+supplied progress lines. This is **real feedback ingestion and target
+error validation**, not proof that the full three-waypoint sweep has
+been completed. The `diagnostic_wz_rad_s` values are neither motor
+commands nor physically commissioned speed limits.
+
+In response, the witness progress now includes
+`current_relative_deg` (relative to the first observed heading),
+`target_relative_deg` (`-90`, `+90`, then `0`) and
+`operator_action` (explicit clockwise/counterclockwise/hold
+instruction). Progress updates every two seconds instead of ten
+while the witnessed session is running. Its motor-control boundary
+and all latched fault rules are unchanged.
+
 **Motor commissioning is a separate engineering stage.**
 The historical M22 signed bridge has a session-bound operator
 rearm, sole serial writer and active command inhibit. It is
