@@ -39,7 +39,17 @@ def run():
     preflight()
     import rclpy
     from rclpy.node import Node
-    from rclpy.qos import qos_profile_sensor_data
+    from rclpy.qos import (
+        DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy,
+    )
+    # A deeper BEST_EFFORT subscriber queue absorbs brief Stage 3 CPU
+    # scheduling stalls without claiming any guaranteed DDS delivery.
+    # On receipt, sensor age and core stamp continuity are still enforced.
+    imu_qos = QoSProfile(
+        history=HistoryPolicy.KEEP_LAST,
+        depth=32,
+        reliability=ReliabilityPolicy.BEST_EFFORT,
+        durability=DurabilityPolicy.VOLATILE)
     from std_msgs.msg import String
     from sensor_msgs.msg import Imu
 
@@ -53,7 +63,7 @@ def run():
             self._owner_ok = False
             self._start_mono = time.monotonic()
             self._imu_sub = self.create_subscription(
-                Imu, IMU_TOPIC, self.on_imu, qos_profile_sensor_data)
+                Imu, IMU_TOPIC, self.on_imu, imu_qos)
             self._status_pub = self.create_publisher(
                 String, STATUS_TOPIC, 5)
             if (self._imu_sub.topic_name != IMU_TOPIC
