@@ -1,3 +1,16 @@
+// TODO(AUTONOMY) [metric visual-inertial localization]: Calibrate actual
+// camera-to-IMU rotation/translation, acquisition-time phase, rolling
+// shutter characteristics, IMU axes/noise and native XRSLAM mode on Leroy.
+// Camera-only monocular yaw cannot establish metric scale or necessarily
+// provide triangulation; plan clearance-checked translational parallax or
+// an independently qualified scale source when initialization needs it.
+// TODO(AUTONOMY) [pose authority]: Validate native pose frame direction,
+// world scale, covariance, drift, relocalization and loss-of-tracking
+// behavior before allowing /odom or odom->base_link/map->odom publication.
+// Acceptance: cold boot, low-texture/lighting changes, lost tracking,
+// timestamp jumps and reinitialization leave metric pose invalid until
+// independently measured accuracy and continuity are demonstrated.
+
 #include <XRSLAM.h>
 #include "leroy_xrslam/sensor_mode.hpp"
 #include <rclcpp/rclcpp.hpp>
