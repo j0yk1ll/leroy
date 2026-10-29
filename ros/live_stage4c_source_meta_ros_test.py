@@ -137,7 +137,7 @@ class RosAdapterSimulation(unittest.TestCase):
         self.assertIn("source_node.create_publisher(", wrapper)
         self.assertIn("metadata_topic_remapped", wrapper)
 
-    def test_guarded_real_capture_stays_uncommissioned(self):
+    def test_guarded_real_capture_is_explicitly_commissioned(self):
         wrapper = (HERE / "live_stage4_imu_sidecar.sh").read_text()
         recorder = (HERE / "live_stage4c_passive_recorder.py").read_text()
         for token in (
@@ -151,7 +151,7 @@ class RosAdapterSimulation(unittest.TestCase):
             "timeout 110s podman wait",
         ):
             self.assertIn(token, wrapper)
-        self.assertIn("LIVE_CAPTURE_COMMISSIONED = False", recorder)
+        self.assertIn("LIVE_CAPTURE_COMMISSIONED = True", recorder)
         runner = (HERE / "live_stage4_imu_overlap.py").read_text()
         self.assertIn('capture_not_armed_before_serial', runner)
         self.assertIn("CAPTURE_SOURCE_DURATION_S = 65.0", runner)
