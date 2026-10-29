@@ -410,6 +410,88 @@ the independent power-stop, complete swept-space observation and
 exclusive signed motor controller are integrated against the actual
 robot, the auto-calibration result is **not a motion permit**.
 
+## Motor-capable autonomous yaw calibration (integrated signed-controller code)
+
+The **actuating controller code** now exists on
+`feature/actuated-autonomous-yaw-calibration`. Unlike earlier manual
+witnesses, `live_actuated_yaw_calibration.py` can produce
+**nonzero signed motor commands** to the pre-existing M22
+`/leroy/motor/signed_motion` ingress, after the separately configured
+bridge acknowledges a valid signed session rearm. It tracks the
+whole −90°, +90°, return-to-zero yaw sequence from the physical
+`/leroy_bridge` IMU stream, performing its own automatic stationary
+gyro calibration and eight-second holdout first.
+
+**One MCU owner:** the motor-capable `leroy-signed-bridge` is the sole
+serial writer. The earlier separate `leroy-boot-imu-source` and
+`leroy-stage4-imu` M18 publisher must not be running. The new
+actuating controller opens **no** STM32 serial device. It subscribes
+to the bridge's `/imu/data_raw`, protected motor session ID and a
+separately issued safety lease, then sends HMAC-signed
+`/leroy/motor/signed_rearm` and `/leroy/motor/signed_motion`
+messages. The M22 bridge retains independent MCU watchdog, wheel
+packet sequencing, zero and STOP acknowledgments, key custody and
+its own physical interlocks. The bridge now also publishes the actual
+`/leroy/motor/authority_status` from its internal `MotorAuthority`
+evaluation, including the current session, `ARMED` state,
+`physical_release_verified`, MCU watchdog acknowledgment, CDC health,
+and fresh monotonic stamp. The controller **requires** this fresh,
+bridge-owned state after operator rearm; elapsed time alone never
+enables a signed nonzero command. There is **no raw /cmd_vel fallback**.
+
+**Continuous independent physical safety lease:** the new
+`autonomous_motor_yaw_core.py` accepts `leroy_swept_safety_lease_v1`
+only from `/leroy_physical_safety_monitor` over
+`/leroy/safety/rotation_lease`, and validates an HMAC signed with a
+third protected, *distinct* monitor key, current motor-bridge session
+ID, strictly increasing sequence, at most 150ms freshness, whole
+swept footprint measured/observed/clear, independently proven stop,
+measured braking distance with positive clearance margin, unique
+motor owner, and physical motor output interlock. The controller
+contains **no lease signer or fallback self-assertion**; ROS graph
+identity alone does not grant motion. Stop-completion requires an
+independently reported stop state and settled IMU heading, with a
+signed zero command and latched shutdown after completion. Velocity
+limits and rate slew are capped in software but must also remain
+within the safety monitor's physically measured operating envelope.
+
+A 20Hz command tick which sees no *new* IMU heading sends
+signed zero, rather than driving on a repeated timestamp. The
+controller also latches if measured yaw rate exceeds the rate
+authorized by the physical monitor. Stop release requires sustained
+zero output and independently reported wheel/chassis stopping.
+
+The rootless entrypoint `live_actuated_yaw_calibration.sh` requires:
+a live, separately commissioned bridge container named
+`leroy-signed-bridge`; a physically independent, authenticated
+monitor named `leroy-physical-safety-monitor`; the isolated Stage 3
+parent; three distinct rootless-owned protected role keys; and
+explicit local one-session operator approval. It refuses simultaneous
+M18 MCU source containers, and its own Podman container has no MCU
+or camera devices. It cannot replace the hardware E-stop, which
+the operator reports as a whole-robot power cutoff, nor should power
+restoration automatically rearm the motors.
+
+**Current physical deployment remains BLOCKED.** Leroy has not
+demonstrated a commissioned all-around safety monitor, a measured
+whole-chassis swept footprint, qualified stopping distance,
+motor-bridge motion response, or a validated bridge-local interlock
+replacement for its deprecated GPIO status assumptions. Camera-only
+DepthART plus an unknown/partial costmap does not satisfy the
+independent 360-degree lease contract, and the approved M18
+`IMU_START/STOP` stream cannot share serial with the motor bridge.
+The code is now connected through the existing **real signed motor
+ingress**, not through fake motion or a diagnostic-only output, but
+under today's hardware conditions it must **refuse arming**.
+
+This software may be reviewed and regression-tested without
+changing the active Stage 3 setup. Do **not** launch the powered
+calibration with dummy safety-monitor key material, a spoofed ROS
+publisher, invented GPIO pins, or motor power connected while using
+the old isolated IMU diagnostic runner. A human-typed
+`ARM_PHYSICAL_AUTONOMOUS_YAW` approves a single reviewed session;
+it is not itself an independent collision-stop sensor.
+
 ## Shortest path to a physical autonomous yaw sweep
 
 1. **Identify the deployed drive/motor safety interface**, not old YAML guesses: current independent cutoff and E-stop mechanism, motor safe-state and test evidence, command owner, motion protocol, and what the wheel/heading feedback actually is. Record verified hardware facts in a separate current configuration, not as magic `True` booleans. No implicit enable.

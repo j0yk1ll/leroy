@@ -1,3 +1,4 @@
+import json
 import math
 import re
 import threading
@@ -353,6 +354,14 @@ class LeroyBridgeNode(Node):
                 durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self._motor_session_pub.publish(
             String(data=verifier.session_id))
+        # Read-only, bridge-owned authority feedback. The actuating
+        # controller must not assume rearm succeeded from elapsed time.
+        self._motor_session_id = verifier.session_id
+        self._motor_authority_status_pub = self.create_publisher(
+            String, '/leroy/motor/authority_status',
+            QoSProfile(
+                depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.VOLATILE))
         self._motor_motion_sub = self.create_subscription(
             String, '/leroy/motor/signed_motion',
             self._on_signed_motor_motion, 10)
@@ -470,6 +479,22 @@ class LeroyBridgeNode(Node):
                 if not self._send_command(_MOTOR_STOP):
                     self._motor_authority.stop()
         self._motor_last_state = decision.state
+        # A status event NEVER enables motors; only the signed handoff and
+        # the local verified MCU CDC writer can do that. Publish actual
+        # MotorAuthority state so a remote controller cannot infer ARMED.
+        status_pub = getattr(self, '_motor_authority_status_pub', None)
+        if status_pub is not None:
+            status_pub.publish(String(data=json.dumps({
+                'schema': 'leroy_motor_bridge_authority_v1',
+                'session_id': self._motor_session_id,
+                'state': decision.state,
+                'reason': decision.reason,
+                'physical_release_verified': (
+                    self._motor_hardware_release_verified is True),
+                'watchdog_acknowledged': self._motor_watchdog_ack.is_set(),
+                'motor_cdc_healthy': self._motor_cdc.healthy,
+                'monotonic_status_ns': time.monotonic_ns(),
+            }, sort_keys=True)))
 
     def _validate_parameters(self) -> None:
         allowed_stream_hz = {0, 10, 20, 50, 100}
