@@ -3,6 +3,7 @@
 Source-only test: no images or physical devices.
 """
 from pathlib import Path
+import re
 import subprocess
 import unittest
 
@@ -56,6 +57,49 @@ class SingleRunbookTest(unittest.TestCase):
             "archive/before-single-readme-2026-10-29",
         ):
             self.assertIn(term, guide)
+
+    def test_ordered_nonsecurity_todo_index_matches_code(self):
+        """Each task has one numbered source owner and one ordered README row."""
+        output = subprocess.run(
+            ["git", "-C", str(REPO), "ls-files", "-z"],
+            check=True, capture_output=True,
+        ).stdout.decode("utf-8")
+        source_pattern = re.compile(
+            r"TODO\(AUTONOMY\) #([0-9]{3}) \[([^\]]+)\]"
+        )
+        entries = {}
+        for relative in filter(None, output.split("\0")):
+            if not relative.endswith((".py", ".sh", ".yaml", ".c", ".cpp")):
+                continue
+            content = (REPO / relative).read_text(errors="replace")
+            for line in content.splitlines():
+                if "TODO(AUTONOMY)" not in line:
+                    continue
+                match = source_pattern.search(line)
+                self.assertIsNotNone(match, (relative, line))
+                number = int(match.group(1))
+                self.assertNotIn(number, entries, (number, relative))
+                entries[number] = relative
+                for security_specific in (
+                    "cryptographic", "signing key", "protected key",
+                    "credential", "secret management", "hmac",
+                ):
+                    self.assertNotIn(security_specific, line.lower())
+        self.assertEqual(sorted(entries), list(range(1, 43)))
+
+        guide = (REPO / "README.md").read_text()
+        index_start = guide.index("## 11. Fully autonomous operation")
+        index_end = guide.index("## 12. Preserve external state", index_start)
+        index = guide[index_start:index_end]
+        readme_entries = re.findall(
+            r"^\|\s*(\d{3})\s*\|[^|]*\|\s*\[`([^`]+)`\]"
+            r"\(([^)]+)\)\s*\|$", index, flags=re.MULTILINE
+        )
+        self.assertEqual(len(readme_entries), 42)
+        for expected, (number, label, path) in enumerate(readme_entries, 1):
+            self.assertEqual(int(number), expected)
+            self.assertEqual(label, path)
+            self.assertEqual(path, entries[expected])
 
     def test_autonomy_todos_are_in_the_owner_files(self):
         required = (
