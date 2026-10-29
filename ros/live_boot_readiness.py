@@ -7,6 +7,7 @@ The existing offline startup model is evaluated with *unproven* physical
 qualification flags; its output is not a command.
 """
 import json
+import math
 import os
 import time
 
@@ -15,6 +16,7 @@ INFO = "/camera/camera_info"
 CLOUD = "/leroy_nav2/diagnostics/raw_depth_points"
 STATUS = "/xrslam/tracking_status"
 VALID = "/xrslam/localization_valid"
+YAW = "/leroy_boot/relative_yaw_status"
 EXPECTED = {
     IMAGE: ("rectify_node", "/camera"),
     INFO: ("usb_cam", "/camera"),
@@ -83,6 +85,9 @@ def run():
             self.frame_errors = 0
             self.tracking_status = "not_received"
             self.local_valid = None
+            self.boot_yaw = None
+            self.boot_yaw_at = None
+            self.boot_yaw_count = 0
             self._boot_subscriptions = [
                 self.create_subscription(Image, IMAGE, self.on_image,
                                          sensor_qos),
