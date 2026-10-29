@@ -375,36 +375,74 @@ monocular graph do not establish metric VIO calibration. Historic
 container commands for the old `leroy-ros` instance are archived;
 do not apply them to the current unified runtime.
 
-## 11. Fully autonomous operation — implementation map
+## 11. Fully autonomous operation — numbered implementation TODOs
 
-The remaining work is **not another integration stage**. Every
-`TODO(AUTONOMY)` in the relevant code identifies a concrete missing
-integration and a verification requirement:
+The `TODO(AUTONOMY) #001` through `#042` code comments form one
+**dependency-ordered implementation backlog**. Start with sensors and measured
+geometry, then reliable motor control and stopping, then qualified startup
+and real navigation. The number identifies a *task*, not a safety approval
+or claim that earlier tasks are complete.
 
-| Workstream | Code entry points | Required outcome |
-| --- | --- | --- |
-| Startup supervisor | `ros/leroy.sh`, `ros/boot_localization_core.py`, `ros/live_boot_readiness.py` | One fault-latching boot state machine based on real observations, explicitly distinguishing sensor-only, attended calibration and unattended navigation |
-| IMU and timing | `ros/live_boot_imu_service.py`, `ros/live_boot_yaw.py`, `ros/boot_yaw_core.py`, `ros/boot_auto_calibration_core.py` | Verified time alignment, gyro bias/drift characterization and bounded sensor-loss behavior |
-| Sensor extrinsics | `ros/src/leroy_description/config/sensor_mounts.yaml`, `ros/src/leroy_bringup/launch/robot.launch.py` | Actual camera–IMU/base extrinsics and one TF publisher per edge |
-| Localization | `ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp`, `ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py` | Metric pose/velocity, calibrated scale and covariance, validated `odom -> base_link`, `map -> odom` and tracking loss/relocalization |
-| Obstacle protection | `ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py`, `live_depth_costmap.launch.py` | Observability of the complete swept footprint, calibrated ground/obstacles, appropriate stale/unknown handling |
-| Attended motor control | `ros/autonomous_motor_yaw_core.py`, `ros/live_actuated_yaw_calibration.py`, `ros/src/leroy_bridge/leroy_bridge/node.py` | Exclusive bounded command owner, physical stop evidence, measured motor polarity/response, watchdog and fault-latched STOP |
-| MCU sequencing | `ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py`, `motor_authority.py` | Resilient cross-reboot sequence ownership and verified ACK/watchdog/STOP behavior |
-| Navigation commissioning | `ros/src/leroy_nav2/config/hardware.disabled.yaml`, `ros/src/leroy_nav2/launch/dry_run.launch.py` | Real Nav2 lifecycle and command routing only after measured localization/obstacle/stop prerequisites |
+| Order | Implementation task | Owner file |
+| ---: | --- | --- |
+| 001 | IMU acquisition fidelity | [`firmware/src/imu.c`](firmware/src/imu.c) |
+| 002 | MCU sensor ownership | [`ros/live_boot_imu_service.py`](ros/live_boot_imu_service.py) |
+| 003 | Heading quality | [`ros/boot_yaw_core.py`](ros/boot_yaw_core.py) |
+| 004 | Repeatable stationary check | [`ros/boot_auto_calibration_core.py`](ros/boot_auto_calibration_core.py) |
+| 005 | Heading observation | [`ros/live_boot_yaw.py`](ros/live_boot_yaw.py) |
+| 006 | Heading fusion | [`ros/boot_yaw_core.py`](ros/boot_yaw_core.py) |
+| 007 | Survey actual sensor mounts | [`ros/src/leroy_description/config/sensor_mounts.yaml`](ros/src/leroy_description/config/sensor_mounts.yaml) |
+| 008 | TF publisher ownership | [`ros/src/leroy_description/launch/description.launch.py`](ros/src/leroy_description/launch/description.launch.py) |
+| 009 | Metric visual-inertial localization | [`ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp`](ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp) |
+| 010 | Pose authority and relocalization | [`ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp`](ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp) |
+| 011 | Real depth-to-obstacle calibration | [`ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py`](ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py) |
+| 012 | All-sided obstacle observability | [`ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py`](ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py) |
+| 013 | Navigation costmaps | [`ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py`](ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py) |
+| 014 | Actual wheel calibration | [`firmware/src/platform.c`](firmware/src/platform.c) |
+| 015 | Bridge calibration configuration | [`ros/src/leroy_bridge/config/leroy_bridge.yaml`](ros/src/leroy_bridge/config/leroy_bridge.yaml) |
+| 016 | Motor motion bounds | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
+| 017 | Measured mecanum odometry | [`ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py`](ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py) |
+| 018 | Odometry and sensor fusion | [`ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py`](ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py) |
+| 019 | MCU motor transaction protocol | [`firmware/src/command.c`](firmware/src/command.c) |
+| 020 | Durable MCU sequence numbers | [`ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py`](ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py) |
+| 021 | Physical MCU fail-stop | [`firmware/src/command.c`](firmware/src/command.c) |
+| 022 | Physical stop confirmation | [`ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py`](ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py) |
+| 023 | Real stop/driver-power status | [`ros/src/leroy_bridge/leroy_bridge/motor_gpio_feedback.py`](ros/src/leroy_bridge/leroy_bridge/motor_gpio_feedback.py) |
+| 024 | Exclusive STM32 bridge ownership | [`ros/src/leroy_bridge/leroy_bridge/node.py`](ros/src/leroy_bridge/leroy_bridge/node.py) |
+| 025 | Actual motor interlocks | [`ros/src/leroy_bridge/leroy_bridge/node.py`](ros/src/leroy_bridge/leroy_bridge/node.py) |
+| 026 | Motion-mode authority boundaries | [`ros/src/leroy_bridge/leroy_bridge/node.py`](ros/src/leroy_bridge/leroy_bridge/node.py) |
+| 027 | Mode-specific motor permits | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
+| 028 | Measured dynamic sensor health | [`ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py`](ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py) |
+| 029 | Unlocalized boot policy | [`ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py`](ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py) |
+| 030 | Real boot-readiness evidence | [`ros/live_boot_readiness.py`](ros/live_boot_readiness.py) |
+| 031 | Actual yaw maneuver dynamics | [`ros/boot_yaw_tracking_core.py`](ros/boot_yaw_tracking_core.py) |
+| 032 | Commissioned turn-control dynamics | [`ros/autonomous_motor_yaw_core.py`](ros/autonomous_motor_yaw_core.py) |
+| 033 | Complete turn-swept clearance | [`ros/autonomous_motor_yaw_core.py`](ros/autonomous_motor_yaw_core.py) |
+| 034 | Attended powered calibration | [`ros/live_actuated_yaw_calibration.py`](ros/live_actuated_yaw_calibration.py) |
+| 035 | Real yaw and STOP feedback | [`ros/live_actuated_yaw_calibration.py`](ros/live_actuated_yaw_calibration.py) |
+| 036 | Boot localization state machine | [`ros/boot_localization_core.py`](ros/boot_localization_core.py) |
+| 037 | Unlocalized recovery/parallax | [`ros/boot_localization_core.py`](ros/boot_localization_core.py) |
+| 038 | Integrated runtime supervisor | [`ros/leroy.sh`](ros/leroy.sh) |
+| 039 | Unified ROS node bringup | [`ros/src/leroy_bringup/launch/robot.launch.py`](ros/src/leroy_bringup/launch/robot.launch.py) |
+| 040 | Real Nav2 lifecycle | [`ros/src/leroy_nav2/launch/dry_run.launch.py`](ros/src/leroy_nav2/launch/dry_run.launch.py) |
+| 041 | Navigation failure recovery | [`ros/src/leroy_nav2/launch/dry_run.launch.py`](ros/src/leroy_nav2/launch/dry_run.launch.py) |
+| 042 | Production enable acceptance | [`ros/src/leroy_nav2/config/hardware.disabled.yaml`](ros/src/leroy_nav2/config/hardware.disabled.yaml) |
+
+The list intentionally **excludes security-specific TODOs** about keys,
+cryptographic signatures and credential handling. It retains real-world
+motor stopping, fault handling, collision protection and watchdog work;
+those are physical and operational requirements, not placeholders for
+cybersecurity functionality.
 
 **Do not grant motion by hardcoding healthy flags or disabling existing
-interlocks.** The real robot has a hardwired downstream power-cut
-E-stop, but the historical GPIO feedback device and external
-rotation-safety lease issuer are not commissioned. The controller
-software cannot substitute either with a fake status. Current
-`hardware.disabled.yaml` and signed-motion credentials stay inhibited.
+interlocks.** The real robot has a hardwired downstream power-cut E-stop,
+but the historical GPIO feedback device and separate rotation-clearance
+monitor are not commissioned. A software status or fake sensor value is
+not a substitute. The current `hardware.disabled.yaml` deployment
+manifest must remain inhibited until measured physical acceptance.
 
-Work in this order: verify motor-driver polarity/stop mechanisms in a
-reviewed attended environment; establish measured heading dynamics,
-full-volume sensing and metric odometry; integrate and physically
-accept an autonomous boot supervisor; finally commission Nav2 on
-real hardware with fault-injection tests. Keep physical evidence
-separate from no-device CI.
+Follow the numbered code comments and their specific acceptance conditions.
+Keep no-device CI evidence distinct from physical robot testing.
 
 ## 12. Preserve external state before replacing GitHub
 

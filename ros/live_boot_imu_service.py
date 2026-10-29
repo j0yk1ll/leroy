@@ -8,7 +8,7 @@ Stops on signal, transport/MCU failure, unexpected graph owner or IMU loss.
 No automatic restart after a power cut or process failure.
 """
 
-# TODO(AUTONOMY) [MCU sensor ownership]: In a future motor-capable runtime,
+# TODO(AUTONOMY) #002 [MCU sensor ownership]: In a future motor-capable runtime,
 # migrate the single real STM32 serial writer to the commissioned bridge
 # without starting this independent IMU-only CDC owner at the same time.
 # Track firmware identity, stream sequence/timestamp health, USB reconnects,

@@ -1,4 +1,4 @@
-# TODO(AUTONOMY) [survey actual sensor mounts]: Measure full 6-DoF
+# TODO(AUTONOMY) #007 [survey actual sensor mounts]: Measure full 6-DoF
 # front/workspace camera and IMU extrinsics relative to base_link, including
 # optical-axis conventions and physical chassis footprint. Zero placeholder
 # camera translations below must not be certified as real extrinsics.

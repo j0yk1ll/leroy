@@ -7,7 +7,7 @@ opens a device, or authorizes any motor output. Physical control requires a
 different, independently validated safety/authority boundary.
 """
 
-# TODO(AUTONOMY) [real yaw maneuver]: Characterize actual wheel-driven yaw
+# TODO(AUTONOMY) #031 [real yaw maneuver]: Characterize actual wheel-driven yaw
 # rates, braking distance/overshoot, wheel-slip asymmetry, wheel signs and
 # final error at -90, +90, 0 degrees on the physical robot.
 # Keep the diagnostic observer separate from motor authority. Once real

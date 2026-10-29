@@ -5,10 +5,10 @@ All parameters are fictitious laboratory values, NOT Leroy calibration.
 No ROS, device, motor, or command topic access.
 """
 
-# TODO(AUTONOMY) [measured mecanum odometry]: Replace this synthetic
+# TODO(AUTONOMY) #017 [measured mecanum odometry]: Replace this synthetic
 # fixture's values with separately tested encoder counts/signs, measured
 # wheel radius, track/wheelbase, roller orientation and slip compensation.
-# TODO(AUTONOMY) [pose fusion]: Fuse wheel velocities and real IMU yaw
+# TODO(AUTONOMY) #018 [pose fusion]: Fuse wheel velocities and real IMU yaw
 # with validated camera/metric localization, published covariances and
 # single ownership of odom->base_link. Detect jumps, encoder loss and
 # nonholonomic slip without silently trusting guessed physical scale.

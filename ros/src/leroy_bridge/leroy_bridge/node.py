@@ -1,12 +1,12 @@
-# TODO(AUTONOMY) [exclusive MCU bridge]: Integrate the one validated
+# TODO(AUTONOMY) #024 [exclusive MCU bridge]: Integrate the one validated
 # serial-owner deployment replacing the sensor-only CDC sidecar; do not
 # ever run two processes on the motor-capable STM32 port. Test firmware
 # identity, explicit stream STOP, serial reconnect and watchdog resets.
-# TODO(AUTONOMY) [actual interlocks]: The historical two-GPIO feedback
+# TODO(AUTONOMY) #025 [actual interlocks]: The historical two-GPIO feedback
 # adapter is NOT installed on Leroy. Commission a real stop/driver-power
 # state interface matching the existing hardwired power cutoff; retain
 # default denial and do not spoof old GPIO readings or relay states.
-# TODO(AUTONOMY) [motion authority]: Separate stationary boot IMU checks,
+# TODO(AUTONOMY) #026 [motion authority]: Separate stationary boot IMU checks,
 # attended bounded calibration and navigation sessions. Prove motor ACK,
 # physical stopping, stale-command rejection, watchdog recovery, retained
 # sequence ownership and ROS topic-owner exclusivity before motor rearm.

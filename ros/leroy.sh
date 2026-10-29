@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TODO(AUTONOMY) [runtime supervisor]: Replace this attended, sensor-only
+# TODO(AUTONOMY) #038 [runtime supervisor]: Replace this attended, sensor-only
 # wrapper with a lifecycle supervisor that starts every commissioned node in
 # dependency order, checks real readiness and stops children in reverse order.
 # Distinguish sensor diagnostics, attended motor calibration, and unattended

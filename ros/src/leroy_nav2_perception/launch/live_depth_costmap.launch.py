@@ -5,7 +5,7 @@ No odometry, planners, controller_server, ROS command authority or motors.
 Only launch in an isolated single-container motor-disconnected experiment.
 """
 
-# TODO(AUTONOMY) [navigation costmaps]: Replace the current diagnostic
+# TODO(AUTONOMY) #013 [navigation costmaps]: Replace the current diagnostic
 # costmap fixture and provisional static TF with measured base geometry,
 # dynamic odom/map transforms and all-sided obstacle sensing. Configure
 # separate appropriate local/global Nav2 layers with safe unknown-space

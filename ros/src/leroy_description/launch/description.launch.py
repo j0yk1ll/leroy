@@ -5,7 +5,7 @@ This launch starts only standard tf2_ros/static_transform_publisher nodes.
 Do not launch a second TF owner for these children at the same time.
 """
 
-# TODO(AUTONOMY) [TF authority]: Replace the provisional mount YAML with
+# TODO(AUTONOMY) #008 [TF authority]: Replace the provisional mount YAML with
 # measured sensor-to-body transforms and validate exact single ROS publisher
 # ownership of every static edge in the integrated navigation graph.
 # Audit separate dynamic odom->base_link and map->odom publishers for

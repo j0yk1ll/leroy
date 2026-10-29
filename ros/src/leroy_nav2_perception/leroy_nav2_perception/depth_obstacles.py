@@ -1,9 +1,9 @@
 """DepthART diagnostic point-cloud adapter: never authorizes robot motion."""
 
-# TODO(AUTONOMY) [real obstacle layer]: Validate monocular DepthART scale,
+# TODO(AUTONOMY) #011 [real obstacle layer]: Validate monocular DepthART scale,
 # uncertainty, noise/latency, camera intrinsics, optical-to-base TF,
 # ground plane and obstacle height classification against measured objects.
-# TODO(AUTONOMY) [all-sided observability]: The forward camera cannot
+# TODO(AUTONOMY) #012 [all-sided observability]: The forward camera cannot
 # certify rear/lateral yaw clearance. Add calibrated additional viewpoints
 # or a proven all-around sensor/map, track unknown/stale/occluded space,
 # and enforce complete swept-footprint clearance before any nonzero drive.

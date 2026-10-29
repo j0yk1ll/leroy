@@ -6,7 +6,7 @@ requests or grant an actuator session. It requires the separately controlled,
 already accepted M18 IMU source in the isolated domain.
 """
 
-# TODO(AUTONOMY) [heading observation]: Replace the current standalone
+# TODO(AUTONOMY) #005 [heading observation]: Replace the current standalone
 # diagnostic result with a typed, fresh estimator status carrying measured
 # uncertainty, continuity and calibration provenance for a boot supervisor.
 # Cross-check IMU frame/clock alignment against actual camera and wheel data
