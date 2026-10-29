@@ -73,7 +73,7 @@ class SingleRunbookTest(unittest.TestCase):
                 continue
             content = (REPO / relative).read_text(errors="replace")
             for line in content.splitlines():
-                if not re.match(r"^\\s*(?:#|//|/\\*|\\*)\\s*TODO\\(AUTONOMY\\)", line):
+                if not line.lstrip().startswith(("# TODO(AUTONOMY)", "// TODO(AUTONOMY)", "/* TODO(AUTONOMY)", "* TODO(AUTONOMY)")):
                     continue
                 match = source_pattern.search(line)
                 self.assertIsNotNone(match, (relative, line))
