@@ -21,19 +21,25 @@ devices. Neither container maps the motor-capable `/dev/ttyACM0`.
 No MCU, bridge, controller, planner, navigation goals or motor interface is
 started. **Motor-driver rails must be independently disconnected.**
 
-## Clean main checkout, preserving the current dirty feature tree
+## Clean main checkout
 
-Your existing feature checkout contains uncommitted tracked deletions and
-untracked logs. Do **not** reset, clean or indiscriminately stash them. Once
-the feature-to-main promotion PR is merged, obtain the full main-branch
-codebase in a **separate worktree**:
+The authoritative source is now `main`. If your existing experiment
+checkout contains uncommitted changes, leave it untouched; do not reset,
+clean or blindly stash it. Clone the complete current source into a
+**separate directory**, then run the offline portability and image-build
+checks before using it to replace any old working directory:
 
 ```bash
-cd /home/kevin/Code/leroy
-git fetch origin main
-git worktree add --detach ../leroy-stage3-main origin/main
-cd ../leroy-stage3-main/ros
+cd /home/kevin/Code
+git clone --branch main https://github.com/j0yk1ll/leroy.git leroy-clean-main
+cd leroy-clean-main/ros
+bash ./check_current_checkout.sh
+bash ./build_current_images.sh --build
 ```
+
+The image build downloads external dependencies and has not yet been
+replayed on the operator's Arch host since repository consolidation.
+Do not delete the existing working directory before that validation.
 
 This main branch also contains motor-authority source and MCU firmware
 development. **Those files are not invoked by this Stage 3 runner** and their
@@ -44,8 +50,7 @@ canonical sensor TF launcher; an additional
 The older URDF file is kept as historical source only, and ordinary
 `robot.launch.py` is **not** part of this guarded diagnostic startup.
 
-Do not use the old dirty feature checkout as the source of a main-branch
-build. Run the static contracts without any hardware:
+Run the static contracts without any hardware:
 
 ```bash
 bash -n live_stage3_build.sh live_stage3_start.sh live_stage3_monocular_sidecar.sh
