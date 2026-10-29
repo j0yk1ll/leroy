@@ -87,6 +87,8 @@ try:
                 }, sort_keys=True), flush=True)
                 print("BOOT_YAW_SNAPSHOT=PASS_FRESH_READ_ONLY", flush=True)
                 raise SystemExit(0)
+            except (ValueError, TypeError):
+                continue
     print("BOOT_YAW_SNAPSHOT=BLOCKED_" +
           ("NO_FRESH_YAW_STATUS" if seen_owner
            else "YAW_PUBLISHER_NOT_PRESENT"), flush=True)
