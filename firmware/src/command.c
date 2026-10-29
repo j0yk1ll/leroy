@@ -1,3 +1,13 @@
+/* TODO(AUTONOMY) [MCU motor transaction protocol]: Document and verify
+ * retained set/stop sequence behavior across USB resets, MCU reboot and
+ * bridge process restart; coordinate a persistent host sequence ledger.
+ * TODO(AUTONOMY) [physical fail-stop]: Independently bench-verify watchdog
+ * response, malformed/stale commands, high-duty commissioning separation,
+ * power-cut recovery and STOP ACK latency against actual wheel motion.
+ * Software watchdog and CDC acknowledgments are NOT hardware E-stop
+ * feedback or proof the chassis has stopped. Never auto-enable after reset.
+ */
+
 #include "command.h"
 
 #include "encoders.h"
