@@ -29,7 +29,9 @@ if [[ "$record_mode" == 1 ]]; then
        ! -L "$capture_root/$capture_name" &&
        ! -e "$capture_root/$capture_name-capture-summary.json" &&
        ! -e "$capture_root/$capture_name-armed" &&
-       ! -L "$capture_root/$capture_name-armed" ]] ||
+       ! -L "$capture_root/$capture_name-armed" &&
+       ! -e "$capture_root/$capture_name-source-done" &&
+       ! -L "$capture_root/$capture_name-source-done" ]] ||
         fail CAPTURE_OUTPUT_ALREADY_EXISTS
     free_kib="$(df -Pk -- "$capture_root" | awk 'END {print $4}')"
     [[ "$free_kib" =~ ^[0-9]+$ && "$free_kib" -ge 1500000 ]] ||
@@ -241,6 +243,13 @@ if [[ "$rc" -ne 0 ]]; then
     exit 2
 fi
 if [[ "$record_mode" == 1 ]]; then
+    # The source has exited with PASS (which requires STOP ACK and no
+    # terminal fault). Publish an exclusive host-only completion receipt:
+    # recorder MUST see this before it can accept the bag.
+    source_done="$capture_root/$capture_name-source-done"
+    ( set -C; umask 077
+      printf 'STAGE4C_SOURCE_DONE=STOP_ACK_AND_TRANSPORT_PASS\\n' > "$source_done"
+    ) || fail SOURCE_COMPLETION_MARKER_FAILED
     if ! capture_rc="$(timeout 110s podman wait "$capture_container")"; then
         fail RECORDER_DID_NOT_FINISH
     fi
