@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'ros/boot_localization_*.py'
+      - 'ros/live_boot_readiness*'
       - 'ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md'
       - '.github/workflows/leroy-boot-localization-offline.yml'
   push:
@@ -11,6 +12,7 @@ on:
       - design/boot-localization-sweep
     paths:
       - 'ros/boot_localization_*.py'
+      - 'ros/live_boot_readiness*'
       - 'ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md'
       - '.github/workflows/leroy-boot-localization-offline.yml'
   workflow_dispatch:
@@ -31,6 +33,9 @@ jobs:
       - name: Fail-closed supervisor regressions
         working-directory: ros
         run: python3 -m unittest -v boot_localization_core_test
+      - name: Real Stage 3 read-only sidecar isolation contract
+        working-directory: ros
+        run: python3 -m unittest -v live_boot_readiness_test
       - name: Deterministic no-hardware diagnostic simulation
         working-directory: ros
         run: |
