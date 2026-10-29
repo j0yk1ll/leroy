@@ -111,8 +111,10 @@ podman run --detach --pull=never --name "$source" \
   ' >/dev/null
 started=1
 
+# The source may need up to 8s for DDS preflight, plus serial-open
+# reset and a 2s START acknowledgement. Allow 20s, not a 10s race.
 ready=0
-for _attempt in $(seq 1 100); do
+for _attempt in $(seq 1 200); do
   if podman logs "$source" 2>&1 | grep -Fxq 'BOOT_IMU_SOURCE_START_ACK=PASS'; then
     ready=1
     break
