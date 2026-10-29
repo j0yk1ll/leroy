@@ -10,15 +10,15 @@ NOT removed by this commit. Physical use requires trusted local health,
 key provisioning and MCU-stop implementation at the sole serial writer.
 """
 
-# TODO(AUTONOMY) [mode-specific motion permits]: Replace the one set of
+# TODO(AUTONOMY) #027 [mode-specific motion permits]: Replace the one set of
 # navigation health prerequisites with documented, independently evidenced
 # authority policies for attended wheel checks, unlocalized boot motion,
 # and fully localized Nav2; do not waive environmental/stop protection.
-# TODO(AUTONOMY) [motion bounds]: Calibrate actual mecanum wheel signs,
+# TODO(AUTONOMY) #016 [motion bounds]: Calibrate actual mecanum wheel signs,
 # radii, track/wheelbase, PWM deadband, driver limits, encoder feedback
 # and wheel-current/load response before converting twist to duty.
-# Acceptance: each missing/stale independent observation, command replay,
-# incompatible session or emergency cut forces a latched zero/STOP path.
+# Acceptance: each missing/stale independent observation, outdated motion
+# instruction, incompatible session or emergency cut forces a latched STOP.
 
 from dataclasses import dataclass
 import math
