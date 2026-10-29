@@ -85,10 +85,20 @@ a yaw drift of 0.0816 degrees and gyro-Z noise of approximately
 0.002389 rad/s. It deliberately reported
 `physical_motion_authorized=false`. This verifies the observed
 **startup and calibration portion** of the sensor-only Stage 4 runtime.
-The pasted output did **not** include the final IMU STOP acknowledgment:
-shutdown completion remains unverified for this fresh-clone run.
-Neither run authorizes motor use, validates metric localization, or
-establishes camera–IMU extrinsics.
+The operator subsequently interrupted that live session with Ctrl+C
+and supplied the final termination transcript:
+`BOOT_IMU_SOURCE_START_ACK=PASS`,
+`BOOT_IMU_SOURCE_STOP_ACK=PASS`,
+`BOOT_IMU_SOURCE_RESULT=PASS_OPERATOR_STOPPED`, and
+`BOOT_LIVE_SESSION=STOPPED_NO_MOTION_AUTHORITY`.
+The yaw observer reported `accepted_samples=55743`,
+`state=HEADING_ACTIVE`, final `yaw_relative_deg=0.5137217008341133`,
+and `BOOT_LIVE_MOTION=BLOCKED_NO_ACTUATION`.
+This closes the observed **non-actuating sensor runtime startup,
+stationary calibration, and IMU-stream shutdown** acceptance loop.
+The IMU STOP acknowledgment is **not** a motor STOP or physical
+braking test. Neither run authorizes motor use, validates metric
+localization, or establishes camera–IMU extrinsics.
 
 ## Run the accepted, non-actuating physical runtime
 
