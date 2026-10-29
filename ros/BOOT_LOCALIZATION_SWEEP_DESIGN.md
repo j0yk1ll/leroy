@@ -13,7 +13,7 @@ The target is therefore **preflight → safe sweep → check SLAM → optional s
 ## Implemented no-device prototype (PR #166)
 
 - `ros/boot_localization_core.py`: deterministic, fail-closed startup state machine. Holds an inhibited default, requires every **fictional/supplied** qualification flag to be explicitly true before producing *diagnostic yaw setpoints* (-90°, +90°, return 0° relative to the initial unwrapped yaw), monitors observation freshness and clearance on every tick, requires consecutive stable heading observations, and latches on all faults without automatic rearm. The result has **no velocities, motor commands, signed tokens or physical enable bits**.
-- `ros/boot_localization_core_test.py`: 16 standard-library regression tests: sweeps, tracking/metric distinction, safety-gate defaults, 400 ms stale-frame fault, unknown/occupied footprint, clockwise/heading frame, repeated/backwards clocks, target settling, timeouts, and post-READY fault handling.
+- `ros/boot_localization_core_test.py`: 17 standard-library regression tests: sweeps, tracking/metric distinction, safety-gate defaults, 400 ms stale-frame fault, unknown/occupied footprint, clockwise/heading frame, repeated/backwards clocks, target settling, timeouts, and post-READY fault handling.
 - `ros/boot_localization_demo.py`: scripted synthetic trial of the full ±90° sweep, absence of blind translation, and latched obstacle fault; demonstrates explicit blocking of an unqualified physical/default observation.
 - `.github/workflows/leroy-boot-localization-offline.yml`: device-free CI; no ROS, MCU or motor interface.
 
