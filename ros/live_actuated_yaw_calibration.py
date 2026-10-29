@@ -14,12 +14,12 @@ There is no fallback to M18's concurrent serial sidecar, raw cmd_vel, or
 synthetic costmap clearance.
 """
 
-# TODO(AUTONOMY) [attended powered calibration]: Integrate a physically
+# TODO(AUTONOMY) #034 [attended powered calibration]: Integrate a physically
 # locally-held deadman and separately commissioned motor-power stop state
 # with the bridge's one and only STM32 serial writer, rather than launching
 # a parallel M18 IMU sidecar. The old external lease monitor is NOT present;
 # determine a real available safety architecture before motor release.
-# TODO(AUTONOMY) [real feedback]: Verify publisher identity, yaw sign,
+# TODO(AUTONOMY) #035 [real feedback]: Verify sensor-source continuity, yaw sign,
 # wheel polarity, rate/acceleration limits, full swept-envelope clearance,
 # power restoration behavior, command ACK latency and stopped-at-waypoint
 # evidence on the real chassis. Do not replace absent evidence with flags.
