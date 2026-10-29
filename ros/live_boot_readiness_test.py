@@ -1,5 +1,6 @@
 """Minimal no-device guard checks for the real ROS boot observation launcher."""
 import ast
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -94,6 +95,62 @@ class LiveBootReadOnlyContract(unittest.TestCase):
         self.assertIn("boot_relative_yaw_samples", source)
         self.assertIn("d.get(\"motor_motion_authorized\") is not False", source)
         self.assertIn("now - node.boot_yaw_at > 0.35", source)
+
+    def test_auto_calibration_candidate_is_real_fresh_and_not_a_grant(self):
+        t = 20_000_000_000
+        status = {
+            "schema": "leroy_auto_imu_calibration_v1",
+            "source": "live_ros_m18_imu",
+            "state": "VERIFIED_STATIONARY_CANDIDATE",
+            "owner_verified": True,
+            "motor_motion_authorized": False,
+            "physical_motion_authorized": False,
+            "physical_heading_accuracy_validated": False,
+            "absolute_heading_validated": False,
+            "camera_imu_extrinsics_validated": False,
+            "samples": 401,
+            "window_elapsed_s": 8.0,
+            "independent_bias_rad_s": -0.0015,
+            "heading_bias_rad_s": -0.0015,
+            "bias_disagreement_rad_s": 0.0,
+            "split_bias_delta_rad_s": 0.0,
+            "gyro_z_noise_std_rad_s": 0.001,
+            "yaw_drift_deg": 0.02,
+            "monotonic_status_ns": t - 100_000_000,
+        }
+        result = live.parse_auto_imu_candidate(json.dumps(status), t)
+        self.assertEqual(result["samples"], 401)
+        self.assertEqual(result["yaw_drift_deg"], 0.02)
+        for key, invalid in (
+                ("source", "untrusted_imu"),
+                ("state", "COLLECTING"),
+                ("owner_verified", False),
+                ("motor_motion_authorized", True),
+                ("physical_motion_authorized", True),
+                ("absolute_heading_validated", True),
+                ("samples", 1),
+                ("samples", "401"),
+                ("window_elapsed_s", float("nan")),
+                ("monotonic_status_ns", t - 500_000_000),
+                ("gyro_z_noise_std_rad_s", float("nan"))):
+            with self.subTest(key=key, invalid=invalid):
+                modified = dict(status)
+                modified[key] = invalid
+                self.assertIsNone(
+                    live.parse_auto_imu_candidate(
+                        json.dumps(modified), t))
+        self.assertIsNone(live.parse_auto_imu_candidate(
+            "malformed", t))
+
+    def test_boot_readiness_observes_auto_calibration_without_arm(self):
+        source = (ROOT / "live_boot_readiness.py").read_text()
+        self.assertIn(
+            'AUTO_IMU = "/leroy_boot/auto_imu_calibration_status"',
+            source)
+        self.assertIn("String, AUTO_IMU, self.on_auto_calibration", source)
+        self.assertIn('"auto_imu_stationary_candidate_observed"', source)
+        self.assertIn("source_calibration_validated\": False", source)
+        self.assertIn("LIVE_BOOT_MOTION=BLOCKED_UNCOMMISSIONED", source)
 
     def test_launcher_maps_only_source_files_not_hardware(self):
         source = (ROOT / "live_boot_readiness.sh").read_text()
