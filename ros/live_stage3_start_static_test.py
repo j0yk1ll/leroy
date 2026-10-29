@@ -20,10 +20,13 @@ class LiveStage3ReproducibilityTest(unittest.TestCase):
         s = self.start_script
         for token in (
             "--network=none", "--ipc=shareable", "--pid=private",
-            "--shm-size=256m", "--device=/dev/video2",
+            "--shm-size=256m", '--device="$camera:/dev/video2:rw"',
             "--cap-drop=all", "--security-opt=no-new-privileges",
             "ROS_DOMAIN_ID=170", "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST",
             "LEROY_MOTOR_POWER_DISCONNECTED",
+            "camera=/dev/video8",
+            "CAMERA_CHANGED_BEFORE_START",
+            "LIVE_STAGE3_CAMERA_MAPPING=HOST_/dev/video8_TO_CONTAINER_/dev/video2",
             "LIVE_STAGE3_INSTALLED_COSTMAP_CONFIG=PASS_BOTH_HEIGHT_WINDOWS",
             'ros2 lifecycle set /costmap configure',
             'ros2 lifecycle set /costmap activate',
@@ -38,6 +41,17 @@ class LiveStage3ReproducibilityTest(unittest.TestCase):
             "ros2 run leroy_bridge",
         ):
             self.assertNotIn(forbidden, s)
+
+    def test_video8_is_only_host_device_and_video2_remains_internal(self):
+        s = self.start_script
+        self.assertIn('camera=/dev/video8', s)
+        self.assertIn('--device="$camera:/dev/video2:rw"', s)
+        self.assertIn('[[ -c "$camera" && ! -L "$camera" ]]', s)
+        self.assertIn('camera_rdev="$(stat -Lc', s)
+        self.assertIn('CAMERA_CHANGED_BEFORE_START', s)
+        self.assertNotIn('--device=/dev/video2 ', s)
+        self.assertNotIn('--device=/dev/video8 ', s)
+        self.assertNotIn('--device=/dev/ttyACM0', s)
 
     def test_both_height_filter_windows_are_required(self):
         s = self.start_script
