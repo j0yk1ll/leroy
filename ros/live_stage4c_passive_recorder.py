@@ -91,8 +91,11 @@ def _run_live(name):
     # creates this marker only after the SQLite writer and subscriptions are
     # armed; it is NOT a physical calibration or movement authorization.
     armed_path = Path("/capture") / (name + "-armed")
+    source_done_path = Path("/capture") / (name + "-source-done")
     if armed_path.exists() or armed_path.is_symlink():
         raise CaptureError("stale_capture_armed_marker")
+    if source_done_path.exists() or source_done_path.is_symlink():
+        raise CaptureError("stale_capture_source_done_marker")
 
     # Delayed ROS imports: --contract-smoke works without ROS/hardware.
     import rclpy
@@ -121,6 +124,7 @@ def _run_live(name):
                     topic, payload, stamp))
             self.failures = []
             self.running = False
+            self.first_imu_received_at = None
             self.valid = None
             self.map_valid = None
             message_types = {
@@ -191,8 +195,16 @@ def _run_live(name):
             return self.valid is False and self.map_valid is False
 
         def receive(self, topic, msg):
-            if not self.running or self.failures:
+            if self.writer is None or self.failures:
                 return
+            # Discard camera pre-roll, so the contract's 75s receipt budget
+            # starts on REAL M18 data rather than recorder graph discovery.
+            # M18 publishes IMU before source metadata: preserve both.
+            if not self.running:
+                if topic != "/imu/data_raw":
+                    return
+                self.first_imu_received_at = time.monotonic()
+                self.running = True
             try:
                 # Same fail-closed payload validation and disk-write path
                 # exercised by Stage 4D no-device synthetic-load tests.
@@ -236,7 +248,6 @@ def _run_live(name):
                 id=0, name=topic, type=typ, serialization_format="cdr"))
         node.writer = writer
         bag_open = True
-        node.running = True
         # The MCU source must never start first: make a one-run, exclusive
         # readiness marker visible to its READ-ONLY /capture mount only
         # after the recorder is actually receiving and able to write.
@@ -244,19 +255,64 @@ def _run_live(name):
             armed_created = True
             marker.write("STAGE4C_RECORDER_ARMED=1\n")
         print("STAGE4C_RECORDER_ARMED=PASS", flush=True)
-        end = time.monotonic() + 75
+        # The START ACK, first real IMU publication and graph discovery
+        # happen AFTER arming; no camera pre-roll consumes capture time.
+        first_imu_deadline = time.monotonic() + 45.0
+        while running[0] and time.monotonic() < first_imu_deadline:
+            rclpy.spin_once(node, timeout_sec=0.01)
+            if node.failures:
+                raise CaptureError(node.failures[0])
+            if node.first_imu_received_at is not None:
+                break
+            if not node.graph_ready():
+                raise CaptureError("capture_sensor_graph_changed_before_first_imu")
+        else:
+            raise CaptureError("real_imu_not_received_after_arming")
+
+        # The SOURCE runs 65s only in capture mode (Stage 4B stays 75s).
+        # Completion is explicitly signaled by the HOST only after the
+        # source reports a successful, STOP-ACKed transport session.
+        end = node.first_imu_received_at + 75.0
         last_graph_check = 0.0
+        source_done = False
+        missing_graph_since = None
         while running[0] and time.monotonic() < end:
             rclpy.spin_once(node, timeout_sec=0.005)
             if node.failures:
                 raise CaptureError(node.failures[0])
             now = time.monotonic()
+            if source_done_path.exists() or source_done_path.is_symlink():
+                if (source_done_path.is_symlink() or
+                    source_done_path.read_text(encoding="ascii") !=
+                        "STAGE4C_SOURCE_DONE=STOP_ACK_AND_TRANSPORT_PASS\\n"):
+                    raise CaptureError("invalid_source_completion_marker")
+                source_done = True
+                # Drain in-flight DDS callbacks while enforcing the 75s
+                # capture budget; the producer may now leave the ROS graph.
+                drain_end = min(end, now + 0.5)
+                while running[0] and time.monotonic() < drain_end:
+                    rclpy.spin_once(node, timeout_sec=0.01)
+                    if node.failures:
+                        raise CaptureError(node.failures[0])
+                break
             if now - last_graph_check >= 0.5:
                 if not node.graph_ready():
-                    raise CaptureError("capture_sensor_graph_changed")
+                    # The M18 ROS node can disappear milliseconds before
+                    # the host sees its successful process exit and writes
+                    # source-done. Only tolerate this near the 65s endpoint.
+                    if now - node.first_imu_received_at < 63.0:
+                        raise CaptureError("capture_sensor_graph_changed")
+                    if missing_graph_since is None:
+                        missing_graph_since = now
+                    if now - missing_graph_since > 2.0:
+                        raise CaptureError("source_done_missing_after_graph_end")
+                else:
+                    missing_graph_since = None
                 last_graph_check = now
         if not running[0]:
             raise CaptureError("capture_interrupted")
+        if not source_done:
+            raise CaptureError("source_stop_ack_completion_not_received")
         result = node.policy.report()
         if result["readiness"] != "INPUT_FORMAT_COMPLETE_UNVERIFIED":
             raise CaptureError("incomplete_sensor_or_raw_tick_capture")
