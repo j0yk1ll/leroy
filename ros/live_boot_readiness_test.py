@@ -67,6 +67,24 @@ class LiveBootReadOnlyContract(unittest.TestCase):
         self.assertIn("physical_motion_authorized", source)
         self.assertIn("LIVE_BOOT_MOTION=BLOCKED_UNCOMMISSIONED", source)
 
+    def test_does_not_override_rclpy_node_subscriptions_property(self):
+        source = (ROOT / "live_boot_readiness.py").read_text()
+        self.assertIn("self._boot_subscriptions = [", source)
+        self.assertIn("for sub in self._boot_subscriptions", source)
+        tree = ast.parse(source)
+        for item in ast.walk(tree):
+            if not isinstance(item, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = (item.targets if isinstance(item, ast.Assign)
+                       else [item.target])
+            for target in targets:
+                self.assertFalse(
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                    and target.attr == "subscriptions",
+                    "rclpy.Node.subscriptions is a read-only property")
+
     def test_launcher_maps_only_source_files_not_hardware(self):
         source = (ROOT / "live_boot_readiness.sh").read_text()
         self.assertIn('parent=leroy-live-costmap', source)
