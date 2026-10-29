@@ -11,6 +11,7 @@ on:
       - 'ros/src/leroy_bridge/config/leroy_bridge.yaml'
       - 'ros/src/leroy_bridge/leroy_bridge/node.py'
       - 'ros/src/leroy_bridge/README.md'
+      - 'ros/src/leroy_nav2/README.md'
       - '.github/workflows/leroy-boot-localization-offline.yml'
   push:
     branches:
@@ -24,6 +25,7 @@ on:
       - 'ros/src/leroy_bridge/config/leroy_bridge.yaml'
       - 'ros/src/leroy_bridge/leroy_bridge/node.py'
       - 'ros/src/leroy_bridge/README.md'
+      - 'ros/src/leroy_nav2/README.md'
       - '.github/workflows/leroy-boot-localization-offline.yml'
   workflow_dispatch:
 
