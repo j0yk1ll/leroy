@@ -166,15 +166,15 @@ class PureCaptureContract(unittest.TestCase):
             {"duration_s": 0}, {"duration_s": 76},
             {"duration_s": float("nan")}, {"max_records": 0},
             {"max_records": 20001}, {"max_bytes": -1},
-            {"max_bytes": 900_000_001},
+            {"max_bytes": 2_000_000_001},
         ):
             with self.subTest(kwargs=kwargs), self.assertRaises(CaptureError):
                 CaptureContract(**kwargs)
 
 
 class StaticNonActuation(unittest.TestCase):
-    def test_live_capture_is_hard_blocked(self):
-        self.assertIs(LIVE_CAPTURE_COMMISSIONED, False)
+    def test_live_capture_is_explicitly_commissioned_but_remains_guarded(self):
+        self.assertIs(LIVE_CAPTURE_COMMISSIONED, True)
         _contract_smoke()
         script = (HERE / "live_stage4c_passive_recorder.py").read_text()
         self.assertIn("if not LIVE_CAPTURE_COMMISSIONED:", script)
@@ -232,7 +232,7 @@ class StaticNonActuation(unittest.TestCase):
             '"/dev/video2"',
             '"/dev/gpiochip0"',
             '"/capture"',
-            "LIVE_CAPTURE_COMMISSIONED = False",
+            "LIVE_CAPTURE_COMMISSIONED = True",
         ):
             self.assertIn(token, s)
 

@@ -15,7 +15,10 @@ TOPICS = {
 METADATA_TOPIC = "/stage4c/imu_source_meta"
 MAX_DURATION_S = 75
 MAX_RECORDS = 20000
-MAX_SERIALIZED_BYTES = 900_000_000
+# 65 seconds of 640x480 three-channel rectified images can exceed 1.2 GB
+# at the operator-measured ~20 Hz, and reach 1.8 GB at full 30 fps.
+# Preserve a hard bound while allowing the actual camera traffic.
+MAX_SERIALIZED_BYTES = 2_000_000_000
 MAX_MESSAGE_BYTES = 4_000_000
 META_FIELDS = {
     "schema", "publisher_node", "seq", "t_us", "imu_stamp_ns",

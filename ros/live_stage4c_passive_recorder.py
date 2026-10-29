@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Stage 4C passive ROS bag capture candidate — NOT AUTHORIZED FOR LIVE USE.
+"""Stage 4C guarded passive ROS bag recorder — operator-commissioned candidate.
 
 Reader only: subscribes to images, CameraInfo, IMU and source MCU metadata.
-It never opens any device or publishes ROS topics. Its live entry point is
-deliberately hard-disabled pending independent source and physical review.
+It never opens any device or publishes ROS topics. The guarded live entry
+point requires the independent hardware-isolated M18 wrapper and operator consent.
 """
 import argparse
 import hashlib
@@ -21,9 +21,11 @@ from live_stage4c_capture_contract import (
 )
 from live_stage4d_capture_ingress import CaptureIngress
 
-# Deliberately hard-disabled in this source candidate. No environment
-# variable or command line parameter can bypass this block.
-LIVE_CAPTURE_COMMISSIONED = False
+# Explicit source-code enablement in the operator-commissioning branch ONLY.
+# This is not a runtime flag. Default image command remains /bin/false;
+# the guarded host wrapper still requires verified isolated parents,
+# two interactive confirmations, an approved MCU ID, and physical isolation.
+LIVE_CAPTURE_COMMISSIONED = True
 REQUIRED_ENV = {
     "ROS_DOMAIN_ID": "170",
     "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
@@ -80,7 +82,7 @@ def capture_hashes(bag_dir):
 
 
 def _run_live(name):
-    """Unreachable unless a future reviewed change explicitly commissions it."""
+    """Guarded entry point; called only after explicit commissioning."""
     for key, value in REQUIRED_ENV.items():
         if os.environ.get(key) != value:
             raise CaptureError("unsafe_environment_" + key)
@@ -391,7 +393,7 @@ def _contract_smoke():
             or r["readiness"] != "BLOCKED_INCOMPLETE_CAPTURE"):
         raise CaptureError("contract_smoke_failed")
     print("STAGE4C_OFFLINE_CAPTURE_CONTRACT=PASS_NO_DEVICE", flush=True)
-    print("STAGE4C_LIVE_CAPTURE_AUTHORIZED=FALSE", flush=True)
+    print("STAGE4C_LIVE_CAPTURE_AUTHORIZED=TRUE_GUARDED", flush=True)
 
 
 def main(argv=None):
