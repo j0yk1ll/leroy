@@ -22,14 +22,32 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
 done
 # Validate build contexts, static commands and no accidental host-device
 # access in build scripts. No Podman build or ROS graph is started.
-bash -n build_current_images.sh live_stage3_build.sh \
-    live_stage3_start.sh live_stage3_monocular_sidecar.sh \
-    live_boot_session.sh live_boot_yaw.sh
+# Syntax-check every retained top-level shell entry point, including
+# the optional signed-controller launcher (but NEVER execute it).
+bash -n ./*.sh
 python3 - <<'PY'
 from pathlib import Path
 import re
 
 root = Path(".")
+# The current checked-in runtime has an intentionally small, explicit shell
+# interface. The old M17-M23 experiment runners are archived, not runnable
+# commands from a fresh checkout. The M16 Nav2 fixture is still a Docker COPY
+# dependency and must remain.
+expected_scripts = {
+    "build_current_images.sh", "check_current_checkout.sh", "exec.sh",
+    "live_actuated_yaw_calibration.sh", "live_boot_readiness.sh",
+    "live_boot_session.sh", "live_boot_yaw.sh",
+    "live_boot_yaw_snapshot.sh", "live_manual_yaw_witness.sh",
+    "live_stage3_build.sh", "live_stage3_monocular_sidecar.sh",
+    "live_stage3_start.sh", "live_stage4_imu_sidecar.sh",
+    "m16_sensor_only_run.sh",
+}
+found_scripts = {p.name for p in root.glob("*.sh")}
+if found_scripts != expected_scripts:
+    raise SystemExit("Current shell entry point inventory changed: missing=" +
+                     str(sorted(expected_scripts - found_scripts)) +
+                     " unexpected=" + str(sorted(found_scripts - expected_scripts)))
 dockerfiles = (
     "Dockerfile", "Dockerfile.live-perception",
     "Dockerfile.live-costmap", "Dockerfile.xrslam",
