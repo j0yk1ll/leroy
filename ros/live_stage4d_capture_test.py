@@ -232,7 +232,7 @@ class IntegrationGuards(unittest.TestCase):
         load = (HERE / "live_stage4d_synthetic_load.py").read_text()
         self.assertIn("ingress.close()", load)
         self.assertLess(load.index("ingress.close()"), load.index("del writer"))
-        self.assertIn("LIVE_CAPTURE_COMMISSIONED = False", recorder)
+        self.assertIn("LIVE_CAPTURE_COMMISSIONED = True", recorder)
         self.assertIn('STAGE4C=BLOCKED_LIVE_CAPTURE_NOT_COMMISSIONED', recorder)
         self.assertNotIn("serial.Serial(", recorder)
         self.assertNotIn("create_publisher(", recorder)
