@@ -11,9 +11,11 @@ import os
 import time
 
 from boot_yaw_core import BootYaw
+from boot_auto_calibration_core import AutoImuCalibration
 
 IMU_TOPIC = "/imu/data_raw"
 STATUS_TOPIC = "/leroy_boot/relative_yaw_status"
+CALIBRATION_TOPIC = "/leroy_boot/auto_imu_calibration_status"
 EXPECTED_OWNER = ("m18_imu_source", "/", "sensor_msgs/msg/Imu")
 REQUIRED_ENV = {
     "LEROY_BOOT_IMU_YAW_ONLY": "1",
@@ -63,6 +65,10 @@ def run():
                 "leroy_live_boot_yaw", enable_rosout=False,
                 start_parameter_services=False)
             self.heading = BootYaw()
+            # Automatically verify the stationary heading-bias estimate
+            # against an independent 8s MCU gyro holdout. No actuator APIs.
+            self.calibration = AutoImuCalibration()
+            self._calibration_announced = False
             self._source_ever_verified = False
             self._owner_ok = False
             self._start_mono = time.monotonic()
@@ -70,8 +76,11 @@ def run():
                 Imu, IMU_TOPIC, self.on_imu, imu_qos)
             self._status_pub = self.create_publisher(
                 String, STATUS_TOPIC, 5)
+            self._calibration_pub = self.create_publisher(
+                String, CALIBRATION_TOPIC, 5)
             if (self._imu_sub.topic_name != IMU_TOPIC
-                    or self._status_pub.topic_name != STATUS_TOPIC):
+                    or self._status_pub.topic_name != STATUS_TOPIC
+                    or self._calibration_pub.topic_name != CALIBRATION_TOPIC):
                 raise RuntimeError("BOOT_YAW_TOPIC_REMAP_DENIED")
             self._tick_timer = self.create_timer(0.2, self.tick)
 
@@ -101,9 +110,19 @@ def run():
                 self.heading.fault("IMU_HEADER_AGE_INVALID")
                 return
             a, g = msg.linear_acceleration, msg.angular_velocity
-            self.heading.update(
-                stamp_ns, time.monotonic_ns(),
-                accel=(a.x, a.y, a.z), gyro=(g.x, g.y, g.z))
+            receipt_ns = time.monotonic_ns()
+            acc = (a.x, a.y, a.z)
+            gyro = (g.x, g.y, g.z)
+            estimate = self.heading.update(
+                stamp_ns, receipt_ns, accel=acc, gyro=gyro)
+            if estimate.state == "FAULT_LATCHED":
+                self.calibration.fault("HEADING_SOURCE_FAULT")
+                return
+            self.calibration.update(
+                stamp_ns, receipt_ns, accel=acc, gyro=gyro,
+                heading_state=estimate.state,
+                heading_yaw_rad=estimate.relative_yaw_rad,
+                heading_bias_rad_s=estimate.gyro_z_bias_rad_s)
 
         def tick(self):
             self._owner_ok = self.owner_valid()
@@ -113,7 +132,11 @@ def run():
                 self.heading.fault("IMU_SOURCE_LOST_OR_DUPLICATED")
             elif time.monotonic() - self._start_mono > 7.0:
                 self.heading.fault("IMU_SOURCE_NOT_DISCOVERED")
-            self.heading.check_freshness(time.monotonic_ns())
+            clock_ns = time.monotonic_ns()
+            self.heading.check_freshness(clock_ns)
+            if self.heading.state == "FAULT_LATCHED":
+                self.calibration.fault("HEADING_SOURCE_FAULT")
+            self.calibration.on_timeout(clock_ns)
             e = self.heading.estimate()
             status = {
                 "schema": "leroy_boot_yaw_v1",
@@ -141,6 +164,33 @@ def run():
             msg.data = json.dumps(status, allow_nan=False, sort_keys=True)
             self._status_pub.publish(msg)
             self.last_status = status
+
+            # Autocalibration is informational only. It does not set the
+            # physical_heading_accuracy_validated field of heading status.
+            from dataclasses import asdict
+            calibration = asdict(self.calibration.status())
+            calibration.update({
+                "schema": "leroy_auto_imu_calibration_v1",
+                "source": "live_ros_m18_imu",
+                "monotonic_status_ns": clock_ns,
+                "owner_verified": self._owner_ok,
+                "sensor_input_kind": "physical_stm32_50hz",
+                "absolute_heading_validated": False,
+                "physical_motion_authorized": False,
+            })
+            candidate = String()
+            candidate.data = json.dumps(
+                calibration, allow_nan=False, sort_keys=True)
+            self._calibration_pub.publish(candidate)
+            if (not self._calibration_announced
+                    and calibration["state"] ==
+                    "VERIFIED_STATIONARY_CANDIDATE"):
+                self._calibration_announced = True
+                print(
+                    "BOOT_AUTO_CALIBRATION=PASS_STATIONARY_GYRO_CONSISTENCY_ONLY",
+                    flush=True)
+                print("BOOT_AUTO_CALIBRATION_JSON=" + candidate.data,
+                      flush=True)
 
     rclpy.init(args=[])
     node = None
