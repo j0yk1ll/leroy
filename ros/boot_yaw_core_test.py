@@ -57,14 +57,100 @@ class BootYawTests(unittest.TestCase):
         self.assertIsNone(est.yaw)
 
     def test_imu_stamp_gap_and_backwards_latch(self):
-        for change in (0, -20_000_000, 250_000_000):
+        for change, reason in (
+            (0, "IMU_STAMP_REGRESSION"),
+            (-20_000_000, "IMU_STAMP_REGRESSION"),
+            (250_000_000, "IMU_STAMP_GAP_ACTIVE"),
+        ):
             with self.subTest(change=change):
                 est, stamp, mono = samples()
                 e = est.update(stamp+change, mono+20_000_000,
                                accel=(0, 0, 9.8),
                                gyro=(0, 0, 0.003))
-                self.assertEqual(e.state, "FAULT_LATCHED")
-                self.assertEqual(e.reason, "IMU_STAMP_GAP_OR_REGRESSION")
+                self.assertEqual((e.state, e.reason),
+                                 ("FAULT_LATCHED", reason))
+                self.assertIsNone(e.relative_yaw_rad)
+                self.assertAlmostEqual(
+                    e.last_stamp_delta_s, change * 1e-9, places=7)
+
+    def test_startup_forward_gap_restarts_bias_without_yaw(self):
+        est = BootYaw()
+        base = 1_800_000_000_000_000_000
+        recv = 10_000_000_000
+        for i in range(8):
+            est.update(base + i*20_000_000, recv + i*20_000_000,
+                       accel=(0.35, 0.1, 9.9),
+                       gyro=(0, 0, 0.003))
+        self.assertEqual(est.estimate().calibration_samples, 8)
+        jump = base + 7*20_000_000 + 240_000_000
+        d = est.update(jump, recv + 8*20_000_000,
+                       accel=(0.35, 0.1, 9.9),
+                       gyro=(0, 0, 0.003))
+        self.assertEqual(d.state, "CALIBRATING")
+        self.assertEqual(d.bias_window_restarts, 1)
+        self.assertEqual(d.calibration_samples, 1)
+        self.assertIsNone(d.relative_yaw_rad)
+        self.assertAlmostEqual(d.last_stamp_delta_s, 0.24)
+        for i in range(1, 141):
+            d = est.update(jump + i*20_000_000,
+                           recv + (8+i)*20_000_000,
+                           accel=(0.35, 0.1, 9.9),
+                           gyro=(0, 0, 0.003))
+        self.assertEqual(d.state, "HEADING_ACTIVE")
+        self.assertEqual(d.bias_window_restarts, 1)
+        self.assertAlmostEqual(d.gyro_z_bias_rad_s, 0.003)
+        self.assertAlmostEqual(d.relative_yaw_rad, 0.0)
+
+    def test_startup_delivery_gap_restarts_bias_without_yaw(self):
+        est = BootYaw()
+        base = 1_800_000_000_000_000_000
+        recv = 10_000_000_000
+        for i in range(8):
+            est.update(base + i*20_000_000, recv + i*20_000_000,
+                       accel=(0, 0, 9.8), gyro=(0, 0, 0.003))
+        d = est.update(base + 8*20_000_000,
+                       recv + 7*20_000_000 + 450_000_000,
+                       accel=(0, 0, 9.8), gyro=(0, 0, 0.003))
+        self.assertEqual(d.state, "CALIBRATING")
+        self.assertEqual(d.bias_window_restarts, 1)
+        self.assertEqual(d.calibration_samples, 1)
+        self.assertIsNone(d.relative_yaw_rad)
+        self.assertAlmostEqual(d.last_receipt_delta_s, 0.45)
+
+    def test_startup_repeated_gaps_are_bounded(self):
+        est = BootYaw()
+        base = 1_800_000_000_000_000_000
+        recv = 10_000_000_000
+        est.update(base, recv, accel=(0, 0, 9.8),
+                   gyro=(0, 0, 0.003))
+        for i in range(1, 7):
+            d = est.update(base + i*240_000_000,
+                           recv + i*20_000_000,
+                           accel=(0, 0, 9.8),
+                           gyro=(0, 0, 0.003))
+        self.assertEqual((d.state, d.reason),
+                         ("FAULT_LATCHED", "BIAS_WINDOW_TOO_FRAGMENTED"))
+        self.assertIsNone(d.relative_yaw_rad)
+
+    def test_startup_clock_regression_still_faults(self):
+        est = BootYaw()
+        est.update(100_000_000, 100_000_000,
+                   accel=(0, 0, 9.8), gyro=(0, 0, 0.003))
+        d = est.update(99_000_000, 120_000_000,
+                       accel=(0, 0, 9.8), gyro=(0, 0, 0.003))
+        self.assertEqual((d.state, d.reason),
+                         ("FAULT_LATCHED", "IMU_STAMP_REGRESSION"))
+        self.assertIsNone(d.relative_yaw_rad)
+
+    def test_stale_before_first_heading_only_invalidates_bias(self):
+        est = BootYaw()
+        est.update(100_000_000, 100_000_000,
+                   accel=(0, 0, 9.8), gyro=(0, 0, 0.003))
+        d = est.check_freshness(600_000_000)
+        self.assertEqual(d.state, "WAITING_IMU")
+        self.assertEqual(d.calibration_samples, 0)
+        self.assertIsNone(d.relative_yaw_rad)
+        self.assertIsNone(d.gyro_z_bias_rad_s)
 
     def test_no_stale_yaw_after_loss_or_reboot(self):
         est, stamp, mono = samples()
