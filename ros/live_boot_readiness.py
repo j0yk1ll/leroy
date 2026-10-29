@@ -119,6 +119,8 @@ def run():
                 return
             try:
                 d = json.loads(msg.data)
+                if type(d) is not dict:
+                    return
                 v = d.get("yaw_relative_rad")
                 t = d.get("monotonic_status_ns")
                 age = time.monotonic_ns() - t
@@ -185,6 +187,10 @@ def run():
         while time.monotonic() - start < 12.0:
             rclpy.spin_once(node, timeout_sec=0.05)
         now = time.monotonic()
+        if (node.boot_yaw_at is not None
+                and now - node.boot_yaw_at > 0.35):
+            node.boot_yaw = None
+            node.boot_yaw_at = None
         owners = graph_report(node)
         ages = {
             topic: (None if topic not in node.received_at
@@ -213,9 +219,9 @@ def run():
             now=now,
             image_at=node.received_at.get(IMAGE),
             obstacle_at=node.received_at.get(CLOUD),
-            yaw_at=None,
+            yaw_at=node.boot_yaw_at,
             localization_at=node.received_at.get(STATUS),
-            yaw_rad=None,
+            yaw_rad=node.boot_yaw,
             localization_status=(
                 node.tracking_status if node.tracking_status in (
                     "initializing", "tracking", "lost") else "unknown"),
@@ -234,6 +240,8 @@ def run():
             "xrslam_tracking_status": node.tracking_status,
             "xrslam_localization_valid": node.local_valid,
             "imu_publisher_count": node.count_publishers("/imu/data_raw"),
+            "boot_relative_yaw_samples": node.boot_yaw_count,
+            "boot_relative_yaw_rad": node.boot_yaw,
             "odom_publisher_count": node.count_publishers("/odom"),
             "read_only": True,
             "source_calibration_validated": False,
