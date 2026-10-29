@@ -39,7 +39,7 @@ podman exec "$parent" test ! -e /dev/ttyACM0 ||
   fail MOTOR_CAPABLE_MCU_VISIBLE_TO_PARENT
 podman image exists "$image" || fail ROS_IMAGE_MISSING
 podman container exists "$sidecar" && fail SIDECAR_NAME_OCCUPIED
-for file in boot_yaw_core.py live_boot_yaw.py; do
+for file in boot_yaw_core.py boot_auto_calibration_core.py live_boot_yaw.py; do
   [[ -f "$file" && ! -L "$file" ]] || fail PYTHON_SOURCE_MISSING_OR_SYMLINK
 done
 
@@ -51,6 +51,7 @@ exec podman run --rm --pull=never --name "$sidecar" \
   --read-only --cap-drop=all --security-opt=no-new-privileges \
   --tmpfs /tmp:rw,nosuid,nodev,size=128m \
   --mount "type=bind,src=$PWD/boot_yaw_core.py,dst=/opt/leroy_boot/boot_yaw_core.py,readonly" \
+  --mount "type=bind,src=$PWD/boot_auto_calibration_core.py,dst=/opt/leroy_boot/boot_auto_calibration_core.py,readonly" \
   --mount "type=bind,src=$PWD/live_boot_yaw.py,dst=/opt/leroy_boot/live_boot_yaw.py,readonly" \
   -e ROS_DOMAIN_ID=170 \
   -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
