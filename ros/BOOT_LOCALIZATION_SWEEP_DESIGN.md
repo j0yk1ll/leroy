@@ -34,6 +34,54 @@ BOOT_MODEL=PASS_NO_ROS_NO_DEVICES_NO_ACTUATION
 
 **Explicit limitation:** All positive qualification flags in the demonstration are synthetic fixtures. The active Stage 3 costmap cannot produce measured full-rotation obstacle clearance; no code currently connects real trustable sensor evidence or closed-loop motor output to this model. Tests and CI prove software decision behavior under invented inputs, **not physical collision avoidance, real actuation, or autonomous boot readiness**. The numerical freshness, dwell and waypoint limits are for synthetic test coverage only, not validated robot motion limits.
 
+## Live Stage 3 read-only integration (implemented)
+
+The **shortest next live step** is one bounded hardware-input observation
+using the already running `leroy-live-costmap` and `leroy-live-xrslam`
+containers. It uses no MCU connection, camera remapping, new DepthART
+instance or synthetic substitute for actual sensor messages.
+
+```bash
+cd /home/kevin/Code/leroy-boot-sweep/ros
+git fetch origin design/boot-localization-sweep
+git switch --detach origin/design/boot-localization-sweep
+bash ./live_boot_readiness.sh
+```
+
+The launcher verifies the parent is a running rootless, isolated Stage 3
+network/IPC/PID container, then starts a **temporary read-only,
+no-device, no-publisher** sidecar in the same DDS graph (domain 170).
+It binds only `live_boot_readiness.py` and
+`boot_localization_core.py` read-only into the existing locally built
+`localhost/leroy-ros:stage4c-capture-offline` image. No image rebuild,
+serial open, rosbag writing, motor GPIO, controller, odometry or TF
+publication is needed.
+
+For 12 seconds the observer subscribes to actual
+`/camera/image_rect`, `/camera/camera_info`,
+`/leroy_nav2/diagnostics/raw_depth_points`,
+`/xrslam/tracking_status` and `/xrslam/localization_valid`.
+It reports publisher identity, callback counts/ages, camera-info
+timestamp correspondence, frame consistency and the raw XRSLAM state
+as `LIVE_BOOT_OBSERVATION_JSON=...`.
+`LIVE_BOOT_SENSORS=PASS_READ_ONLY` means **only** that selected
+real input paths were visible and plausibly active, not that any
+obstacle classification, all-around clearance, stopping or metric SLAM
+requirements were met. A nonzero exit or
+`BLOCKED_INPUTS_INCOMPLETE` indicates a live sensor wiring issue.
+
+The real readiness model is evaluated with **all unproven physical
+motion-release flags left false**, and no yaw estimate is invented.
+Expect `LIVE_BOOT_MOTION=BLOCKED_UNCOMMISSIONED`; that is the
+correct result for today's robot. The output is a diagnostic JSON
+line printed to stdout, not a ROS command or a credential.
+The overall test exits successfully only on a complete read-only
+input observation.
+
+The live source has a narrow host-level no-device guard regression:
+`python3 -m unittest -v live_boot_readiness_test`.
+There is **no extra 75s MCU recording** or repeat camera FPS test.
+
 ## Current repository constraints (block autonomous motion)
 
 1. `ros/src/leroy_nav2_perception/config/live_diagnostic_costmap.yaml` marks unclassified depth surfaces (including floor), has provisional camera TF and a placeholder 1 m square footprint, leaves unknown space unknown, does not clear free space and has no source freshness enforcement. It cannot prove the rotation swept area or a translation corridor is collision-free.
