@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'ros/boot_localization_*.py'
+      - 'ros/boot_yaw_*.py'
+      - 'ros/live_boot_yaw*'
       - 'ros/live_boot_readiness*'
       - 'ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md'
       - 'ros/CURRENT_LIVE_RUNTIME.md'
@@ -18,6 +20,8 @@ on:
       - design/boot-localization-sweep
     paths:
       - 'ros/boot_localization_*.py'
+      - 'ros/boot_yaw_*.py'
+      - 'ros/live_boot_yaw*'
       - 'ros/live_boot_readiness*'
       - 'ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md'
       - 'ros/CURRENT_LIVE_RUNTIME.md'
@@ -51,6 +55,9 @@ jobs:
       - name: Guard current live defaults and retired bridge parameters
         working-directory: ros
         run: python3 -m unittest -v current_live_runtime_test
+      - name: Live yaw source-independent unit tests
+        working-directory: ros
+        run: python3 -m unittest -v boot_yaw_core_test
       - name: Deterministic no-hardware diagnostic simulation
         working-directory: ros
         run: |
