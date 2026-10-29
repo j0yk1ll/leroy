@@ -34,7 +34,9 @@ if [[ "$record_mode" == 1 ]]; then
        ! -L "$capture_root/$capture_name-source-done" ]] ||
         fail CAPTURE_OUTPUT_ALREADY_EXISTS
     free_kib="$(df -Pk -- "$capture_root" | awk 'END {print $4}')"
-    [[ "$free_kib" =~ ^[0-9]+$ && "$free_kib" -ge 1500000 ]] ||
+    # Allow room for up to 2 GB serialized payload plus rosbag2 SQLite
+    # overhead, journal/WAL and manifest before opening the MCU.
+    [[ "$free_kib" =~ ^[0-9]+$ && "$free_kib" -ge 3500000 ]] ||
         fail CAPTURE_DISK_SPACE_INSUFFICIENT
 fi
 [[ "$(id -u)" -ne 0 ]] || fail NOT_ROOTLESS_USER
