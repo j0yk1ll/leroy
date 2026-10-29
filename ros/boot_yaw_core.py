@@ -12,6 +12,7 @@ import statistics
 MIN_STATIONARY_S = 2.5
 MIN_STATIONARY_SAMPLES = 100
 MAX_SAMPLE_GAP_S = 0.16
+MAX_BIAS_WINDOW_RESTARTS = 5
 MAX_RECEIPT_AGE_S = 0.35
 MAX_GYRO_STATIONARY_RAD_S = 0.08
 MAX_GYRO_Z_RAD_S = 1.5
@@ -28,13 +29,18 @@ class YawEstimate:
     gyro_z_bias_rad_s: float | None
     accepted_samples: int
     calibration_samples: int
+    bias_window_restarts: int
+    last_stamp_delta_s: float | None
+    last_receipt_delta_s: float | None
     # Intentionally no motion enable, speed or physical yaw validity flag.
 
 
 class BootYaw:
     """One session, one stationary bias estimate, unwrapped relative yaw.
 
-    Any timestamp/freshness/sensor fault latches until process restart.
+    Backward time, invalid data or post-heading loss latches until restart.
+    A forward delivery gap before heading exists resets only the stationary
+    bias window (bounded retries); it never extrapolates a heading.
     A restart begins at WAITING_IMU and never auto-resumes a motor session.
     """
 
@@ -49,6 +55,9 @@ class BootYaw:
         self.yaw = None
         self.prev_rate = None
         self.samples = 0
+        self.bias_window_restarts = 0
+        self.last_stamp_delta_s = None
+        self.last_receipt_delta_s = None
 
     def fault(self, reason):
         self.state = "FAULT_LATCHED"
@@ -59,7 +68,24 @@ class BootYaw:
     def estimate(self):
         return YawEstimate(
             self.state, self.reason, self.yaw, self.bias,
-            self.samples, len(self.z_rates))
+            self.samples, len(self.z_rates), self.bias_window_restarts,
+            self.last_stamp_delta_s, self.last_receipt_delta_s)
+
+    def _restart_uncommitted_bias(self):
+        # This is allowed ONLY before publishing any relative yaw estimate.
+        if self.state not in ("WAITING_IMU", "CALIBRATING"):
+            return self.fault("BIAS_WINDOW_RESET_AFTER_HEADING_FORBIDDEN")
+        self.bias_window_restarts += 1
+        if self.bias_window_restarts > MAX_BIAS_WINDOW_RESTARTS:
+            return self.fault("BIAS_WINDOW_TOO_FRAGMENTED")
+        self.z_rates.clear()
+        self.first_stamp_ns = None
+        self.bias = None
+        self.prev_rate = None
+        self.yaw = None
+        self.state = "WAITING_IMU"
+        self.reason = "RESTARTING_STATIONARY_BIAS_WINDOW"
+        return self.estimate()
 
     def update(self, stamp_ns, receipt_ns, *, accel, gyro):
         if self.state == "FAULT_LATCHED":
@@ -71,16 +97,31 @@ class BootYaw:
                 not all(type(x) in (float, int) and math.isfinite(x)
                         for x in (*accel, *gyro))):
             return self.fault("INVALID_SENSOR_VECTOR")
-        if self.last_receipt_ns is not None and receipt_ns <= self.last_receipt_ns:
-            return self.fault("RECEIPT_CLOCK_REGRESSION")
-        if self.last_stamp_ns is not None:
-            gap = (stamp_ns - self.last_stamp_ns) * 1e-9
-            if not 0 < gap <= MAX_SAMPLE_GAP_S:
-                return self.fault("IMU_STAMP_GAP_OR_REGRESSION")
         if self.last_receipt_ns is not None:
             gap = (receipt_ns - self.last_receipt_ns) * 1e-9
-            if not 0 < gap <= MAX_RECEIPT_AGE_S:
-                return self.fault("IMU_DELIVERY_GAP")
+            self.last_receipt_delta_s = gap
+            if gap <= 0:
+                return self.fault("RECEIPT_CLOCK_REGRESSION")
+            if gap > MAX_RECEIPT_AGE_S:
+                if self.state == "HEADING_ACTIVE":
+                    return self.fault("IMU_DELIVERY_GAP")
+                self._restart_uncommitted_bias()
+                if self.state == "FAULT_LATCHED":
+                    return self.estimate()
+        if self.last_stamp_ns is not None:
+            gap = (stamp_ns - self.last_stamp_ns) * 1e-9
+            self.last_stamp_delta_s = gap
+            if gap <= 0:
+                return self.fault("IMU_STAMP_REGRESSION")
+            if gap > MAX_SAMPLE_GAP_S:
+                if self.state == "HEADING_ACTIVE":
+                    return self.fault("IMU_STAMP_GAP_ACTIVE")
+                # Do not count one discontinuity twice if it also
+                # triggered a receipt gap reset in this same callback.
+                if self.first_stamp_ns is not None:
+                    self._restart_uncommitted_bias()
+                    if self.state == "FAULT_LATCHED":
+                        return self.estimate()
         norm_a = math.sqrt(sum(v * v for v in accel))
         if not GRAVITY_MIN <= norm_a <= GRAVITY_MAX:
             return self.fault("ACCEL_MAGNITUDE_IMPLAUSIBLE")
@@ -132,5 +173,13 @@ class BootYaw:
         if self.last_receipt_ns is not None:
             age = (now_ns - self.last_receipt_ns) * 1e-9
             if not 0 <= age <= MAX_RECEIPT_AGE_S:
-                return self.fault("IMU_STALE")
+                if self.state == "HEADING_ACTIVE" or age < 0:
+                    return self.fault("IMU_STALE")
+                # Before a heading is established there is nothing to
+                # extrapolate. Do not latch merely due to a transient
+                # source pause: require a new contiguous stationary window.
+                self.state = "WAITING_IMU"
+                self.reason = "AWAITING_CONTIGUOUS_STATIONARY_IMU"
+                self.z_rates.clear()
+                self.first_stamp_ns = None
         return self.estimate()
