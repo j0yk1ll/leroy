@@ -16,7 +16,6 @@ setup(
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
-        ('share/' + package_name, ['README.md']),
     ],
     install_requires=['setuptools'],
     # Colcon uses this metadata to choose pytest rather than setup.py test.
