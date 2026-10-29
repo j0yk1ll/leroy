@@ -200,6 +200,13 @@ unless you export or push them elsewhere.
 - `electronics/` — electronics design
 - `utils/` — calibration tools and source-controlled capture assets
 
-Older single-milestone Dockerfiles, launch scripts and milestone notes are
-historical development artifacts, not extra startup dependencies. Retained
-historical snapshots can be read from the archive branch.
+The active ROS directory contains **14 shell entry points**: the
+current source build, startup, observation, maintenance and integration
+scripts, plus the M16 runner still required by the Nav2 fixture
+Dockerfile. The old `m18`–`m23` one-off runner scripts, milestone
+Dockerfiles and reports are deliberately absent from the active tree.
+They remain available in the immutable pre-cleanup snapshot at
+`archive/full-runtime-history-2026-10-29` (see
+[`ros/ARCHIVE_INDEX.md`](ros/ARCHIVE_INDEX.md)).
+Some archived milestone tests are not part of the supported current
+runtime regression suite and may depend on these historical artifacts.
