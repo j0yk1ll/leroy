@@ -244,6 +244,73 @@ unless explicitly run in persistent mode by the new launcher. No
 additional fixed-length capture or synthetic motion study is needed
 to exercise this path.
 
+## Live feedback-based yaw tracking — software integration
+
+The real STM32 IMU was independently observed delivering 50 Hz data,
+the continuous gyro-Z estimator produced `HEADING_ACTIVE`, and a
+manually performed ~90° **clockwise** chassis turn gave a signed
+relative-yaw change of **−90.9865°**. This is physical sign and
+approximate scale confirmation, **not precision odometry calibration**.
+
+The next code path, `boot_yaw_tracking_core.py`, accepts live
+monotonic relative-heading observations and tracks the intended
+three boot yaw waypoints **−90°, +90°, 0°** relative to the
+heading at session start. It computes a proportional, bounded
+`diagnostic_wz_rad_s` *proposal only*. It requires fresh,
+single-owner live feedback, a stationary dwell at each target,
+keeps within an explicit yaw envelope and latches on source
+loss, stale data, invalid timestamps, overshoot, or deadline.
+
+The ROS adapter `live_manual_yaw_witness.py` has exactly one
+subscriber (the live `/leroy_boot/relative_yaw_status` topic),
+**no publishers**, and no MCU or motor device access. The entrypoint
+`live_manual_yaw_witness.sh` runs a separate isolated sidecar
+against the already running persistent boot IMU/yaw session. The
+local operator moves the *unpowered* chassis by hand; the software
+witness records waypoint/error/dwell progress using real feedback.
+
+For an **optional, supervised full-manual-sweep witness** with
+motor power independently disconnected and the continuous
+`live_boot_session.sh` service already started in another
+terminal:
+
+```bash
+cd /home/kevin/Code/leroy-boot-sweep/ros
+git fetch origin feature/live-supervised-yaw-control
+git switch --detach origin/feature/live-supervised-yaw-control
+bash ./live_manual_yaw_witness.sh
+```
+
+Move to −90° clockwise and hold still, then +90° relative to the
+original heading (a 180° counterclockwise change) and hold still,
+then back to 0° and hold still. The witness checks a roughly
+0.5-second stable dwell inside ±3° and prints
+`MANUAL_YAW_SWEEP=PASS_REAL_GYRO_WITNESS_NO_ACTUATION` only
+if all three are observed within the bounded session.
+`MANUAL_YAW_PROGRESS_JSON` prints target/error and the
+non-actuating nominal rate proposal. Do not mistake that value
+for safe PWM, a motor command, or an approved operating speed.
+User interruption, stale yaw, source loss or an exceeded
+envelope returns `MANUAL_YAW_SWEEP=BLOCKED_...`, with
+`MANUAL_YAW_MOTOR=BLOCKED_NO_COMMAND_PATH`. This witness
+never stops or modifies the independent IMU-source session.
+
+**Motor commissioning is a separate engineering stage.**
+The historical M22 signed bridge has a session-bound operator
+rearm, sole serial writer and active command inhibit. It is
+still coupled to a deprecated GPIO feedback assumption and
+has no measured all-around obstacle clearance. The hardwired
+whole-robot E-stop is real but not a remotely readable
+software heartbeat: the running ROS application cannot
+assume the E-stop has been exercised, nor that power restoration
+releases new command authority. The numeric diagnostic rate
+must remain disconnected from `/cmd_vel`, signed motion
+envelopes and wheel PWM until the actual motor safe-state
+interface, stopping distance and entire swept obstacle
+envelope have been physically verified and reviewed.
+The present read-only integration deliberately uses **no
+fabricated safety flags** to pretend these checks passed.
+
 ## Shortest path to a physical autonomous yaw sweep
 
 1. **Identify the deployed drive/motor safety interface**, not old YAML guesses: current independent cutoff and E-stop mechanism, motor safe-state and test evidence, command owner, motion protocol, and what the wheel/heading feedback actually is. Record verified hardware facts in a separate current configuration, not as magic `True` booleans. No implicit enable.
