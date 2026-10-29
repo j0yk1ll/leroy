@@ -124,6 +124,126 @@ misrepresent the condition or bypass the old runner. A new reviewed
 commissioning path must instead reflect the actual hardwired cutoff
 and independently bound any unexpected movement.
 
+## Continuous live IMU + relative yaw (supervised sensor-only service)
+
+The previous 75-second M18 capture and 25-second yaw diagnostic have now
+been complemented by **one continuous sensor-only operation**. The
+independent STM32 IMU publisher retains its single serial writer and
+the already accepted M18 message parser/time mapper; its only MCU
+writes are `set_imu_stream_hz 50` (START) and
+`set_imu_stream_hz 0` (STOP). The yaw observer runs in a **separate
+no-device sidecar** and can publish status continuously at 5 Hz.
+Both join the existing isolated Stage 3 graph.
+
+The one new operating command is:
+
+```bash
+cd /home/kevin/Code/leroy-boot-sweep/ros
+git fetch origin feature/live-boot-persistent-imu-yaw
+git switch --detach origin/feature/live-boot-persistent-imu-yaw
+LEROY_STAGE4_MCU_BY_ID=/dev/serial/by-id/usb-Robot_Controller_STM32F401_Robot_CDC_F401-ROBOT-if00 \
+LEROY_STAGE4_MOTOR_ISOLATION_ATTESTED=YES \
+bash ./live_boot_session.sh
+```
+
+**Only attest physical isolation if the motor/manipulator supply is
+actually disconnected independently of the powered MCU.**
+The operator's whole-robot E-stop cuts *all* downstream power and
+cannot itself meet the simultaneously powered-MCU / disconnected-motor
+condition; no software flag proves a hardware separation. If the
+motor power is not separately disconnected, do **not** run this script.
+
+The command refuses concurrent Stage4A/boot source ownership, root
+containers, non-isolated Stage 3 namespaces, changed MCU by-id device
+and unexpected/duplicate ROS motor graph participants. It prompts for
+`BOOT_IMU_ONLY`, then starts the source and yaw together; it has no
+75s timeout or 25s probe deadline. It prints
+`BOOT_LIVE_SESSION=IMU_STREAM_READY` when the MCU START command is
+acknowledged and
+`BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY` when heading is first
+established. Keep the command running to retain the live heading feed
+for downstream read-only boot status consumers.
+
+Stop with Ctrl-C. The launcher asks the MCU for STOP, checks its ACK
+and removes the source container. If the source fails, yaw is lost,
+and the session does not restart by itself. If the STOP ACK is absent,
+treat the motor-capable MCU state as unverified and isolate its
+power. The continuous stream is **not** an actuation or navigation
+authorization; the startup sweep core's real physical-release and
+obstacle-coverage evidence remain unset.
+
+### Live acceleration fault and bounded heading snapshots
+
+The operator confirmed the persistent session started successfully on
+real hardware: `BOOT_LIVE_SESSION=IMU_STREAM_READY` and
+`BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY`. A later attempt to
+sample manually rotated yaw hung in `ros2 topic echo --once`: the
+heading estimator had faulted, ending its publisher. The session
+correctly received `BOOT_IMU_SOURCE_STOP_ACK=PASS` from the MCU.
+This is not yet a physical 90-degree yaw-accuracy acceptance.
+
+The reported heading fault was `ACCEL_MAGNITUDE_IMPLAUSIBLE` after
+11,504 IMU samples. Previously the estimator enforced a
+**stationary-only** near-gravity acceleration magnitude during
+the entire active yaw session. Actual manual rotation can generate
+accelerations outside that window; the precise failing IMU sample
+was not logged, so its exact cause remains unproven.
+
+The estimator now requires near-gravity measurements while
+calibrating *stationary gyro bias*, but permits plausible dynamic
+acceleration once relative heading has been established. Grossly
+invalid acceleration, nonfinite sensor data, gyro faults, active
+timestamp gaps, stale IMU and source-ownership faults still latch.
+The reported `last_accel_norm_m_s2` and `dynamic_accel_samples`
+make motion transients visible without falsely presenting calibrated
+heading accuracy.
+
+A separate read-only one-shot query now has a built-in 6-second
+timeout; it never hangs when the yaw publisher stops:
+
+```bash
+cd /home/kevin/Code/leroy-boot-sweep/ros
+bash ./live_boot_yaw_snapshot.sh
+```
+
+Run the snapshot before and after a known, independently measured
+*unpowered* manual rotation; compare the two
+`BOOT_YAW_SNAPSHOT_JSON.yaw_relative_deg` values. The script
+returns `BOOT_YAW_SNAPSHOT=BLOCKED_...` if no live source or fresh
+heading exists. It has no MCU access or ROS command publisher.
+
+### Operator-observed clockwise yaw sign (2026-10-29)
+
+The operator took two **fresh live read-only yaw snapshots**, with a
+manual approximately 90-degree **clockwise** rotation between them,
+using the sensor-only service with motor command output absent:
+
+| Phase | Relative yaw | Sample count | Freshness |
+| --- | ---: | ---: | ---: |
+| Before rotation | −0.0386634149° | 481 | 200.4 ms |
+| After clockwise rotation | −91.0251943239° | 1070 | 106.0 ms |
+
+Observed difference: **−90.9865309091°**. This establishes the
+expected clockwise-negative ROS yaw sign and a plausible angle scale
+under manual handling. It is **not a subdegree sensor-calibration claim**:
+the reference was a user-reported manual ~90° turn rather than an
+independently measured precision angle. Gyro-Z bias in both snapshots
+was −0.0015275591 rad/s, and `dynamic_accel_samples` reached 16
+without invalidating the second heading.
+
+Both reported `BOOT_YAW_SNAPSHOT=PASS_FRESH_READ_ONLY` and
+`state=HEADING_ACTIVE`. A STOP ACK for this specific run has not
+yet been supplied; don't claim shutdown acceptance from these two
+snapshots. Heading is verified for sign and approximate scale only;
+physical motor stopping, all-around swept-space clearance and the
+motion command authority remain uncommissioned.
+
+The earlier `live_stage4_imu_sidecar.sh` and
+`live_boot_yaw.sh` 75s/25s acceptance recipes remain unchanged
+unless explicitly run in persistent mode by the new launcher. No
+additional fixed-length capture or synthetic motion study is needed
+to exercise this path.
+
 ## Shortest path to a physical autonomous yaw sweep
 
 1. **Identify the deployed drive/motor safety interface**, not old YAML guesses: current independent cutoff and E-stop mechanism, motor safe-state and test evidence, command owner, motion protocol, and what the wheel/heading feedback actually is. Record verified hardware facts in a separate current configuration, not as magic `True` booleans. No implicit enable.

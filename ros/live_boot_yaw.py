@@ -37,6 +37,10 @@ def preflight(env=None, exists=None):
 
 def run():
     preflight()
+    persistent = os.environ.get("LEROY_BOOT_YAW_PERSISTENT", "0")
+    if persistent not in ("0", "1"):
+        raise RuntimeError("BOOT_YAW_PERSISTENT_MODE_INVALID")
+    persistent = persistent == "1"
     import rclpy
     from rclpy.node import Node
     from rclpy.qos import (
@@ -126,6 +130,8 @@ def run():
                 "bias_window_restarts": e.bias_window_restarts,
                 "last_stamp_delta_s": e.last_stamp_delta_s,
                 "last_receipt_delta_s": e.last_receipt_delta_s,
+                "last_accel_norm_m_s2": e.last_accel_norm_m_s2,
+                "dynamic_accel_samples": e.dynamic_accel_samples,
                 "owner_verified": self._owner_ok,
                 "physical_heading_accuracy_validated": False,
                 "motor_motion_authorized": False,
@@ -141,11 +147,24 @@ def run():
     try:
         node = YawNode()
         started = time.monotonic()
-        while time.monotonic() - started < 25.0:
-            rclpy.spin_once(node, timeout_sec=0.05)
-            if node.heading.state == "FAULT_LATCHED":
-                break
-        node.tick()
+        announced_heading = False
+        interrupted = False
+        try:
+            while rclpy.ok() and (
+                    persistent or time.monotonic() - started < 25.0):
+                rclpy.spin_once(node, timeout_sec=0.05)
+                if persistent and (
+                        not announced_heading
+                        and node.heading.state == "HEADING_ACTIVE"):
+                    announced_heading = True
+                    print("BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY",
+                          flush=True)
+                if node.heading.state == "FAULT_LATCHED":
+                    break
+        except KeyboardInterrupt:
+            interrupted = True
+        if rclpy.ok():
+            node.tick()
         status = node.last_status
         print("BOOT_LIVE_YAW_JSON=" +
               json.dumps(status, allow_nan=False, sort_keys=True),
@@ -157,6 +176,10 @@ def run():
             "PASS_RELATIVE_GYRO_HEADING_ONLY" if ok
             else "BLOCKED_" + status["reason"]), flush=True)
         print("BOOT_LIVE_MOTION=BLOCKED_NO_ACTUATION", flush=True)
+        if persistent:
+            if status["state"] == "FAULT_LATCHED":
+                return 2
+            return 0 if interrupted and announced_heading and ok else 2
         return 0 if ok else 2
     finally:
         if node is not None:

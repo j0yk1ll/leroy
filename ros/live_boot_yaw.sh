@@ -13,6 +13,14 @@ fail() { printf 'BOOT_LIVE_YAW_LAUNCH=BLOCKED_%s\n' "$1" >&2; exit 2; }
 parent=leroy-live-costmap
 source=leroy-stage4-imu
 sidecar=leroy-live-boot-yaw
+# The accepted 25-second standalone test keeps its existing source/name.
+# Persistent mode is explicit and only joins the one-command boot session.
+case "${LEROY_BOOT_YAW_PERSISTENT:-0}" in
+  0) ;;
+  1) source=leroy-boot-imu-source
+     sidecar=leroy-live-boot-yaw-persistent ;;
+  *) fail INVALID_PERSISTENT_MODE ;;
+esac
 image=localhost/leroy-ros:stage4c-capture-offline
 
 [[ "$(podman inspect -f '{{.State.Running}}' "$parent" 2>/dev/null)" == true ]] ||
@@ -48,6 +56,7 @@ exec podman run --rm --pull=never --name "$sidecar" \
   -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   -e LEROY_BOOT_IMU_YAW_ONLY=1 \
+  -e LEROY_BOOT_YAW_PERSISTENT="${LEROY_BOOT_YAW_PERSISTENT:-0}" \
   -e ROS_LOG_DIR=/tmp/leroy-boot-yaw-ros \
   -e XDG_CACHE_HOME=/tmp/leroy-boot-yaw-cache \
   --entrypoint bash "$image" -lc '
