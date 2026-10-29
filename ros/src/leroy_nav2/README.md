@@ -1,9 +1,16 @@
-# Leroy Nav2 — Milestone 1: isolated inspection
+# Leroy Nav2 — HISTORICAL Milestone 1: isolated inspection
 
-**Not a driving stack.** Leroy's healthy `leroy-ros` hardware container,
-`ros/Dockerfile`, robot bringup, bridge, DepthART, URDF and XRSLAM are NOT
-modified by this change. The bridge subscribes to absolute `/cmd_vel`
-(`geometry_msgs/Twist`); never join its graph with these experiments.
+**Historical test instructions, not the active robot startup path.**
+See [`ros/CURRENT_LIVE_RUNTIME.md`](../../../CURRENT_LIVE_RUNTIME.md)
+for the operator-verified Stage 3/4C system and current migration work.
+
+**Not a driving stack.** The original M1 isolated Nav2 experiment did
+not modify the then-existing hardware bringup, bridge or camera stack.
+Its historical warning about a bridge `/cmd_vel` subscriber is **stale**:
+the current `leroy_bridge` source deliberately has **no raw
+`/cmd_vel` subscription** and its optional signed motion ingress is
+not provisioned by Stage 3. Never join these old experimental
+controller graphs to a physical motor authority.
 
 ## Exactly what runs
 
