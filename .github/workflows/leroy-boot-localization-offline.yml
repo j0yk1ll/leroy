@@ -6,6 +6,9 @@ on:
       - 'ros/boot_localization_*.py'
       - 'ros/boot_yaw_*.py'
       - 'ros/live_boot_yaw*'
+      - 'ros/live_boot_imu_service.py'
+      - 'ros/live_boot_session.sh'
+      - 'ros/live_boot_service_test.py'
       - 'ros/live_boot_readiness*'
       - 'ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md'
       - 'ros/CURRENT_LIVE_RUNTIME.md'
@@ -22,6 +25,9 @@ on:
       - 'ros/boot_localization_*.py'
       - 'ros/boot_yaw_*.py'
       - 'ros/live_boot_yaw*'
+      - 'ros/live_boot_imu_service.py'
+      - 'ros/live_boot_session.sh'
+      - 'ros/live_boot_service_test.py'
       - 'ros/live_boot_readiness*'
       - 'ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md'
       - 'ros/CURRENT_LIVE_RUNTIME.md'
@@ -58,6 +64,9 @@ jobs:
       - name: Live yaw source-independent unit tests
         working-directory: ros
         run: python3 -m unittest -v boot_yaw_core_test
+      - name: Persistent real IMU lifecycle contract
+        working-directory: ros
+        run: python3 -m unittest -v live_boot_service_test
       - name: Deterministic no-hardware diagnostic simulation
         working-directory: ros
         run: |
