@@ -1,0 +1,35 @@
+# This context is ros/. Do not send a host's local build state or
+# recorded sensor data into any of the canonical source image builds.
+.git/
+.gitignore
+build/
+install/
+log/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/.ros/
+**/build/
+**/install/
+**/log/
+**/*.db3
+**/*.mcap
+**/*.sqlite3
+**/*.sqlite3-shm
+**/*.sqlite3-wal
+**/*.core
+**/core.*
+**/*.log
+**/*.bag
+**/*.bag.active
+**/rosbags/
+**/bags/
+**/captures/
+**/tmp/
+**/run/
+**/*~
+# Intentionally keep src/, config/, launch, Dockerfile.* and tests.
+# They are copied by the active multi-stage image recipes.
