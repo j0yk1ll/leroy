@@ -34,10 +34,53 @@ launcher’s six-second check. Transient `WAITING` states for the depth
 publisher resolved to `READY`.
 
 This demonstrates **successful fresh-checkout construction and a live,
-nonactuating Stage 3 sensor runtime**. It does not attest to a new
-Stage 4 IMU/calibration run, metric SLAM localization, Nav2 autonomous
-motion, or a commissioned motor bridge. The source is the operator's
+nonactuating Stage 3 sensor runtime**. The source is the operator's
 terminal output; it is not an independently captured hardware trace.
+
+### Clean `main` real STM32 gyro/calibration acceptance (2026-10-29)
+
+Using the same fresh-checkout Stage 3 graph, the operator started
+`live_boot_session.sh` and reported:
+
+```text
+BOOT_LIVE_SESSION=STARTING_M18_SOURCE
+BOOT_LIVE_SESSION=IMU_STREAM_READY
+BOOT_LIVE_YAW_LAUNCH=STARTING_REAL_MCU_GYRO_DDS_ONLY
+BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY
+BOOT_AUTO_CALIBRATION=PASS_STATIONARY_GYRO_CONSISTENCY_ONLY
+```
+
+The emitted `leroy_auto_imu_calibration_v1` status used
+`sensor_input_kind=physical_stm32_50hz` and
+`source=live_ros_m18_imu`; it reported:
+
+| Observed field | Value |
+| --- | ---: |
+| `samples` | 401 |
+| `window_elapsed_s` | 8.0 |
+| `window_restarts` | 0 |
+| `gyro_z_noise_std_rad_s` | 0.002388587265975862 |
+| `heading_bias_rad_s` | -0.0015555555555555557 |
+| `independent_bias_rad_s` | -0.0013765586034912719 |
+| `bias_disagreement_rad_s` | 0.0001789969520642838 |
+| `split_bias_delta_rad_s` | 0.000023059701492537206 |
+| `yaw_drift_deg` | 0.08161474076119325 |
+
+The state was `VERIFIED_STATIONARY_CANDIDATE` with the explicit
+reason `STATIONARY_GYRO_CONSISTENCY_PASSED_ONLY`. As designed,
+`absolute_heading_validated`,
+`physical_heading_accuracy_validated`,
+`camera_imu_extrinsics_validated`,
+`physical_motion_authorized`, and `motor_motion_authorized`
+were all false.
+
+**Scope:** This is operator-reported real-source IMU/yaw startup and
+eight-second stationary gyro acceptance from the rebuilt repository.
+The provided transcript ends while the session is running, **before**
+`BOOT_IMU_SOURCE_STOP_ACK=PASS` or a full shutdown outcome.
+Consequently the fresh-clone MCU IMU STOP handshake is still unverified.
+No metric SLAM localization, Nav2 motion, full physical stop, or motor
+bridge commissioning is implied.
 
 
 ## Actual software interfaces for the next live milestone
