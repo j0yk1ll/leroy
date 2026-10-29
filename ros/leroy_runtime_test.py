@@ -72,7 +72,7 @@ class UnifiedLeroyRuntimeTest(unittest.TestCase):
         self.assertIn("leroy-live-xrslam leroy-live-costmap", s)
         self.assertIn("LEROY_RUNTIME=STOPPED_SENSOR_ONLY_NO_MOTION_AUTHORITY", s)
         self.assertIn("LEROY_RUNTIME=FAILED_OR_INTERRUPTED_EXIT_", s)
-        self.assertIn("trap 'exit 130' INT", s)
+        self.assertIn("trap ':' INT", s)
         self.assertIn("trap 'exit 143' TERM", s)
         self.assertNotIn("podman rm -f leroy-live-costmap", s)
         self.assertNotIn("podman rm -f leroy-live-xrslam", s)
