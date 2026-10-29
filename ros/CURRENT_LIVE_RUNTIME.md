@@ -17,7 +17,7 @@ These are runtime observations, not operator-independent physical authentication
 ## Actual software interfaces for the next live milestone
 
 - `ros/boot_localization_core.py`: bounded fail-closed boot-state model; `ros/live_boot_readiness.py`: real Stage 3 sensor input observation without any ROS publishers. Both currently produce **no wheel/motor requests**.
-- The old `leroy_bridge` MCU interface includes a separately opted-in **signed** `/leroy/motor/signed_motion` + `/leroy/motor/signed_rearm` path with fresh-session verification, ACK/STOP and watchdog logic. It is **not running in Stage 3** and is not ready for autonomous deployment. Do not connect the startup supervisor to it without a separately reviewed real command-authority and stop design.
+- The historical **M22/PR #156** `leroy_bridge` MCU interface includes a separately opted-in **signed** `/leroy/motor/signed_motion` + `/leroy/motor/signed_rearm` path with fresh-session verification, ACK/STOP and watchdog logic. It is **not running in Stage 3** and is not ready for autonomous deployment. Do not connect the startup supervisor to it without a separately reviewed real command-authority and stop design.
 - The older `leroy_motor_manual_commission` and keyboard-hold/pulse programs are operator-attended motor commissioning tools, **not** startup navigation or collision avoidance. They require their own verified mechanical/electrical safeguards and exclusive CDC ownership.
 - The Nav2 MPPI M5–M16 integration and M14 gate use **synthetic/diagnostic** command topics. They do not own a physical motor path. `ros/src/leroy_nav2/config/hardware.disabled.yaml` remains `enabled: false`.
 
