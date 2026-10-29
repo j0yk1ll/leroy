@@ -181,6 +181,17 @@ The wrapper starts, in order:
 | `leroy-boot-imu-source` | `live_boot_imu_service.py` / `m18_imu_source`: exclusive serial owner, 50 Hz IMU publish |
 | `leroy-live-boot-yaw-persistent` | `live_boot_yaw.py`: relative heading and independent gyro holdout; **no MCU device** |
 
+**Actual implementation entry points:** the top-level CLI is
+`ros/leroy.sh`, built by `ros/build_current_images.sh` and checked
+through `ros/check_current_checkout.sh`. The camera graph is started by
+`ros/live_stage3_start.sh` and the installed ROS launch file
+`ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py`.
+The MCU/yaw graph is started by `ros/live_boot_session.sh` and
+`ros/live_boot_yaw.sh`, with the serial writer in
+`ros/live_boot_imu_service.py`. This is an implementation map,
+**not** an instruction to run these internal scripts simultaneously.
+Firmware is independently built using `firmware/Makefile`.
+
 The containers use ROS domain `170`, localhost-only discovery and
 Fast DDS within the intentionally isolated parent network/IPC/PID
 namespace. Do **not** start a second copy of these nodes via
