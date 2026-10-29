@@ -7,6 +7,18 @@ Neither a passing simulation nor a checked True flag constitutes a real-world
 safety interlock. Keep hardware Nav2 disabled.
 """
 
+# TODO(AUTONOMY) [startup state machine]: Connect these synthetic Observations
+# to validated, timestamped ROS facts through a single boot supervisor. Add
+# real sensor discovery, calibration, localization checks and fault-latched
+# transitions; never map diagnostic_yaw_target_rad directly to motor output.
+# TODO(AUTONOMY) [unlocalized recovery]: Define separate authority for bounded
+# attended yaw and independently clearance-checked parallax translation;
+# monocular pure rotation alone may not initialize a metric map. Require
+# verified heading, swept footprint, dynamic-stop evidence and motor owner.
+# Acceptance: startup with missing topics, stale pose, unknown obstacles,
+# lost tracking, restart, and moving chassis remains motion-inhibited.
+
+
 from dataclasses import dataclass
 import math
 
