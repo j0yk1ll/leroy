@@ -9,7 +9,7 @@ A passed candidate is diagnostic evidence of stationary consistency, not
 absolute heading, camera/IMU extrinsics, speed, or permission to move.
 """
 
-# TODO(AUTONOMY) [repeatable stationary check]: Characterize gyro-Z bias,
+# TODO(AUTONOMY) #004 [repeatable stationary check]: Characterize gyro-Z bias,
 # temperature, vibration, gravity magnitude and drift on multiple real
 # boots; promote empirically measured thresholds rather than test guesses.
 # Export calibration uncertainty and a versioned evidence timestamp to a
