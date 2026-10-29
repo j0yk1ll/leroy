@@ -7,7 +7,7 @@ Unconfigured/missing/invalid GPIO => both interlocks false.
 Uses libgpiod v2 Python API when the real hardware is provisioned.
 """
 
-# TODO(AUTONOMY) [hardware-specific safety status]: These two libgpiod
+# TODO(AUTONOMY) #023 [hardware-specific safety status]: These two libgpiod
 # pins belong to an older, *unconfigured* bridge design. Leroy currently
 # has a hardwired downstream power-cut E-stop, but no commissioned GPIO
 # E-stop/contactor telemetry. Measure its electrical stop behavior and
