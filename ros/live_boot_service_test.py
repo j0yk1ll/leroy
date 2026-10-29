@@ -73,6 +73,27 @@ class PersistentBootService(unittest.TestCase):
         self.assertIn("source=leroy-boot-imu-source", s)
         self.assertNotIn("--privileged", s)
 
+    def test_snapshot_bounded_and_never_publishes(self):
+        script = ROOT / "live_boot_yaw_snapshot.sh"
+        subprocess.run(["bash", "-n", str(script)], check=True)
+        source_text = script.read_text()
+        self.assertIn("time.monotonic() + 6.0", source_text)
+        self.assertIn("NO_FRESH_YAW_STATUS", source_text)
+        self.assertIn("YAW_PUBLISHER_NOT_PRESENT", source_text)
+        self.assertIn("BOOT_YAW_SNAPSHOT_JSON=", source_text)
+        self.assertIn("len(pubs) == 1", source_text)
+        self.assertNotIn("--device=", source_text)
+        self.assertNotIn("--privileged", source_text)
+        embedded = source_text.split("<<'PY'\\n", 1)[1].rsplit("\\nPY", 1)[0]
+        program = ast.parse(embedded)
+        ros_publishers = [
+            call for call in ast.walk(program)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "create_publisher"
+        ]
+        self.assertEqual(ros_publishers, [])
+
     def test_accepted_short_live_yaw_mode_not_replaced(self):
         s = (ROOT / "live_boot_yaw.sh").read_text()
         subprocess.run(["bash", "-n", str(ROOT/"live_boot_yaw.sh")], check=True)
