@@ -20,9 +20,30 @@ git show archive/full-runtime-history-2026-10-29:ros/Dockerfile.m22h-selftest
 git show archive/full-runtime-history-2026-10-29:ros/M22H_SIGNED_ROS_DIAGNOSTIC_BRIDGE.md
 ```
 
-Do not treat the archived recipes as the current startup path. Old
-`mXX` experiment runners may refer to archived Dockerfiles, and are not
-part of `build_current_images.sh` or supported current boot procedures.
+Do not treat the archived recipes as the current startup path.
+
+**Historical shell runner cleanup:** 57 top-level `ros/m18_*.sh` through
+`ros/m23*.sh` one-off commissioning, synthetic and experimental runners
+were also removed from the active checkout. None is required by the
+**operator-verified** Stage 3 or persistent IMU/yaw startup. Most target
+the already-archived milestone Dockerfiles or superseded container
+images, and some historical tests still refer to those old scripts.
+Those tests are archival, not the supported `check_current_checkout.sh`
+contract. The scripts remain in the full-runtime history branch:
+
+```bash
+git show archive/full-runtime-history-2026-10-29:ros/m23bv_v3_stage3_vio_host.sh
+git show archive/full-runtime-history-2026-10-29:ros/m22h_no_device_run.sh
+```
+
+**Retained exception:** `ros/m16_sensor_only_run.sh` is copied by
+`Dockerfile.nav2`, so it remains in the active source alongside the
+13 current build, diagnostic and runtime shell entry points.
+
+The current shell interface is enforced by
+`ros/check_current_checkout.sh`: all 14 scripts are syntax-checked,
+and changes to their inventory require an intentional update to that
+source-only contract.
 
 **Do not delete the only copy of the archive branch or its Git bundle**
 until the historical development work is backed up elsewhere. A fresh
