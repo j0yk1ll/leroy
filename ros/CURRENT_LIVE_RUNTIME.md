@@ -14,6 +14,32 @@
 
 These are runtime observations, not operator-independent physical authentication or permission to drive.
 
+### Clean `main` rebuild and physical Stage 3 acceptance (2026-10-29)
+
+The operator used `/home/kevin/Code/leroy-clean-main/ros` after the
+repository cleanup and reported both:
+
+```text
+LEROY_CURRENT_IMAGES=BUILT_FROM_CHECKOUT_NO_HARDWARE_LAUNCHED
+LIVE_STAGE3_START=PASS_CAMERA_ONLY_CONCURRENT_DDS
+```
+
+The detailed live output confirmed the **host /dev/video8 → container
+/dev/video2** mapping; both Nav2 costmap lifecycle transitions; two
+DepthART/costmap probes that reached `READY` and `PASS` with real
+optical clouds, costmap grids, lethal cells and unknown cells; and the
+XRSLAM process with `tracking_status=initializing` and
+`localization_valid=false`. No `/odom` message was observed in the
+launcher’s six-second check. Transient `WAITING` states for the depth
+publisher resolved to `READY`.
+
+This demonstrates **successful fresh-checkout construction and a live,
+nonactuating Stage 3 sensor runtime**. It does not attest to a new
+Stage 4 IMU/calibration run, metric SLAM localization, Nav2 autonomous
+motion, or a commissioned motor bridge. The source is the operator's
+terminal output; it is not an independently captured hardware trace.
+
+
 ## Actual software interfaces for the next live milestone
 
 - `ros/boot_localization_core.py`: bounded fail-closed boot-state model; `ros/live_boot_readiness.py`: real Stage 3 sensor input observation without any ROS publishers. Both currently produce **no wheel/motor requests**.
@@ -33,12 +59,10 @@ The independent ability to inhibit/stop motor power, verify the stop response, m
 
 ## One live operating workflow — today (read-only)
 
-Prerequisites: the existing guarded, isolated `leroy-live-costmap` and `leroy-live-xrslam` Stage 3 containers are already running. On the Arch host:
+Prerequisites: the existing guarded, isolated `leroy-live-costmap` and `leroy-live-xrslam` Stage 3 containers are already running. Use the **clean current main checkout** on the Arch host:
 
 ```bash
-cd /home/kevin/Code/leroy-boot-sweep/ros
-git fetch origin design/boot-localization-sweep
-git switch --detach origin/design/boot-localization-sweep
+cd /home/kevin/Code/leroy-clean-main/ros
 bash ./live_boot_readiness.sh
 ```
 

@@ -59,9 +59,21 @@ This script builds these local tags in dependency order:
 | `localhost/leroy-ros:stage4-imu` | Compatibility tag for the Stage 4A runner |
 | `localhost/leroy-ros:stage4c-capture-offline` | Passive recorder and boot-yaw runtime |
 
-No hardware is opened and no containers start during the build. This
-unified build sequence has been added to source; it **requires validation
-on the actual host** before claiming fresh-clone physical parity.
+No hardware is opened and no containers start during the build.
+
+**Clean-clone operator acceptance (2026-10-29):** The owner reported
+`LEROY_CURRENT_IMAGES=BUILT_FROM_CHECKOUT_NO_HARDWARE_LAUNCHED` after
+rebuilding from `/home/kevin/Code/leroy-clean-main/ros`. The same clean
+checkout then produced
+`LIVE_STAGE3_START=PASS_CAMERA_ONLY_CONCURRENT_DDS` on the robot,
+including the mapped host `/dev/video8` camera, real DepthART optical
+point clouds, activated Nav2 diagnostic costmap, and real XRSLAM
+monocular process. XRSLAM reported `initializing` and
+`/xrslam/localization_valid=false`; no `/odom` message was
+observed in the six-second check. This confirms the current Stage 3
+nonactuating startup path, **not** Stage 4 IMU session or autonomous
+motor/navigation readiness. The owner-reported result has not been
+independently replicated by CI or this assistant.
 
 ## Run the accepted, non-actuating physical runtime
 
@@ -74,9 +86,8 @@ LEROY_MOTOR_POWER_DISCONNECTED=1 bash ./live_stage3_start.sh
 ```
 
 The actual operator-verified camera is **host** `/dev/video8`, mapped to
-`/dev/video2` **inside** the container. This is intentional; an older
-paragraph in `ros/LIVE_STAGE3_REPRODUCIBLE.md` uses the inner name
-ambiguously. Do not automatically select a different camera.
+`/dev/video2` **inside** the container. This is intentional.
+Do not automatically select a different camera.
 
 The Stage 3 launcher starts only the camera, depth, costmap and monocular
 XRSLAM graph. For continuous, **still motor-isolated**, real STM32 IMU
