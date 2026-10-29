@@ -11,9 +11,12 @@ import subprocess
 import unittest
 
 from boot_yaw_tracking_core import (
-    Heading, YawTracking, WAYPOINTS_RAD, DIAGNOSTIC_RATE_CAP_RAD_S,
+    Heading, YawTracking, TrackingDecision, WAYPOINTS_RAD,
+    DIAGNOSTIC_RATE_CAP_RAD_S,
 )
-from live_manual_yaw_witness import read_status, preflight, REQUIRED_ENV
+from live_manual_yaw_witness import (
+    read_status, preflight, REQUIRED_ENV, operator_action,
+)
 
 ROOT = Path(__file__).resolve().parent
 BASE = 10_000_000_000
@@ -157,6 +160,35 @@ class LiveYawTrackingTests(unittest.TestCase):
                 bad[key] = invalid
                 self.assertIsNone(read_status(json.dumps(bad), now))
         self.assertIsNone(read_status("not-json", now))
+
+    def test_operator_prompts_are_human_only_and_signed_correctly(self):
+        def result(state, err):
+            return TrackingDecision(
+                state=state, reason="TEST", waypoint_index=0,
+                target_rad=-math.pi/2, error_rad=err,
+                observed_rate_rad_s=0.0, diagnostic_wz_rad_s=0.0)
+        for state, error, expected in (
+            ("TRACKING", -math.radians(90), "TURN_CLOCKWISE_TO_TARGET"),
+            ("TRACKING", math.radians(8), "TURN_COUNTERCLOCKWISE_TO_TARGET"),
+            ("TRACKING", -math.radians(1), "STOP_TURNING_AND_HOLD_STILL"),
+            ("TRACKING", math.radians(2), "STOP_TURNING_AND_HOLD_STILL"),
+            ("SETTLING", 0.0, "HOLD_STILL_UNTIL_WAYPOINT_ADVANCES"),
+            ("AWAITING_HEADING", None, "WAIT_FOR_LIVE_HEADING"),
+            ("DONE", None, "SEQUENCE_COMPLETE"),
+            ("FAULT_LATCHED", None, "STOP_NO_FURTHER_TURNS"),
+        ):
+            with self.subTest(state=state, error=error):
+                self.assertEqual(operator_action(result(state, error)),
+                                 expected)
+
+    def test_progress_reports_original_heading_relative_offset(self):
+        s = (ROOT/"live_manual_yaw_witness.py").read_text()
+        self.assertIn('"current_relative_deg"', s)
+        self.assertIn('"target_relative_deg"', s)
+        self.assertIn('"operator_action": operator_action(d)', s)
+        self.assertIn('now - last_log >= 2.0', s)
+        self.assertIn("node.tracker.last_yaw - node.tracker.origin", s)
+        self.assertIn('MANUAL_YAW_MOTOR=BLOCKED_NO_COMMAND_PATH', s)
 
     def test_contract_refuses_any_hardware_visible(self):
         self.assertTrue(preflight(REQUIRED_ENV, lambda _: False))
