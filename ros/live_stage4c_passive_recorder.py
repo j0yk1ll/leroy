@@ -21,7 +21,7 @@ from live_stage4c_capture_contract import (
 )
 from live_stage4d_capture_ingress import CaptureIngress
 
-# Explicit code-reviewed enablement in the operator-commissioning branch ONLY.
+# Explicit source-code enablement in the operator-commissioning branch ONLY.
 # This is not a runtime flag. Default image command remains /bin/false;
 # the guarded host wrapper still requires verified isolated parents,
 # two interactive confirmations, an approved MCU ID, and physical isolation.
