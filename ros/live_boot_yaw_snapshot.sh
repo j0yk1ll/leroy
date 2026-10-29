@@ -60,8 +60,10 @@ try:
                         or data.get("motor_motion_authorized") is not False):
                     continue
                 t = data.get("monotonic_status_ns")
+                if type(t) is not int:
+                    continue
                 age_ns = time.monotonic_ns() - t
-                if type(t) is not int or not 0 <= age_ns <= 500_000_000:
+                if not 0 <= age_ns <= 500_000_000:
                     continue
                 state = data.get("state")
                 if state != "HEADING_ACTIVE":
