@@ -1,3 +1,9 @@
+# TODO(AUTONOMY) [survey actual sensor mounts]: Measure full 6-DoF
+# front/workspace camera and IMU extrinsics relative to base_link, including
+# optical-axis conventions and physical chassis footprint. Zero placeholder
+# camera translations below must not be certified as real extrinsics.
+# Store calibration uncertainty, provenance, hardware revision and repeatable
+# verification in versioned configuration before metric pose or Nav2 release.
 # Leroy's fixed robot sensor TF configuration; no URDF/Xacro is required.
 #
 # Only ros/src/leroy_description/launch/description.launch.py publishes
