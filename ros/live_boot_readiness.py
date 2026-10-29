@@ -83,7 +83,7 @@ def run():
             self.frame_errors = 0
             self.tracking_status = "not_received"
             self.local_valid = None
-            self.subscriptions = [
+            self._boot_subscriptions = [
                 self.create_subscription(Image, IMAGE, self.on_image,
                                          sensor_qos),
                 self.create_subscription(CameraInfo, INFO, self.on_info,
@@ -95,7 +95,7 @@ def run():
                 self.create_subscription(Bool, VALID, self.on_valid,
                                          status_qos),
             ]
-            if {sub.topic_name for sub in self.subscriptions} != set(EXPECTED):
+            if {sub.topic_name for sub in self._boot_subscriptions} != set(EXPECTED):
                 raise RuntimeError("BOOT_LIVE_SUBSCRIPTION_REMAP_DENIED")
 
         def mark(self, topic):
