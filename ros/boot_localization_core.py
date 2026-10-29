@@ -191,6 +191,11 @@ class BootLocalizationModel:
             return self.decision()
 
         if self.state == "SWEEP":
+            # Explicit synthetic guard against overrunning the planned
+            # [-90,+90] sector. NOT a physical braking envelope.
+            if abs(o.yaw_rad - self.origin_yaw) > (
+                    math.pi / 2 + math.radians(7.0)):
+                return self._fault("SWEEP_ANGLE_ENVELOPE_EXCEEDED")
             if now - self.waypoint_since > SYNTHETIC_MAX_WAYPOINT_S:
                 return self._fault("WAYPOINT_DEADLINE_EXCEEDED")
             target = self.origin_yaw + SWEEP_RELATIVE_YAWS_RAD[self.waypoint]
