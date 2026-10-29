@@ -8,6 +8,8 @@ M18 START/STOP commands. If STOP ACK is missing, state is UNVERIFIED.
 import json
 import math
 import os
+from pathlib import Path
+import re
 import signal
 import sys
 import time
@@ -29,6 +31,9 @@ from m18_imu_stream_source import (
 )
 
 DURATION_S = 75.0
+# Capture-mode source ends before the recorder's 75-second upper bound,
+# allowing a validated MCU STOP ACK and bounded DDS callback drain.
+CAPTURE_SOURCE_DURATION_S = 65.0
 EXPECTED = {
     "ROS_DOMAIN_ID": "170",
     "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
@@ -152,7 +157,7 @@ class PassiveOverlap(Node):
             return 0.0
         return max(0.0, min(a[1], b[1]) - max(a[0], b[0]))
 
-    def graph_ready(self):
+    def graph_ready(self, *, require_source_meta=False):
         names = {n for n, _ in self.get_node_names_and_namespaces()}
         topics = {topic for topic, _ in self.get_topic_names_and_types()}
         if names & FORBIDDEN_NODES or topics & FORBIDDEN_TOPICS:
@@ -162,13 +167,47 @@ class PassiveOverlap(Node):
         if not REQUIRED_NODES <= names:
             return False
         pub = self.get_publishers_info_by_topic("/imu/data_raw")
-        return (len(pub) == 1
-                and pub[0].node_name == "m18_imu_source"
-                and pub[0].node_namespace == "/"
-                and pub[0].topic_type == "sensor_msgs/msg/Imu")
+        imu_ready = (len(pub) == 1
+                     and pub[0].node_name == "m18_imu_source"
+                     and pub[0].node_namespace == "/"
+                     and pub[0].topic_type == "sensor_msgs/msg/Imu")
+        if not require_source_meta:
+            return imu_ready
+        metadata_publishers = self.get_publishers_info_by_topic(
+            "/stage4c/imu_source_meta")
+        return (imu_ready and len(metadata_publishers) == 1
+                and metadata_publishers[0].node_name == "m18_imu_source"
+                and metadata_publishers[0].node_namespace == "/"
+                and metadata_publishers[0].topic_type == "std_msgs/msg/String")
+
+
+def source_metadata_enabled():
+    """Explicit opt-in only; the accepted Stage 4A/B path stays unchanged."""
+    requested = os.environ.get("LEROY_STAGE4C_SOURCE_META", "0")
+    if requested not in ("0", "1"):
+        raise RuntimeError("invalid_source_metadata_mode")
+    if requested == "1" and os.environ.get("LEROY_STAGE4C_CAPTURE_ONLY") != "1":
+        raise RuntimeError("source_metadata_requires_capture_only_session")
+    return requested == "1"
 
 
 def run():
+    metadata_enabled = source_metadata_enabled()
+    capture_requested = os.environ.get("LEROY_STAGE4C_RECORD", "0")
+    if capture_requested not in ("0", "1"):
+        raise RuntimeError("invalid_real_capture_mode")
+    capture_armed_path = None
+    session_duration_s = (CAPTURE_SOURCE_DURATION_S
+                          if capture_requested == "1" else DURATION_S)
+    if capture_requested == "1":
+        if not metadata_enabled:
+            raise RuntimeError("real_capture_requires_m18_metadata")
+        capture_name = os.environ.get("LEROY_STAGE4C_CAPTURE_NAME", "")
+        if not re.fullmatch(r"stage4c-[a-zA-Z0-9_-]{6,50}", capture_name):
+            raise RuntimeError("invalid_capture_armed_name")
+        capture_armed_path = Path("/capture") / (capture_name + "-armed")
+        if not capture_armed_path.parent.is_dir():
+            raise RuntimeError("capture_read_only_mount_missing")
     for name, value in EXPECTED.items():
         if os.environ.get(name) != value:
             raise RuntimeError("blocked_environment_" + name)
@@ -190,7 +229,7 @@ def run():
         previous[sig] = signal.getsignal(sig)
         signal.signal(sig, interrupt)
 
-    source = observer = None
+    source = observer = metadata_adapter = None
     trace = DeliveryTrace()
     spin_stats = {"serial_loop_iterations": 0, "spin_attempts": 0,
                   "max_callback_burst_s": 0.0}
@@ -200,8 +239,18 @@ def run():
     try:
         # The pre-existing M18 callback fires only after successful ROS
         # publication. It sends metadata, never another MCU command or image.
-        source = ImuStreamSource(on_imu_published=lambda fields, stamp, steady:
-                                 trace.source(stamp, time.monotonic_ns()))
+        def after_imu_publish(fields, stamp, steady):
+            # Reuse M18 after-publish callback; never duplicate IMU/serial.
+            trace.source(stamp, time.monotonic_ns())
+            if metadata_adapter is not None:
+                metadata_adapter.on_imu_published(fields, stamp, steady)
+
+        source = ImuStreamSource(on_imu_published=after_imu_publish)
+        if metadata_enabled:
+            # Same physical M18 publisher node; constructed before serial.
+            # Any callback failure latches the M18 source and attempts STOP.
+            from live_stage4c_source_meta_ros import SourceMetadataRosAdapter
+            metadata_adapter = SourceMetadataRosAdapter(source)
         observer = PassiveOverlap(trace=trace)
         # Before opening the motor-capable serial port, prove the camera,
         # depth, XRSLAM and this source are present in the shared DDS graph.
@@ -210,12 +259,29 @@ def run():
             rclpy.spin_once(observer, timeout_sec=0.05)
             if observer.failures:
                 raise RuntimeError(observer.failures[0])
-            if (observer.graph_ready() and observer.valid_status is False
+            if (observer.graph_ready(require_source_meta=metadata_enabled)
+                    and observer.valid_status is False
                     and observer.map_valid_status is False):
                 break
         else:
             raise RuntimeError("required_stage3_graph_or_false_validity_not_ready")
         print("STAGE4A_PRE_SERIAL_DDS_GRAPH=PASS", flush=True)
+        if capture_armed_path is not None:
+            # The ROS graph alone does not prove the SQLite writer is open.
+            # Wait for the existing passive recorder to arm its writer
+            # BEFORE even opening the motor-capable STM32 CDC interface.
+            deadline = time.monotonic() + 20.0
+            while time.monotonic() < deadline and not quitting[0]:
+                try:
+                    marker = capture_armed_path.read_text(encoding="ascii")
+                except (OSError, UnicodeError):
+                    marker = ""
+                if marker == "STAGE4C_RECORDER_ARMED=1\n":
+                    break
+                time.sleep(0.05)
+            else:
+                raise RuntimeError("capture_not_armed_before_serial")
+            print("STAGE4C_RECORDER_ARMED_BEFORE_SERIAL=PASS", flush=True)
 
         with serial.Serial(port=PORT, baudrate=115200, timeout=0.08,
                            write_timeout=0.25, exclusive=True) as device:
@@ -229,7 +295,7 @@ def run():
                 if not started:
                     raise RuntimeError("MCU_start_ack_missing")
                 print("STAGE4A_IMU_START_ACK=PASS", flush=True)
-                end = time.monotonic() + DURATION_S
+                end = time.monotonic() + session_duration_s
                 while time.monotonic() < end and not quitting[0]:
                     payload = device.readline()
                     if payload:
@@ -248,7 +314,7 @@ def run():
                     spin_stats["spin_attempts"] += attempts
                     spin_stats["max_callback_burst_s"] = max(
                         spin_stats["max_callback_burst_s"], elapsed)
-                    if not observer.graph_ready():
+                    if not observer.graph_ready(require_source_meta=metadata_enabled):
                         raise RuntimeError("sensor_graph_changed")
                 complete = (not quitting[0] and time.monotonic() >= end
                             and source.terminal_fault is None)
@@ -294,9 +360,13 @@ def run():
             and observer.valid_status is False
             and observer.map_valid_status is False
             and not observer.failures
+            and (not metadata_enabled or (
+                metadata_adapter is not None
+                and metadata_adapter.tap.count ==
+                result["counts"]["published_imu_messages"]))
         )
         print("STAGE4A_RESULT_JSON=" + json.dumps({
-            "duration_s": DURATION_S, "start_ack": started, "stop_ack": stopped,
+            "duration_s": session_duration_s, "start_ack": started, "stop_ack": stopped,
             "overlap_receipt_s": round(overlap, 3), "counts": counts,
             "source": result, "error": error,
             "stage4b_delivery_trace": trace.report(),
@@ -308,6 +378,10 @@ def run():
                 "spin_attempts_are_not_callbacks": True,
                 "physical_calibration_validated": False,
             },
+            "real_source_metadata_mode": metadata_enabled,
+            "original_mcu_metadata_published": (
+                metadata_adapter.tap.count if metadata_adapter is not None
+                else 0),
             "camera_imu_absolute_offset_validated": False,
             "camera_imu_extrinsics_validated": False,
             "xrslam_vio_started": False,
@@ -325,7 +399,9 @@ def run():
             source.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-        return 0 if passed else 2
+    # Do not return from finally: cleanup failures must propagate to the
+    # top-level BLOCKED handler rather than being silently suppressed.
+    return 0 if passed else 2
 
 
 if __name__ == "__main__":

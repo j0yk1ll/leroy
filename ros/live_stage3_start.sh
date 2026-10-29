@@ -12,7 +12,12 @@ fail() { printf 'LIVE_STAGE3_START=BLOCKED_%s\n' "$1" >&2; exit 2; }
 command -v podman >/dev/null || fail PODMAN_MISSING
 [[ "$(podman info --format '{{.Host.Security.Rootless}}')" == true ]] || fail NOT_ROOTLESS
 [[ "${LEROY_MOTOR_POWER_DISCONNECTED-}" == 1 ]] || fail PHYSICAL_MOTOR_DISCONNECT_CONFIRMATION_REQUIRED
-[[ -c /dev/video2 ]] || fail CAMERA_DEVICE_NOT_CHARACTER
+# The operator visually verified the front camera on HOST /dev/video8.
+# Keep /dev/video2 ONLY as the existing in-container usb_cam interface.
+# Never silently fall back to a different host video node.
+camera=/dev/video8
+[[ -c "$camera" && ! -L "$camera" ]] || fail VERIFIED_CAMERA_DEVICE_MISSING
+camera_rdev="$(stat -Lc '%t:%T' -- "$camera")" || fail CAMERA_DEVICE_STAT
 [[ ! -e /dev/ttyACM0 || -c /dev/ttyACM0 ]] || fail UNEXPECTED_MCU_DEVICE
 for image in localhost/leroy-ros:costmap localhost/leroy-ros:xrslam; do
     podman image exists "$image" || fail IMAGE_NOT_BUILT
@@ -25,6 +30,7 @@ done
 # verification. Motor driver rails must be independently disconnected.
 echo "Motor-driver power must already be physically disconnected."
 echo "Starting ONLY the isolated real camera diagnostic; no serial mapping."
+echo "LIVE_STAGE3_CAMERA_MAPPING=HOST_/dev/video8_TO_CONTAINER_/dev/video2"
 parent_started=0
 sidecar_started=0
 cleanup_if_failed() {
@@ -45,11 +51,15 @@ cleanup_if_failed() {
 }
 trap cleanup_if_failed EXIT
 
-# Only the front USB camera is mapped. No host networking, IPC, PID,
-# motor-capable STM32 serial or command bridge.
+# Refuse a replaced/hotplugged host camera before starting the container.
+[[ -c "$camera" && "$(stat -Lc '%t:%T' -- "$camera")" == "$camera_rdev" ]] ||
+    fail CAMERA_CHANGED_BEFORE_START
+# Only the visually verified HOST /dev/video8 is mapped, to the existing
+# INNER /dev/video2 interface expected by usb_cam's launch parameters.
+# No host networking, IPC, PID, motor-capable STM32 or command bridge.
 podman run --rm --detach --pull=never --name leroy-live-costmap \
     --network=none --ipc=shareable --shm-size=256m --pid=private \
-    --group-add keep-groups --device=/dev/video2 \
+    --group-add keep-groups --device="$camera:/dev/video2:rw" \
     --cap-drop=all --security-opt=no-new-privileges \
     -e ROS_DOMAIN_ID=170 \
     -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \

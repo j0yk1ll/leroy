@@ -129,9 +129,49 @@ class RosAdapterSimulation(unittest.TestCase):
         for token in ("serial.Serial(", "device.write(", "/cmd_vel", "rclpy.init("):
             self.assertNotIn(token, wrapper)
         self.assertNotIn("live_stage4c_source_meta_ros", m18)
-        self.assertNotIn("live_stage4c_source_meta_ros", runner)
+        self.assertIn("live_stage4c_source_meta_ros", runner)
+        self.assertIn("SourceMetadataRosAdapter(source)", runner)
+        self.assertIn('os.environ.get("LEROY_STAGE4C_SOURCE_META", "0")', runner)
+        self.assertIn("source_metadata_requires_capture_only_session", runner)
+        self.assertIn("require_source_meta=metadata_enabled", runner)
         self.assertIn("source_node.create_publisher(", wrapper)
         self.assertIn("metadata_topic_remapped", wrapper)
+
+    def test_guarded_real_capture_stays_uncommissioned(self):
+        wrapper = (HERE / "live_stage4_imu_sidecar.sh").read_text()
+        recorder = (HERE / "live_stage4c_passive_recorder.py").read_text()
+        for token in (
+            'record_mode="${LEROY_STAGE4C_RECORD:-0}"',
+            "CAPTURE_REVIEW_ATTESTATION_REQUIRED",
+            "RECORDER_REQUIRES_SOURCE_METADATA_IMAGE",
+            "CAPTURE_OPERATOR_CONSENT_MISSING",
+            'grep -Fqx "LIVE_CAPTURE_COMMISSIONED = True"',
+            "RECORDER_FAILED_BEFORE_MCU_OPEN",
+            "STAGE4C_REAL_FOUR_TOPIC_RECORDING=COMPLETE_UNCALIBRATED",
+            "timeout 110s podman wait",
+        ):
+            self.assertIn(token, wrapper)
+        self.assertIn("LIVE_CAPTURE_COMMISSIONED = False", recorder)
+        runner = (HERE / "live_stage4_imu_overlap.py").read_text()
+        self.assertIn('capture_not_armed_before_serial', runner)
+        self.assertIn("CAPTURE_SOURCE_DURATION_S = 65.0", runner)
+        self.assertIn("source_stop_ack_completion_not_received", recorder)
+        self.assertIn("STAGE4C_SOURCE_DONE=STOP_ACK_AND_TRANSPORT_PASS", wrapper)
+        self.assertIn("node.first_imu_received_at + 75.0", recorder)
+        self.assertIn('STAGE4C_RECORDER_ARMED_BEFORE_SERIAL=PASS', runner)
+        self.assertIn('STAGE4C_RECORDER_ARMED=1', recorder)
+        self.assertIn('armed_path.open("x"', recorder)
+        self.assertIn('armed_path.unlink()', recorder)
+        self.assertIn('record_mount=(-v "$capture_root:/capture:ro")', wrapper)
+        self.assertIn('"${record_mount[@]}"', wrapper)
+        self.assertIn("if not LIVE_CAPTURE_COMMISSIONED:", recorder)
+        # No hardware passthrough or motor command in the recorder segment.
+        recorder_run = wrapper.split('    trap cleanup_capture EXIT', 1)[1].split(
+            "printf 'STAGE4A_SELECTED_IMAGE", 1)[0]
+        self.assertNotIn("--device=", recorder_run)
+        self.assertNotIn("/cmd_vel", recorder_run)
+        self.assertIn('test ! -e /dev/ttyACM0', recorder_run)
+
 
 
 if __name__ == "__main__":
