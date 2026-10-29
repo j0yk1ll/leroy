@@ -5,6 +5,7 @@ on:
     paths:
       - 'ros/boot_localization_*.py'
       - 'ros/boot_yaw_*.py'
+      - 'ros/boot_auto_calibration_*.py'
       - 'ros/live_manual_yaw_witness*'
       - 'ros/live_boot_yaw*'
       - 'ros/live_boot_imu_service.py'
@@ -25,6 +26,7 @@ on:
     paths:
       - 'ros/boot_localization_*.py'
       - 'ros/boot_yaw_*.py'
+      - 'ros/boot_auto_calibration_*.py'
       - 'ros/live_manual_yaw_witness*'
       - 'ros/live_boot_yaw*'
       - 'ros/live_boot_imu_service.py'
@@ -69,6 +71,9 @@ jobs:
       - name: Persistent real IMU lifecycle contract
         working-directory: ros
         run: python3 -m unittest -v live_boot_service_test
+      - name: Automatic real IMU calibration holdout and output boundary
+        working-directory: ros
+        run: python3 -m unittest -v boot_auto_calibration_test
       - name: Live yaw tracking witness and zero-command boundaries
         working-directory: ros
         run: python3 -m unittest -v boot_yaw_tracking_test
