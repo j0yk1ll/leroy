@@ -7,6 +7,7 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     Dockerfile.xrslam Dockerfile.live-stage4-imu \
     Dockerfile.live-stage4c-capture \
     live_stage3_build.sh live_stage3_start.sh \
+    leroy.sh \
     live_stage3_monocular_sidecar.sh \
     live_boot_session.sh live_boot_yaw.sh \
     live_boot_imu_service.py live_boot_yaw.py \
@@ -24,7 +25,9 @@ done
 # access in build scripts. No Podman build or ROS graph is started.
 # Syntax-check every retained top-level shell entry point, including
 # the optional signed-controller launcher (but NEVER execute it).
-bash -n ./*.sh
+for script in ./*.sh; do
+    bash -n "$script"
+done
 python3 - <<'PY'
 from pathlib import Path
 import re
@@ -36,6 +39,7 @@ root = Path(".")
 # dependency and must remain.
 expected_scripts = {
     "build_current_images.sh", "check_current_checkout.sh", "exec.sh",
+    "leroy.sh",
     "live_actuated_yaw_calibration.sh", "live_boot_readiness.sh",
     "live_boot_session.sh", "live_boot_yaw.sh",
     "live_boot_yaw_snapshot.sh", "live_manual_yaw_witness.sh",
@@ -89,5 +93,23 @@ python3 -m unittest -v \
     live_boot_readiness_test \
     live_boot_service_test \
     current_live_runtime_test \
-    autonomous_motor_yaw_test
+    autonomous_motor_yaw_test \
+    leroy_runtime_test \
+    live_stage3_start_static_test \
+    live_stage3_sidecar_static_test \
+    live_stage4_contract_test \
+    live_stage4b_test \
+    live_stage4c_capture_test \
+    live_stage4c_source_meta_test \
+    live_stage4c_source_meta_ros_test \
+    live_stage4c_synthetic_dds_test \
+    live_stage4d_capture_test \
+    live_stage4d_bag_audit_test \
+    live_stage4d_synthetic_load_test
+
+python3 -m unittest discover -s src/leroy_nav2_perception/test \
+  -p test_live_costmap_static_contract.py -v
+
+grep -Fqx 'CMD ["/bin/false"]' Dockerfile.live-stage4c-capture
+grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' live_stage4c_passive_recorder.py
 echo 'REPO_PORTABILITY=PASS_OFFLINE_CURRENT_RUNTIME'

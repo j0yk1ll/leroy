@@ -3,7 +3,7 @@
 The accepted current diagnostic runtime is documented in
 [`../README.md`](../README.md),
 [`CURRENT_LIVE_RUNTIME.md`](CURRENT_LIVE_RUNTIME.md) and
-[`LIVE_STAGE3_REPRODUCIBLE.md`](LIVE_STAGE3_REPRODUCIBLE.md).
+the canonical [`leroy.sh`](leroy.sh) runtime entry point.
 
 To simplify a fresh checkout, the **historical milestone-only** root
 `M16`–`M23` reports and selftest/experimental Dockerfiles were removed
@@ -25,7 +25,8 @@ Do not treat the archived recipes as the current startup path.
 **Historical shell runner cleanup:** 57 top-level `ros/m18_*.sh` through
 `ros/m23*.sh` one-off commissioning, synthetic and experimental runners
 were also removed from the active checkout. None is required by the
-**operator-verified** Stage 3 or persistent IMU/yaw startup. Most target
+**operator-verified** combined camera/depth/XRSLAM and IMU/yaw
+sensor runtime. Most target
 the already-archived milestone Dockerfiles or superseded container
 images, and some historical tests still refer to those old scripts.
 Those tests are archival, not the supported `check_current_checkout.sh`
@@ -38,10 +39,11 @@ git show archive/full-runtime-history-2026-10-29:ros/m22h_no_device_run.sh
 
 **Retained exception:** `ros/m16_sensor_only_run.sh` is copied by
 `Dockerfile.nav2`, so it remains in the active source alongside the
-13 current build, diagnostic and runtime shell entry points.
+14 current build, diagnostic and runtime shell entry points,
+including the new unified `leroy.sh`.
 
 The current shell interface is enforced by
-`ros/check_current_checkout.sh`: all 14 scripts are syntax-checked,
+`ros/check_current_checkout.sh`: all 15 scripts are syntax-checked,
 and changes to their inventory require an intentional update to that
 source-only contract.
 
@@ -56,3 +58,24 @@ The current six-image family includes:
 `Dockerfile.live-stage4-imu`, `Dockerfile.live-stage4c-capture`.
 The additional `Dockerfile.nav2` and `Dockerfile.m16-sensors` are
 retained as a pair for the independent Nav2 offline development build.
+
+## Completed stage division
+
+The former Stage 3 and Stage 4 were implementation milestones, not
+separate operating modes. The current startup is `bash ./leroy.sh run`;
+`bash ./leroy.sh build` builds the entire container family. Old image
+tags and lower-level launchers remain as internal compatibility layers
+to preserve physical evidence and regression tests, not as distinct
+operator workflows.
+
+The previous `LIVE_STAGE3_REPRODUCIBLE.md` is available in the
+`archive/full-runtime-history-2026-10-29` snapshot:
+
+```bash
+git show archive/full-runtime-history-2026-10-29:ros/LIVE_STAGE3_REPRODUCIBLE.md
+```
+
+Legacy separate Stage 3 / 4 GitHub Actions workflows were folded into
+the single maintained `.github/workflows/leroy-current-checkout.yml`
+no-device integration regression workflow. The archived Git history
+retains their original definitions.

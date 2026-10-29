@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rebuild the CURRENT non-actuating Stage 3 + persistent IMU/yaw image family
-# from this checkout. No host devices or motors are started by this script.
+# Build the complete current Leroy sensor runtime, independent of old
+# stage milestones. No host devices or motors are started by this script.
 set -Eeuo pipefail
 cd "$(dirname "$0")"
 if [[ $# -ne 1 || "$1" != --build ]]; then
@@ -15,10 +15,13 @@ for required in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
   Dockerfile.xrslam Dockerfile.live-stage4-imu Dockerfile.live-stage4c-capture; do
   [[ -f "$required" ]] || { echo "Missing build input $required" >&2; exit 2; }
 done
-# Keep the proven Stage 3 build sequence unchanged.
-bash ./live_stage3_build.sh --build
-# The live_boot_session / live_boot_yaw launchers depend on these tags,
-# which were NOT produced by the older Stage 3-only build script.
+# Build the complete family in dependency order. The stage-labelled
+# image tags below are internal compatibility contracts for the already
+# physically validated source wrappers; they are not distinct user modes.
+podman build -f Dockerfile -t localhost/leroy-ros:jazzy .
+podman build -f Dockerfile.live-perception -t localhost/leroy-ros:perception .
+podman build -f Dockerfile.live-costmap -t localhost/leroy-ros:costmap .
+podman build -f Dockerfile.xrslam -t localhost/leroy-ros:xrslam .
 podman build -f Dockerfile.live-stage4-imu \
   -t localhost/leroy-ros:stage4b-imu .
 podman tag localhost/leroy-ros:stage4b-imu \
