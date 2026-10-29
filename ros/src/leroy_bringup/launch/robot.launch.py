@@ -12,6 +12,16 @@ from launch_ros.substitutions import FindPackageShare
 
 def _launch_xrslam(context, *args, **kwargs):
     """Start the Leroy-owned XRSLAM ROS 2 adapter when explicitly enabled."""
+
+# TODO(AUTONOMY) [unified ROS bringup]: Align this optional legacy launch
+# with the physically verified leroy.sh container graph. Avoid duplicate
+# camera, IMU and static TF publishers and ensure one STM32 serial owner.
+# When transitioning beyond diagnostics, explicitly integrate validated
+# VIO/metric odometry and Nav2 lifecycle under a fault-latched boot manager
+# rather than enabling optional components solely through launch flags.
+# Acceptance: source-controlled launch graph matches runtime topic owners;
+# partial startup, shutdown and sensor loss preserve motor inhibition.
+
     def arg(name):
         return LaunchConfiguration(name).perform(context).strip()
 
