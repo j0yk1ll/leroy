@@ -48,10 +48,12 @@ class Stage4DGraphGuards(unittest.TestCase):
         self.assertIn("STAGE4D_LIVE_CAPTURE_AUTHORIZED=FALSE", s)
         self.assertIn("STAGE4D_PHYSICAL_CALIBRATION_VALIDATED=FALSE", s)
 
-    def test_hard_live_gate_unchanged(self):
+    def test_passive_live_recorder_commissioned_separately_from_synthetic_load(self):
         r = (ROOT / "live_stage4c_passive_recorder.py").read_text()
-        self.assertIn("LIVE_CAPTURE_COMMISSIONED = False", r)
+        self.assertIn("LIVE_CAPTURE_COMMISSIONED = True", r)
         self.assertIn("STAGE4C=BLOCKED_LIVE_CAPTURE_NOT_COMMISSIONED", r)
+        self.assertIn('"LEROY_STAGE4C_CAPTURE_ONLY": "1"', r)
+        self.assertIn('"ROS_DOMAIN_ID": "170"', r)
         self.assertNotIn("serial.Serial(", r)
         self.assertNotIn("create_publisher(", r)
 
