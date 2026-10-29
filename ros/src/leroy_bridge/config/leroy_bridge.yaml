@@ -14,12 +14,10 @@ leroy_bridge:
     motor_motion_key_file: ''
     motor_operator_key_file: ''
 
-    # Absolute /dev/gpiochipN path and separate read-only active-high
-    # feedback offsets from an INDEPENDENT hardwired motor-power cutoff.
-    # No pinout is assumed; blank/-1 = fail-closed motor release.
-    motor_gpio_chip: ''
-    motor_estop_feedback_offset: -1
-    motor_power_feedback_offset: -1
+    # Historical M22 signed-bridge GPIO feedback is NOT an active Leroy
+    # startup configuration. Keep its code-level default (unprovisioned),
+    # and keep independent physical stopping verification as a separate
+    # deployment requirement. Do not synthesize healthy GPIO flags here.
 
     imu_frame_id: imu_link
 
@@ -36,12 +34,11 @@ leroy_bridge:
     # Independent 25%-of-full-scale motor duty ceiling.
     max_pwm: 64
 
-    # Encoder calibration.
+    # Legacy FL/RL+gyro odometry fallback only. Disabled below.
+    # No current wheel-encoder calibration is asserted here.
     encoder_counts_per_rev: 2464
     front_left_encoder_sign: -1
     rear_left_encoder_sign: -1
-    front_right_encoder_sign: 0
-    rear_right_encoder_sign: 0
 
     # Diagnostic fallback only; never enable alongside XRSLAM.
     # With this disabled the bridge does not advertise /odom or dynamic odom TF.
