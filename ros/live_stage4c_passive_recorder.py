@@ -284,7 +284,7 @@ def _run_live(name):
             if source_done_path.exists() or source_done_path.is_symlink():
                 if (source_done_path.is_symlink() or
                     source_done_path.read_text(encoding="ascii") !=
-                        "STAGE4C_SOURCE_DONE=STOP_ACK_AND_TRANSPORT_PASS\\n"):
+                        "STAGE4C_SOURCE_DONE=STOP_ACK_AND_TRANSPORT_PASS\n"):
                     raise CaptureError("invalid_source_completion_marker")
                 source_done = True
                 # Drain in-flight DDS callbacks while enforcing the 75s
