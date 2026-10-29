@@ -151,6 +151,13 @@ class BootLocalizationTests(unittest.TestCase):
             m.tick(synthetic(1.96, -math.pi/2)).diagnostic_yaw_target_rad,
             math.pi/2)
 
+    def test_angle_overshoot_latches_without_timeout(self):
+        m = self.running()
+        d = m.tick(synthetic(1.2, -math.radians(108)))
+        self.assertEqual((d.state, d.reason),
+                         ("FAULT_LATCHED", "SWEEP_ANGLE_ENVELOPE_EXCEEDED"))
+        self.assertIsNone(d.diagnostic_yaw_target_rad)
+
     def test_waypoint_timeout_latches(self):
         m = self.running()
         d = m.tick(synthetic(21.1, 0))
