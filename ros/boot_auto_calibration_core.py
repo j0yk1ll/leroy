@@ -8,6 +8,15 @@ and unwrapped yaw drift while the chassis remains stationary.
 A passed candidate is diagnostic evidence of stationary consistency, not
 absolute heading, camera/IMU extrinsics, speed, or permission to move.
 """
+
+# TODO(AUTONOMY) [repeatable stationary check]: Characterize gyro-Z bias,
+# temperature, vibration, gravity magnitude and drift on multiple real
+# boots; promote empirically measured thresholds rather than test guesses.
+# Export calibration uncertainty and a versioned evidence timestamp to a
+# supervisor. This pass remains diagnostic, not an actuator permission.
+# Acceptance: slight chassis motion, delayed samples, temperature swings
+# and repeated aborts cannot be mistaken for a verified stationary holdout.
+
 from dataclasses import dataclass
 import math
 import statistics
