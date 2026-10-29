@@ -88,6 +88,13 @@ def run():
             self.boot_yaw = None
             self.boot_yaw_at = None
             self.boot_yaw_count = 0
+            self._yaw_sub = self.create_subscription(
+                String, YAW, self.on_yaw,
+                QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
+                           reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.VOLATILE))
+            if self._yaw_sub.topic_name != YAW:
+                raise RuntimeError("BOOT_LIVE_YAW_REMAP_DENIED")
             self._boot_subscriptions = [
                 self.create_subscription(Image, IMAGE, self.on_image,
                                          sensor_qos),
@@ -102,6 +109,33 @@ def run():
             ]
             if {sub.topic_name for sub in self._boot_subscriptions} != set(EXPECTED):
                 raise RuntimeError("BOOT_LIVE_SUBSCRIPTION_REMAP_DENIED")
+
+        def on_yaw(self, msg):
+            pubs = self.get_publishers_info_by_topic(YAW)
+            if (len(pubs) != 1
+                    or pubs[0].node_name != "leroy_live_boot_yaw"
+                    or pubs[0].node_namespace != "/"
+                    or pubs[0].topic_type != "std_msgs/msg/String"):
+                return
+            try:
+                d = json.loads(msg.data)
+                v = d.get("yaw_relative_rad")
+                t = d.get("monotonic_status_ns")
+                age = time.monotonic_ns() - t
+                if (d.get("schema") != "leroy_boot_yaw_v1"
+                        or d.get("state") != "HEADING_ACTIVE"
+                        or d.get("owner_verified") is not True
+                        or d.get("motor_motion_authorized") is not False
+                        or type(v) not in (int, float)
+                        or not math.isfinite(v)
+                        or type(t) is not int
+                        or not 0 <= age <= 350_000_000):
+                    return
+                self.boot_yaw = float(v)
+                self.boot_yaw_at = time.monotonic()
+                self.boot_yaw_count += 1
+            except (ValueError, TypeError):
+                return
 
         def mark(self, topic):
             self.counts[topic] += 1
