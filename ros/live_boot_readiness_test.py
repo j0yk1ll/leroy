@@ -85,6 +85,16 @@ class LiveBootReadOnlyContract(unittest.TestCase):
                     and target.attr == "subscriptions",
                     "rclpy.Node.subscriptions is a read-only property")
 
+    def test_live_supervisor_consumes_relative_imu_yaw(self):
+        source = (ROOT / "live_boot_readiness.py").read_text()
+        self.assertIn('YAW = "/leroy_boot/relative_yaw_status"', source)
+        self.assertIn("String, YAW, self.on_yaw", source)
+        self.assertIn("yaw_at=node.boot_yaw_at", source)
+        self.assertIn("yaw_rad=node.boot_yaw", source)
+        self.assertIn("boot_relative_yaw_samples", source)
+        self.assertIn("d.get(\"motor_motion_authorized\") is not False", source)
+        self.assertIn("now - node.boot_yaw_at > 0.35", source)
+
     def test_launcher_maps_only_source_files_not_hardware(self):
         source = (ROOT / "live_boot_readiness.sh").read_text()
         self.assertIn('parent=leroy-live-costmap', source)

@@ -7,6 +7,7 @@ The existing offline startup model is evaluated with *unproven* physical
 qualification flags; its output is not a command.
 """
 import json
+import math
 import os
 import time
 
@@ -15,6 +16,7 @@ INFO = "/camera/camera_info"
 CLOUD = "/leroy_nav2/diagnostics/raw_depth_points"
 STATUS = "/xrslam/tracking_status"
 VALID = "/xrslam/localization_valid"
+YAW = "/leroy_boot/relative_yaw_status"
 EXPECTED = {
     IMAGE: ("rectify_node", "/camera"),
     INFO: ("usb_cam", "/camera"),
@@ -83,6 +85,16 @@ def run():
             self.frame_errors = 0
             self.tracking_status = "not_received"
             self.local_valid = None
+            self.boot_yaw = None
+            self.boot_yaw_at = None
+            self.boot_yaw_count = 0
+            self._yaw_sub = self.create_subscription(
+                String, YAW, self.on_yaw,
+                QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
+                           reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.VOLATILE))
+            if self._yaw_sub.topic_name != YAW:
+                raise RuntimeError("BOOT_LIVE_YAW_REMAP_DENIED")
             self._boot_subscriptions = [
                 self.create_subscription(Image, IMAGE, self.on_image,
                                          sensor_qos),
@@ -97,6 +109,35 @@ def run():
             ]
             if {sub.topic_name for sub in self._boot_subscriptions} != set(EXPECTED):
                 raise RuntimeError("BOOT_LIVE_SUBSCRIPTION_REMAP_DENIED")
+
+        def on_yaw(self, msg):
+            pubs = self.get_publishers_info_by_topic(YAW)
+            if (len(pubs) != 1
+                    or pubs[0].node_name != "leroy_live_boot_yaw"
+                    or pubs[0].node_namespace != "/"
+                    or pubs[0].topic_type != "std_msgs/msg/String"):
+                return
+            try:
+                d = json.loads(msg.data)
+                if type(d) is not dict:
+                    return
+                v = d.get("yaw_relative_rad")
+                t = d.get("monotonic_status_ns")
+                age = time.monotonic_ns() - t
+                if (d.get("schema") != "leroy_boot_yaw_v1"
+                        or d.get("state") != "HEADING_ACTIVE"
+                        or d.get("owner_verified") is not True
+                        or d.get("motor_motion_authorized") is not False
+                        or type(v) not in (int, float)
+                        or not math.isfinite(v)
+                        or type(t) is not int
+                        or not 0 <= age <= 350_000_000):
+                    return
+                self.boot_yaw = float(v)
+                self.boot_yaw_at = time.monotonic()
+                self.boot_yaw_count += 1
+            except (ValueError, TypeError):
+                return
 
         def mark(self, topic):
             self.counts[topic] += 1
@@ -146,6 +187,10 @@ def run():
         while time.monotonic() - start < 12.0:
             rclpy.spin_once(node, timeout_sec=0.05)
         now = time.monotonic()
+        if (node.boot_yaw_at is not None
+                and now - node.boot_yaw_at > 0.35):
+            node.boot_yaw = None
+            node.boot_yaw_at = None
         owners = graph_report(node)
         ages = {
             topic: (None if topic not in node.received_at
@@ -174,9 +219,9 @@ def run():
             now=now,
             image_at=node.received_at.get(IMAGE),
             obstacle_at=node.received_at.get(CLOUD),
-            yaw_at=None,
+            yaw_at=node.boot_yaw_at,
             localization_at=node.received_at.get(STATUS),
-            yaw_rad=None,
+            yaw_rad=node.boot_yaw,
             localization_status=(
                 node.tracking_status if node.tracking_status in (
                     "initializing", "tracking", "lost") else "unknown"),
@@ -195,6 +240,8 @@ def run():
             "xrslam_tracking_status": node.tracking_status,
             "xrslam_localization_valid": node.local_valid,
             "imu_publisher_count": node.count_publishers("/imu/data_raw"),
+            "boot_relative_yaw_samples": node.boot_yaw_count,
+            "boot_relative_yaw_rad": node.boot_yaw,
             "odom_publisher_count": node.count_publishers("/odom"),
             "read_only": True,
             "source_calibration_validated": False,
