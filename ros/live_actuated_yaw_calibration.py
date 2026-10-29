@@ -31,6 +31,7 @@ from leroy_bridge.motor_signed_ingress import read_protected_key
 
 IMU_TOPIC = "/imu/data_raw"
 BRIDGE_SESSION = "/leroy/motor/session_id"
+BRIDGE_AUTHORITY = "/leroy/motor/authority_status"
 LEASE_TOPIC = "/leroy/safety/rotation_lease"
 SIGNED_REARM = "/leroy/motor/signed_rearm"
 SIGNED_MOTION = "/leroy/motor/signed_motion"
@@ -115,6 +116,8 @@ def run():
             self.motor = None
             self.verifier = None
             self.session_id = None
+            self.bridge_armed_at = None
+            self.bridge_armed_session = None
             self.last_heading = None
             self.last_imu_stamp = None
             self.last_imu_receipt = None
@@ -136,6 +139,9 @@ def run():
                 String, BRIDGE_SESSION, self.on_session, durable_qos)
             self._safety_sub = self.create_subscription(
                 String, LEASE_TOPIC, self.on_safety, live_qos)
+            self._bridge_authority_sub = self.create_subscription(
+                String, BRIDGE_AUTHORITY, self.on_bridge_authority,
+                live_qos)
             self._motion_pub = self.create_publisher(
                 String, SIGNED_MOTION, live_qos)
             self._rearm_pub = self.create_publisher(
@@ -144,6 +150,7 @@ def run():
             if (self._imu_sub.topic_name != IMU_TOPIC
                     or self._session_sub.topic_name != BRIDGE_SESSION
                     or self._safety_sub.topic_name != LEASE_TOPIC
+                    or self._bridge_authority_sub.topic_name != BRIDGE_AUTHORITY
                     or self._motion_pub.topic_name != SIGNED_MOTION
                     or self._rearm_pub.topic_name != SIGNED_REARM):
                 raise RuntimeError("MOTOR_YAW_ROS_REMAP_NOT_ALLOWED")
@@ -153,6 +160,7 @@ def run():
             return (
                 _strict_owner(self, IMU_TOPIC, IMU_OWNER)
                 and _strict_owner(self, BRIDGE_SESSION, SESSION_OWNER)
+                and _strict_owner(self, BRIDGE_AUTHORITY, SESSION_OWNER)
                 and _strict_owner(self, LEASE_TOPIC, LEASE_OWNER)
                 and self._motion_pub.get_subscription_count() == 1
                 and self._rearm_pub.get_subscription_count() == 1
@@ -176,6 +184,35 @@ def run():
                 self.verifier = SafetyLeaseVerifier(
                     safety_key=safety_key, bridge_session_id=sid)
                 self.motor = MotorYawCalibration(sid)
+
+        def on_bridge_authority(self, msg):
+            if not _strict_owner(self, BRIDGE_AUTHORITY, SESSION_OWNER):
+                self.fail("BRIDGE_AUTHORITY_PUBLISHER_CHANGED")
+                return
+            now = time.monotonic_ns()
+            try:
+                d = json.loads(msg.data)
+                t = d.get("monotonic_status_ns")
+                fresh = (type(t) is int and 0 <= now - t <= 150_000_000)
+                valid = (
+                    type(d) is dict
+                    and d.get("schema") == "leroy_motor_bridge_authority_v1"
+                    and d.get("session_id") == self.session_id
+                    and d.get("state") == "ARMED"
+                    and d.get("physical_release_verified") is True
+                    and d.get("watchdog_acknowledged") is True
+                    and d.get("motor_cdc_healthy") is True
+                    and fresh)
+            except (TypeError, ValueError, AttributeError, OverflowError):
+                valid = False
+            if valid:
+                self.bridge_armed_session = self.session_id
+                self.bridge_armed_at = now
+            else:
+                self.bridge_armed_session = None
+                self.bridge_armed_at = None
+                if self.last_nonzero_ns is not None:
+                    self.fail("SIGNED_BRIDGE_ARMED_STATE_LOST")
 
         def on_safety(self, msg):
             if not _strict_owner(self, LEASE_TOPIC, LEASE_OWNER):
@@ -340,7 +377,18 @@ def run():
                 return
             # Bridge must pass the 1s rearm dwell with ZERO packets issued
             # before the first motion command; premature commands latch it.
-            if now_ns-self.rearm_issued_ns < 1_150_000_000:
+            if now_ns-self.rearm_issued_ns < 1_050_000_000:
+                return
+            # This status comes from the actual sole bridge authority. No
+            # elapsed-time guess, operator Bool or ROS input can substitute
+            # for a bridge-issued ARMED + hardware-interlock result.
+            actual_armed = (
+                self.bridge_armed_session == self.session_id
+                and self.bridge_armed_at is not None
+                and 0 <= now_ns-self.bridge_armed_at <= 150_000_000)
+            if not actual_armed:
+                if now_ns-self.rearm_issued_ns > 2_000_000_000:
+                    self.fail("BRIDGE_MOTOR_REARM_NOT_ACKNOWLEDGED")
                 return
             # Do not pretend a repeated ROS callback sample is a new
             # observation on every 20 Hz command tick.
