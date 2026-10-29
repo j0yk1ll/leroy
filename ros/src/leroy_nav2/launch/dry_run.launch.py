@@ -1,10 +1,10 @@
 """Milestone-1 Nav2 inspection only. Must run in an OFFLINE Podman network."""
 
-# TODO(AUTONOMY) [real Nav2 lifecycle]: Preserve this deliberately isolated
+# TODO(AUTONOMY) #040 [real Nav2 lifecycle]: Preserve this deliberately isolated
 # diagnostic launch. Implement a *separate* production launcher with map,
 # odom/TF, costmaps, planner, controller, behavior tree, collision monitor,
 # velocity limits and one verified command handoff to the signed bridge.
-# TODO(AUTONOMY) [recovery]: Add map/goal persistence, localization-loss
+# TODO(AUTONOMY) #041 [recovery]: Add map/goal persistence, localization-loss
 # stopping, obstacle replan, recovery deadlines and no-auto-rearm logic.
 # Acceptance: real goals, blocked paths, stale odom/depth, TF loss,
 # E-stop and restart cannot command movement outside commissioned limits.
