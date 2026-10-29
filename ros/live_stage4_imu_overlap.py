@@ -31,6 +31,9 @@ from m18_imu_stream_source import (
 )
 
 DURATION_S = 75.0
+# Capture-mode source ends before the recorder's 75-second upper bound,
+# allowing a validated MCU STOP ACK and bounded DDS callback drain.
+CAPTURE_SOURCE_DURATION_S = 65.0
 EXPECTED = {
     "ROS_DOMAIN_ID": "170",
     "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
@@ -194,6 +197,8 @@ def run():
     if capture_requested not in ("0", "1"):
         raise RuntimeError("invalid_real_capture_mode")
     capture_armed_path = None
+    session_duration_s = (CAPTURE_SOURCE_DURATION_S
+                          if capture_requested == "1" else DURATION_S)
     if capture_requested == "1":
         if not metadata_enabled:
             raise RuntimeError("real_capture_requires_m18_metadata")
@@ -290,7 +295,7 @@ def run():
                 if not started:
                     raise RuntimeError("MCU_start_ack_missing")
                 print("STAGE4A_IMU_START_ACK=PASS", flush=True)
-                end = time.monotonic() + DURATION_S
+                end = time.monotonic() + session_duration_s
                 while time.monotonic() < end and not quitting[0]:
                     payload = device.readline()
                     if payload:
@@ -361,7 +366,7 @@ def run():
                 result["counts"]["published_imu_messages"]))
         )
         print("STAGE4A_RESULT_JSON=" + json.dumps({
-            "duration_s": DURATION_S, "start_ack": started, "stop_ack": stopped,
+            "duration_s": session_duration_s, "start_ack": started, "stop_ack": stopped,
             "overlap_receipt_s": round(overlap, 3), "counts": counts,
             "source": result, "error": error,
             "stage4b_delivery_trace": trace.report(),
