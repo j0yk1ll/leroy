@@ -55,8 +55,10 @@ class PersistentBootService(unittest.TestCase):
                       if isinstance(n, ast.Call)
                       and isinstance(n.func, ast.Attribute)
                       and n.func.attr == "create_publisher"]
-        self.assertEqual(len(publishers), 1)
-        self.assertEqual(ast.unparse(publishers[0].args[1]), "STATUS_TOPIC")
+        self.assertEqual(len(publishers), 2)
+        self.assertEqual(
+            {ast.unparse(pub.args[1]) for pub in publishers},
+            {"STATUS_TOPIC", "CALIBRATION_TOPIC"})
 
     def test_single_command_shell_is_syntactically_valid_and_cleans_up(self):
         script = ROOT / "live_boot_session.sh"
