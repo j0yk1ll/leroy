@@ -1,212 +1,145 @@
 # Leroy
 
-Leroy is a four-wheel mecanum robot with an STM32F401 USB CDC controller,
-real monocular camera/DepthART perception, XRSLAM diagnostics, and a ROS 2
-Jazzy application packaged for **rootless Podman on an Arch Linux host**.
+Leroy is a four-wheel mecanum robot running ROS 2 Jazzy in **rootless
+Podman** on an Arch Linux host. Its live runtime includes the actual
+front camera, CPU DepthART perception, diagnostic Nav2 costmap, XRSLAM
+monocular adapter, and STM32F401 50 Hz IMU with continuous relative
+yaw and automatic stationary gyro verification.
 
-## Which code runs today?
+**The old Stage 3 / Stage 4 division is complete and retired.** There
+is one current **Leroy sensor runtime**, one build command and one
+attended startup command. Separate Linux containers remain for
+isolating camera and STM32 USB ownership, not as separate project
+milestones. Legacy Stage-named implementation files and image tags are
+retained only where required for verified backward compatibility.
 
-The last physically observed runtime (2026-10-29) is a **sensor-only**
-Stage 3 camera / DepthART / Nav2 diagnostic costmap + XRSLAM **monocular**
-graph, optionally augmented by a separate, physically motor-isolated
-STM32 50 Hz IMU publisher and persistent yaw/calibration subscriber.
-It has demonstrated real relative yaw when the chassis was moved manually.
+The currently commissioned system is **sensor-only**. The motion bridge
+and closed-loop powered yaw calibration exist as development code but
+are not commissioned for motor operation. XRSLAM reports
+`initializing`, metric localization is not validated, and Nav2
+command output is disabled.
 
-**It is not an autonomously driving robot.** XRSLAM has remained
-`initializing`, metric localization is unvalidated, Nav2 motor output is
-disabled, and the signed motor controller is an uncommissioned development
-path. Do not treat a successfully rebuilt image or CI pass as motor-release
-authorization.
+## One Leroy workflow
 
-The canonical files to start with are:
+Host prerequisites: Linux, Bash, Git, rootless Podman, network access
+for builds, sufficient disk/RAM for CPU PyTorch and XRSLAM. External
+sources and Docker/OCI base tags are not all immutable, so this is a
+functionally reproducible build, not a bit-for-bit offline snapshot.
 
-- `ros/CURRENT_LIVE_RUNTIME.md` — verified and unverified physical behavior
-- `ros/LIVE_STAGE3_REPRODUCIBLE.md` — isolated camera-only Stage 3
-- `ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md` — future autonomous boot design
-- `ros/Dockerfile`, `ros/Dockerfile.live-perception`,
-  `ros/Dockerfile.live-costmap`, `ros/Dockerfile.xrslam`,
-  `ros/Dockerfile.live-stage4-imu`,
-  `ros/Dockerfile.live-stage4c-capture` — current image recipes
-
-## Reconstruct current images from a clean checkout
-
-Required host dependencies: rootless Podman (with working subordinate
-UID/GID mappings), Git, Bash and enough disk/RAM for CPU PyTorch,
-DepthART and native XRSLAM builds. The image build downloads ROS packages,
-a pinned DepthART source snapshot, the model checkpoint, patched usb_cam
-source and a pinned XRSLAM revision. **An internet connection and working
-external package/model hosting are required.** OCI base image tags and apt
-repositories are not pinned to immutable digests or a package snapshot;
-this is a functional rebuild recipe, not a bit-identical supply-chain
-reproduction.
-
-From the repository root:
+Run commands from a **clean main checkout**, under `ros/`:
 
 ```bash
-cd ros
-bash ./build_current_images.sh --build
+bash ./leroy.sh check       # no hardware
+bash ./leroy.sh build       # all images, no hardware
+bash ./leroy.sh status      # inspect container states
 ```
 
-This script builds these local tags in dependency order:
-
-| Tag | Purpose |
-| --- | --- |
-| `localhost/leroy-ros:jazzy` | Base Jazzy, patched usb_cam and DepthART |
-| `localhost/leroy-ros:perception` | Live depth adapter |
-| `localhost/leroy-ros:costmap` | Stage 3 diagnostic costmap |
-| `localhost/leroy-ros:xrslam` | Native XRSLAM monocular adapter |
-| `localhost/leroy-ros:stage4b-imu` | Existing standalone M18/Stage 4B IMU image |
-| `localhost/leroy-ros:stage4-imu` | Compatibility tag for the Stage 4A runner |
-| `localhost/leroy-ros:stage4c-capture-offline` | Passive recorder and boot-yaw runtime |
-
-No hardware is opened and no containers start during the build.
-
-**Clean-clone operator acceptance (2026-10-29):** The owner reported
-`LEROY_CURRENT_IMAGES=BUILT_FROM_CHECKOUT_NO_HARDWARE_LAUNCHED` after
-rebuilding from `/home/kevin/Code/leroy-clean-main/ros`. The same clean
-checkout then produced
-`LIVE_STAGE3_START=PASS_CAMERA_ONLY_CONCURRENT_DDS` on the robot,
-including the mapped host `/dev/video8` camera, real DepthART optical
-point clouds, activated Nav2 diagnostic costmap, and real XRSLAM
-monocular process. XRSLAM reported `initializing` and
-`/xrslam/localization_valid=false`; no `/odom` message was
-observed in the six-second check. This confirms the current Stage 3
-nonactuating startup path. The owner-reported result has not been
-independently replicated by CI or this assistant.
-
-**Clean-clone persistent IMU acceptance (2026-10-29):** Using the same
-reconstructed checkout and the existing Stage 3 graph, the operator also
-reported `BOOT_LIVE_SESSION=IMU_STREAM_READY`,
-`BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY`, and
-`BOOT_AUTO_CALIBRATION=PASS_STATIONARY_GYRO_CONSISTENCY_ONLY`.
-The calibration status identified the physical STM32 50 Hz IMU,
-an uninterrupted eight-second window with 401 samples and no resets,
-a yaw drift of 0.0816 degrees and gyro-Z noise of approximately
-0.002389 rad/s. It deliberately reported
-`physical_motion_authorized=false`. This verifies the observed
-**startup and calibration portion** of the sensor-only Stage 4 runtime.
-The operator subsequently interrupted that live session with Ctrl+C
-and supplied the final termination transcript:
-`BOOT_IMU_SOURCE_START_ACK=PASS`,
-`BOOT_IMU_SOURCE_STOP_ACK=PASS`,
-`BOOT_IMU_SOURCE_RESULT=PASS_OPERATOR_STOPPED`, and
-`BOOT_LIVE_SESSION=STOPPED_NO_MOTION_AUTHORITY`.
-The yaw observer reported `accepted_samples=55743`,
-`state=HEADING_ACTIVE`, final `yaw_relative_deg=0.5137217008341133`,
-and `BOOT_LIVE_MOTION=BLOCKED_NO_ACTUATION`.
-This closes the observed **non-actuating sensor runtime startup,
-stationary calibration, and IMU-stream shutdown** acceptance loop.
-The IMU STOP acknowledgment is **not** a motor STOP or physical
-braking test. Neither run authorizes motor use, validates metric
-localization, or establishes camera–IMU extrinsics.
-
-## Run the accepted, non-actuating physical runtime
-
-**Only after independently disconnecting the actual motor power rails**
-and inspecting the host camera selection, run on Leroy's Arch host:
+For the live integrated session, the **motor and manipulator power
+rails must first be independently, physically disconnected** while
+STM32 USB remains powered. Verify the robot's hardwired power-cut
+E-stop remains accessible. The environment variable below is an
+operator statement, **not a software sensor**.
 
 ```bash
-cd ros
-LEROY_MOTOR_POWER_DISCONNECTED=1 bash ./live_stage3_start.sh
+cd /home/kevin/Code/leroy-clean-main/ros
+LEROY_MOTOR_RAILS_DISCONNECTED=YES \
+LEROY_MCU_BY_ID=/dev/serial/by-id/usb-Robot_Controller_STM32F401_Robot_CDC_F401-ROBOT-if00 \
+bash ./leroy.sh run
 ```
 
-The actual operator-verified camera is **host** `/dev/video8`, mapped to
-`/dev/video2` **inside** the container. This is intentional.
-Do not automatically select a different camera.
+The single invocation, in order:
 
-The Stage 3 launcher starts only the camera, depth, costmap and monocular
-XRSLAM graph. For continuous, **still motor-isolated**, real STM32 IMU
-and startup gyro calibration, the existing launcher is:
+1. Verifies rootless Podman, isolation acknowledgement, stable STM32
+   device, the required images and absence of conflicting owners.
+2. Starts the physically verified camera → DepthART → costmap and
+   XRSLAM monocular DDS graph in isolated containers.
+3. Starts the existing **single serial-owner** STM32 IMU source and
+   the gyro-yaw observer in the same isolated DDS graph. The operator
+   types `BOOT_IMU_ONLY` for this supervised session.
+4. Keeps publishing real relative yaw and stationary gyro verification
+   while the supervised foreground session remains active.
+5. On Ctrl+C, the IMU source attempts its acknowledged IMU-stream STOP;
+   the wrapper then stops XRSLAM and its parent camera container in
+   reverse dependency order. A missing IMU STOP ACK fails the session.
 
-```bash
-cd ros
-LEROY_STAGE4_MCU_BY_ID=/dev/serial/by-id/usb-Robot_Controller_STM32F401_Robot_CDC_F401-ROBOT-if00 \
-LEROY_STAGE4_MOTOR_ISOLATION_ATTESTED=YES \
-bash ./live_boot_session.sh
+This does **not** start an autonomous motor controller, drive the
+wheels or enable metric localization. The camera owner uses host
+`/dev/video8` mapped to container `/dev/video2`. Only the IMU owner
+maps the motor-capable STM32 device `/dev/ttyACM0`; do not run any
+other serial-owning bridge concurrently.
+
+The orchestrator intentionally refuses stale or running Leroy
+containers instead of replacing them. Inspect the state with
+`bash ./leroy.sh status`. Stop only the known old session processes
+after verifying no sensor/MCU client is still active; do not remove
+unrelated Podman containers.
+
+Legacy `live_stage3_*`, `live_stage4_*` and `live_boot_*` entry
+points remain internal compatibility layers and targeted diagnostic
+utilities. **Do not use them as a second, parallel startup workflow.**
+The operator-facing entry point is `leroy.sh`.
+
+## Physically verified from a clean `main` checkout
+
+On October 29, 2026, the operator built the current images from
+`/home/kevin/Code/leroy-clean-main/ros`, reproduced the real camera
+and depth/costmap/XRSLAM graph, completed automatic stationary gyro
+verification, then shut down the real STM32 IMU stream with START/STOP
+acknowledgments.
+
+```text
+LEROY_CURRENT_IMAGES=BUILT_FROM_CHECKOUT_NO_HARDWARE_LAUNCHED
+LIVE_STAGE3_START=PASS_CAMERA_ONLY_CONCURRENT_DDS
+BOOT_LIVE_SESSION=IMU_STREAM_READY
+BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY
+BOOT_AUTO_CALIBRATION=PASS_STATIONARY_GYRO_CONSISTENCY_ONLY
+BOOT_IMU_SOURCE_START_ACK=PASS
+BOOT_IMU_SOURCE_STOP_ACK=PASS
+BOOT_IMU_SOURCE_RESULT=PASS_OPERATOR_STOPPED
+BOOT_LIVE_SESSION=STOPPED_NO_MOTION_AUTHORITY
 ```
 
-That command is exclusively for the separate, physically disconnected
-sensor-only session. The hardwired whole-robot E-stop by itself is not
-a substitute for keeping the motor drivers isolated while MCU USB and
-ROS remain powered. Do **not** run the signed bridge concurrently with
-the M18 serial-owner sidecar.
+These are **operator-reported results from the verified component
+launchers**, not yet a physical validation of the **new unified
+`leroy.sh run` wrapper**. The stationary calibration had 401 samples
+over eight seconds, zero restarts, and 0.0816° reported relative yaw
+drift during that holdout. XRSLAM remained `initializing` with
+`/xrslam/localization_valid=false`; no real metric odometry was
+approved. The gyro status retains `motor_motion_authorized=false`.
+The IMU STOP is **not** proof of motor-driver braking or an E-stop test.
 
-To stop the original sensor-only graph, stop IMU/yaw (Ctrl+C), verify
-the MCU IMU STOP ACK, then stop XRSLAM before its parent:
+See [`ros/CURRENT_LIVE_RUNTIME.md`](ros/CURRENT_LIVE_RUNTIME.md)
+for integration and hardware acceptance details.
 
-```bash
-podman stop leroy-live-xrslam
-podman stop leroy-live-costmap
-```
+## Project directories
 
-The experimental signed motor/yaw code in `ros/live_actuated_yaw_calibration.py`
-and the historical motor-commissioning programs are **not** part of
-this accepted sensor-only startup.
+- `firmware/` — STM32 source.
+- `ros/src/` — maintained ROS packages, including the currently
+  disabled/uncommissioned motor and navigation interfaces.
+- `ros/` — current build, orchestration, configuration and tests.
+- `hardware/` and `electronics/` — mechanical/electrical design.
+- `utils/` — calibration utilities and source-controlled data.
 
-## Offline checks
+Historical one-off `M18`–`M23` launchers, experimental Dockerfiles
+and milestone notes are archived at the snapshot branch
+`archive/full-runtime-history-2026-10-29`. See
+[`ros/ARCHIVE_INDEX.md`](ros/ARCHIVE_INDEX.md).
 
-```bash
-cd ros
-bash ./check_current_checkout.sh
-```
+## Do not delete your only copy of external state
 
-This verifies the tracked build inputs, static launcher syntax and the
-current zero-device Python contracts. It never opens the robot.
+A Git source checkout does not preserve running Podman containers,
+locally built images, volumes, untracked files, firmware actually
+flashed onto the MCU, protected signing keys, recorded ROS bags or
+persistent motor sequence ledgers. Verify these separately before
+deleting any local checkout or GitHub repository.
 
-## What Git does not restore
-
-A repository is **source code, not a machine image**. Before deleting the
-GitHub repository or the local working copy, explicitly preserve:
-
-- Uncommitted or untracked local files (`git status --porcelain`), including
-  any host-specific camera/IMU calibration not committed to source.
-- Rootless Podman images, volume contents, container configuration and logs;
-  a fresh clone does not restore those automatically.
-- MCU firmware that is *actually flashed*, any persistent
-  `MotorSequenceLedger` state, and protected signing credentials. Never
-  upload private keys to GitHub.
-- Locally saved ROS bags, capture records, model caches and source calibration
-  artifacts not present in the tracked tree.
-- Device mapping, permissions, host serial-by-ID identity and the
-  hardware isolation/stop configuration.
-- The full Git history and review context if needed: deleting the hosting
-  repository also deletes its pull requests and issues.
-
-For a portable **Git history** backup, create a bundle locally before
-deleting any repository:
+For a complete source **and Git refs** backup (while the remote
+still exists):
 
 ```bash
 git bundle create ../leroy-all-refs.bundle --all
 git bundle verify ../leroy-all-refs.bundle
 ```
 
-For the **source tree** only, use `git archive` on the intended main
-commit. A plain copy of the local folder is not automatically a clean,
-rebuildable checkout, because it can contain stale build outputs and may
-lack committed feature-branch changes.
-
-The current change-history archive is retained in the
-`archive/full-runtime-history-2026-10-29` branch, and the earlier main
-in `archive/main-before-runtime-consolidation-2026-10-29`.
-These GitHub refs will **not survive deletion of the GitHub repository**
-unless you export or push them elsewhere.
-
-## Source layout
-
-- `firmware/` — STM32 code and build system
-- `ros/src/` — ROS packages
-- `ros/` — canonical image builds, runtime wrappers and offline tests
-- `hardware/` — mechanical design source and STL
-- `electronics/` — electronics design
-- `utils/` — calibration tools and source-controlled capture assets
-
-The active ROS directory contains **14 shell entry points**: the
-current source build, startup, observation, maintenance and integration
-scripts, plus the M16 runner still required by the Nav2 fixture
-Dockerfile. The old `m18`–`m23` one-off runner scripts, milestone
-Dockerfiles and reports are deliberately absent from the active tree.
-They remain available in the immutable pre-cleanup snapshot at
-`archive/full-runtime-history-2026-10-29` (see
-[`ros/ARCHIVE_INDEX.md`](ros/ARCHIVE_INDEX.md)).
-Some archived milestone tests are not part of the supported current
-runtime regression suite and may depend on these historical artifacts.
+A source-only reupload does not restore issues, PR reviews or archived
+Git refs automatically. Keep a verified Git bundle independently.
