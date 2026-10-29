@@ -68,6 +68,25 @@ def read_status(raw, now_ns):
         return None
 
 
+def operator_action(decision):
+    """Human instruction only; never a motion command."""
+    if decision.state == "DONE":
+        return "SEQUENCE_COMPLETE"
+    if decision.state in ("FAULT_LATCHED", "STOPPED"):
+        return "STOP_NO_FURTHER_TURNS"
+    if decision.state == "AWAITING_HEADING":
+        return "WAIT_FOR_LIVE_HEADING"
+    if decision.state == "SETTLING":
+        return "HOLD_STILL_UNTIL_WAYPOINT_ADVANCES"
+    if decision.error_rad is None:
+        return "WAIT_FOR_LIVE_HEADING"
+    if abs(decision.error_rad) <= math.radians(3.0):
+        return "STOP_TURNING_AND_HOLD_STILL"
+    if decision.error_rad < 0:
+        return "TURN_CLOCKWISE_TO_TARGET"
+    return "TURN_COUNTERCLOCKWISE_TO_TARGET"
+
+
 def run():
     preflight()
     import rclpy
@@ -135,9 +154,26 @@ def run():
                 node.tracker._fault("LIVE_YAW_PUBLISHER_OWNER_CHANGED")
             d = node.tracker.on_timeout(time.monotonic_ns())
             signature = (d.state, d.waypoint_index, d.reason)
-            if signature != previous or now - last_log >= 10.0:
+            if signature != previous or now - last_log >= 2.0:
+                # Relative witness yaw differs from the session-level IMU
+                # yaw: the witness origin is captured on first fresh status.
+                offset = (
+                    node.tracker.last_yaw - node.tracker.origin
+                    if node.tracker.origin is not None
+                    and node.tracker.last_yaw is not None else None)
+                target_offset = (
+                    d.target_rad - node.tracker.origin
+                    if d.target_rad is not None
+                    and node.tracker.origin is not None else None)
                 print("MANUAL_YAW_PROGRESS_JSON=" + json.dumps({
                     "state": d.state, "reason": d.reason,
+                    "operator_action": operator_action(d),
+                    "current_relative_deg": (
+                        round(math.degrees(offset), 2)
+                        if offset is not None else None),
+                    "target_relative_deg": (
+                        round(math.degrees(target_offset), 2)
+                        if target_offset is not None else None),
                     "waypoint_index": d.waypoint_index,
                     "target_deg": (
                         round(math.degrees(d.target_rad), 2)
