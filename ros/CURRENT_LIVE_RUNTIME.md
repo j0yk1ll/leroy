@@ -124,6 +124,60 @@ misrepresent the condition or bypass the old runner. A new reviewed
 commissioning path must instead reflect the actual hardwired cutoff
 and independently bound any unexpected movement.
 
+## Continuous live IMU + relative yaw (supervised sensor-only service)
+
+The previous 75-second M18 capture and 25-second yaw diagnostic have now
+been complemented by **one continuous sensor-only operation**. The
+independent STM32 IMU publisher retains its single serial writer and
+the already accepted M18 message parser/time mapper; its only MCU
+writes are `set_imu_stream_hz 50` (START) and
+`set_imu_stream_hz 0` (STOP). The yaw observer runs in a **separate
+no-device sidecar** and can publish status continuously at 5 Hz.
+Both join the existing isolated Stage 3 graph.
+
+The one new operating command is:
+
+```bash
+cd /home/kevin/Code/leroy-boot-sweep/ros
+git fetch origin feature/live-boot-persistent-imu-yaw
+git switch --detach origin/feature/live-boot-persistent-imu-yaw
+LEROY_STAGE4_MCU_BY_ID=/dev/serial/by-id/usb-Robot_Controller_STM32F401_Robot_CDC_F401-ROBOT-if00 \
+LEROY_STAGE4_MOTOR_ISOLATION_ATTESTED=YES \
+bash ./live_boot_session.sh
+```
+
+**Only attest physical isolation if the motor/manipulator supply is
+actually disconnected independently of the powered MCU.**
+The operator's whole-robot E-stop cuts *all* downstream power and
+cannot itself meet the simultaneously powered-MCU / disconnected-motor
+condition; no software flag proves a hardware separation. If the
+motor power is not separately disconnected, do **not** run this script.
+
+The command refuses concurrent Stage4A/boot source ownership, root
+containers, non-isolated Stage 3 namespaces, changed MCU by-id device
+and unexpected/duplicate ROS motor graph participants. It prompts for
+`BOOT_IMU_ONLY`, then starts the source and yaw together; it has no
+75s timeout or 25s probe deadline. It prints
+`BOOT_LIVE_SESSION=IMU_STREAM_READY` when the MCU START command is
+acknowledged and
+`BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY` when heading is first
+established. Keep the command running to retain the live heading feed
+for downstream read-only boot status consumers.
+
+Stop with Ctrl-C. The launcher asks the MCU for STOP, checks its ACK
+and removes the source container. If the source fails, yaw is lost,
+and the session does not restart by itself. If the STOP ACK is absent,
+treat the motor-capable MCU state as unverified and isolate its
+power. The continuous stream is **not** an actuation or navigation
+authorization; the startup sweep core's real physical-release and
+obstacle-coverage evidence remain unset.
+
+The earlier `live_stage4_imu_sidecar.sh` and
+`live_boot_yaw.sh` 75s/25s acceptance recipes remain unchanged
+unless explicitly run in persistent mode by the new launcher. No
+additional fixed-length capture or synthetic motion study is needed
+to exercise this path.
+
 ## Shortest path to a physical autonomous yaw sweep
 
 1. **Identify the deployed drive/motor safety interface**, not old YAML guesses: current independent cutoff and E-stop mechanism, motor safe-state and test evidence, command owner, motion protocol, and what the wheel/heading feedback actually is. Record verified hardware facts in a separate current configuration, not as magic `True` booleans. No implicit enable.
