@@ -115,9 +115,10 @@ class LeroyBridgeNode(Node):
             'motor_power_feedback_offset', -1,
             descriptor=ParameterDescriptor(read_only=True))
 
-        # Encoder/odometry calibration. The right-side encoders are currently
-        # unavailable, so odometry can explicitly run in a degraded mode using
-        # FL + RL encoder velocities and the IMU yaw rate.
+        # Historical FL/RL encoder + IMU-yaw odometry fallback.
+        # This code is opt-in and disabled by the active bridge config.
+        # Its original encoder-availability assumptions are not current
+        # hardware commissioning evidence for autonomous boot.
         self.declare_parameter('encoder_counts_per_rev', 2464)
         self.declare_parameter('front_left_encoder_sign', -1)
         self.declare_parameter('rear_left_encoder_sign', -1)

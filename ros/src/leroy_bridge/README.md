@@ -1,3 +1,20 @@
+# Bridge documentation: current vs. historical paths
+
+**For the active Leroy runtime and autonomous-startup migration, see
+[`ros/CURRENT_LIVE_RUNTIME.md`](../../CURRENT_LIVE_RUNTIME.md).**
+
+This README retains attended motor-commissioning history, experimental
+high-PWM tooling and the earlier optional signed-bridge design. Commands
+below are **not** the currently running Stage 3 boot procedure. The old
+GPIO status-line parameters and incomplete right-encoder-sign placeholders
+have been **deprecated as deployment assumptions**; do not restore them
+just to satisfy earlier milestone notes. Historical signed-bridge code may
+still require those inputs if separately opted in; that path remains
+fail-closed and must be explicitly redesigned/validated before autonomous
+physical motion. Independently effective stopping is still required.
+
+---
+
 ## Observed A/D strafe direction on Leroy
 
 During attended motor commissioning, the operator confirmed that the
