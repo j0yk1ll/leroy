@@ -25,7 +25,9 @@ done
 # access in build scripts. No Podman build or ROS graph is started.
 # Syntax-check every retained top-level shell entry point, including
 # the optional signed-controller launcher (but NEVER execute it).
-bash -n ./*.sh
+for script in ./*.sh; do
+    bash -n "$script"
+done
 python3 - <<'PY'
 from pathlib import Path
 import re
