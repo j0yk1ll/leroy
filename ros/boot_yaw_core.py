@@ -19,6 +19,11 @@ MAX_GYRO_Z_RAD_S = 1.5
 MAX_STATIONARY_GYRO_SD_RAD_S = 0.025
 GRAVITY_MIN = 8.8
 GRAVITY_MAX = 10.8
+# Once heading exists, real chassis handling adds linear acceleration.
+# This broad bound only catches grossly invalid acceleration samples;
+# stationary gravity conformity must NOT be required during rotation.
+ACTIVE_ACCEL_NORM_MIN_M_S2 = 0.1
+ACTIVE_ACCEL_NORM_MAX_M_S2 = 60.0
 
 
 @dataclass(frozen=True)
@@ -32,6 +37,8 @@ class YawEstimate:
     bias_window_restarts: int
     last_stamp_delta_s: float | None
     last_receipt_delta_s: float | None
+    last_accel_norm_m_s2: float | None
+    dynamic_accel_samples: int
     # Intentionally no motion enable, speed or physical yaw validity flag.
 
 
@@ -58,6 +65,8 @@ class BootYaw:
         self.bias_window_restarts = 0
         self.last_stamp_delta_s = None
         self.last_receipt_delta_s = None
+        self.last_accel_norm_m_s2 = None
+        self.dynamic_accel_samples = 0
 
     def fault(self, reason):
         self.state = "FAULT_LATCHED"
@@ -69,7 +78,8 @@ class BootYaw:
         return YawEstimate(
             self.state, self.reason, self.yaw, self.bias,
             self.samples, len(self.z_rates), self.bias_window_restarts,
-            self.last_stamp_delta_s, self.last_receipt_delta_s)
+            self.last_stamp_delta_s, self.last_receipt_delta_s,
+            self.last_accel_norm_m_s2, self.dynamic_accel_samples)
 
     def _restart_uncommitted_bias(self):
         # This is allowed ONLY before publishing any relative yaw estimate.
@@ -123,8 +133,21 @@ class BootYaw:
                     if self.state == "FAULT_LATCHED":
                         return self.estimate()
         norm_a = math.sqrt(sum(v * v for v in accel))
-        if not GRAVITY_MIN <= norm_a <= GRAVITY_MAX:
-            return self.fault("ACCEL_MAGNITUDE_IMPLAUSIBLE")
+        self.last_accel_norm_m_s2 = norm_a
+        if self.state in ("WAITING_IMU", "CALIBRATING"):
+            # Stationary gyro-bias calibration depends on a stationary
+            # chassis. Require a near-gravity accelerometer vector here.
+            if not GRAVITY_MIN <= norm_a <= GRAVITY_MAX:
+                return self.fault("ACCEL_MAGNITUDE_IMPLAUSIBLE_BIAS_WINDOW")
+        else:
+            # Relative yaw integrates angular-rate Z, not acceleration.
+            # A dynamic accelerometer magnitude during hand rotation
+            # must not erase a previously acquired heading.
+            if not (ACTIVE_ACCEL_NORM_MIN_M_S2
+                    <= norm_a <= ACTIVE_ACCEL_NORM_MAX_M_S2):
+                return self.fault("ACCEL_SENSOR_OUT_OF_RANGE")
+            if not GRAVITY_MIN <= norm_a <= GRAVITY_MAX:
+                self.dynamic_accel_samples += 1
 
         prev_stamp = self.last_stamp_ns
         self.last_stamp_ns = stamp_ns
