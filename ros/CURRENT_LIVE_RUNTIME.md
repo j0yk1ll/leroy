@@ -375,6 +375,14 @@ BOOT_AUTO_CALIBRATION_JSON={...}
 
 and publishes structured JSON `std_msgs/msg/String` on
 `/leroy_boot/auto_imu_calibration_status` in ROS domain 170.
+The existing read-only `live_boot_readiness.py` now consumes this
+topic from the single expected live yaw node, verifies recent status,
+minimum sample/window evidence and non-authorizing fields, and reports
+`auto_imu_stationary_candidate_observed` plus measured
+`auto_imu_stationary_candidate` metrics. It still reports
+`source_calibration_validated=false` and
+`physical_motion_authorized=false`; an 8-second gyro holdout is not
+camera–IMU calibration or physical motion release.
 This separate status never sets `physical_heading_accuracy_validated`,
 `absolute_heading_validated`, `camera_imu_extrinsics_validated` or
 `motor_motion_authorized` to true. If Leroy moves too early, the
