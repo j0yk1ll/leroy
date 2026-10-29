@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+# TODO(AUTONOMY) [runtime supervisor]: Replace this attended, sensor-only
+# wrapper with a lifecycle supervisor that starts every commissioned node in
+# dependency order, checks real readiness and stops children in reverse order.
+# Distinguish sensor diagnostics, attended motor calibration, and unattended
+# navigation as separate authority states; do not infer a permit from consent.
+# Require a single hardware/ROS serial owner across modes and latch faults
+# for sensor loss, reboots, bad TF, and unexpected motion.
+# Acceptance: cold boot, interrupted startup, Ctrl-C, SIGTERM, watchdog
+# expiration and power recovery leave no active motion authority; verify
+# on the physical machine before enabling any automatic actuation.
 # One operator-attended, non-actuating Leroy sensor runtime.
 # Camera+DepthART+XRSLAM and MCU IMU/yaw share an isolated ROS graph.
 # Separate containers preserve exclusive camera and MCU ownership.

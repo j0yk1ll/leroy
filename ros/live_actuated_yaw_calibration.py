@@ -13,6 +13,19 @@ No ROS parameter or self-reported Bool can substitute for those interlocks.
 There is no fallback to M18's concurrent serial sidecar, raw cmd_vel, or
 synthetic costmap clearance.
 """
+
+# TODO(AUTONOMY) [attended powered calibration]: Integrate a physically
+# locally-held deadman and separately commissioned motor-power stop state
+# with the bridge's one and only STM32 serial writer, rather than launching
+# a parallel M18 IMU sidecar. The old external lease monitor is NOT present;
+# determine a real available safety architecture before motor release.
+# TODO(AUTONOMY) [real feedback]: Verify publisher identity, yaw sign,
+# wheel polarity, rate/acceleration limits, full swept-envelope clearance,
+# power restoration behavior, command ACK latency and stopped-at-waypoint
+# evidence on the real chassis. Do not replace absent evidence with flags.
+# Acceptance: repeatable -90/+90/0 attended tests with log-backed stopping,
+# and injected deadman release/serial/IMU faults that latch STOP.
+
 import json
 import math
 import os

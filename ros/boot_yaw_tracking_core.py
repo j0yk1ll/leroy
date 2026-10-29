@@ -6,6 +6,17 @@ NEVER produces a ROS Twist, signs a motion envelope, enables the bridge,
 opens a device, or authorizes any motor output. Physical control requires a
 different, independently validated safety/authority boundary.
 """
+
+# TODO(AUTONOMY) [real yaw maneuver]: Characterize actual wheel-driven yaw
+# rates, braking distance/overshoot, wheel-slip asymmetry, wheel signs and
+# final error at -90, +90, 0 degrees on the physical robot.
+# Keep the diagnostic observer separate from motor authority. Once real
+# hardware stopping, clearance and exclusive command ownership are validated,
+# use a separately reviewed closed-loop actuator that stops and settles
+# at each waypoint; never auto-advance from this synthetic output alone.
+# Acceptance: repeated attended runs plus injected IMU/command loss achieve
+# measured tracking/stop bounds or fault-latch, with no runaway rotation.
+
 from dataclasses import dataclass
 import math
 

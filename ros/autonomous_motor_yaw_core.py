@@ -9,6 +9,19 @@ hardware safety monitor, never created by this controller.
 The production robot currently lacks a commissioned lease issuer and swept-
 envelope sensor. There is intentionally no fabricated local PASS switch.
 """
+
+# TODO(AUTONOMY) [commissioned turn control]: Replace provisional yaw/slew
+# coefficients with empirically measured acceleration, braking and overshoot
+# bounds for the actual four-wheel chassis and current driver firmware.
+# TODO(AUTONOMY) [trusted clearance]: The current signed safety lease
+# requires an independent monitor that is not physically installed on Leroy.
+# Design and commission a real source of whole-swept-footprint clearance,
+# independent stopping and freshness evidence before enabling this actuator.
+# Preserve denied-by-default lease verification; NEVER generate lease values
+# within this controller or treat ROS self-report as hardware clearance.
+# Acceptance: replay/expiry, occlusion, IMU loss, wheel slip and emergency
+# cutoff produce bounded-zero behavior and latched session termination.
+
 from dataclasses import dataclass
 import hashlib
 import hmac

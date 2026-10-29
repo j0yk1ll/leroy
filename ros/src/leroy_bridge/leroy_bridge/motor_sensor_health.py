@@ -3,6 +3,17 @@
 A valid ROS message is not proof that physical depth or localization is
 calibrated. These gates only block absent/stale/malformed evidence.
 """
+
+# TODO(AUTONOMY) [trusted dynamic health]: Current checks prove message
+# shape/freshness only. Add measured acquisition-to-receipt timestamps,
+# transform history, odometry pose covariance, tracking scale confidence,
+# independent sensor provenance and complete obstacle field coverage.
+# TODO(AUTONOMY) [unlocalized boot policy]: Distinguish missing *metric*
+# localization from otherwise verified bounded startup motion; do not
+# fake localization_valid just to unlock an initializing SLAM system.
+# Acceptance: timestamps from stale/duplicate publishers, invalid geometry,
+# monocular scale ambiguity and sensor blindness make health unavailable.
+
 import math
 import time
 

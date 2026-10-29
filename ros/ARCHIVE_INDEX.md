@@ -1,4 +1,22 @@
-# Legacy milestones and build recipes
+# Archived component documentation and historical milestones
+
+The **only active README** is at the repository root: `README.md`.
+The previous component READMEs (firmware, electronics, utilities, ROS
+packages, and experimental Nav2 packages) were preserved unchanged
+in `archive/before-single-readme-2026-10-29` and removed from the
+working tree. The root guide now contains the supported checkout,
+build, ROS node startup/shutdown, STM32 firmware build and calibration
+tool instructions. Archive component docs are historical references,
+not current motor-authorizing instructions.
+
+To view an original component document without restoring it:
+
+```bash
+git show archive/before-single-readme-2026-10-29:firmware/README.md
+git show archive/before-single-readme-2026-10-29:ros/src/leroy_bridge/README.md
+git show archive/before-single-readme-2026-10-29:utils/imu/README.md
+```
+
 
 The accepted current diagnostic runtime is documented in
 [`../README.md`](../README.md),

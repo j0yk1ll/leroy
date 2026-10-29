@@ -1,3 +1,12 @@
+# TODO(AUTONOMY) [commissioning configuration]: Replace provisional
+# wheel geometry, velocity-to-PWM conversion, encoder counts/signs and
+# watchdog assumptions with measured robot-specific values, validated on
+# the actual STM32 firmware version and four mecanum wheel directions.
+# TODO(AUTONOMY) [runtime authorization]: Provide explicit sensor-only,
+# attended-calibration and navigation profiles with protected key custody,
+# real physical cutoff feedback and exclusive serial ownership. Keep the
+# signed bridge keys empty and degraded odometry/TF output disabled until
+# separate hardware acceptance; do not add fake GPIO or readiness flags.
 leroy_bridge:
   ros__parameters:
     serial_port: /dev/ttyACM0

@@ -1,3 +1,11 @@
+/* TODO(AUTONOMY) [actual wheel calibration]: Measure and document the
+ * PWM polarities, minimum moving duty, per-wheel acceleration/braking,
+ * mecanum yaw/strafe direction and current/thermal limits. Keep the
+ * actuator power-off default, hardware cutoff and watchdog behavior intact.
+ * Acceptance: supported-wheel and attended-floor tests record real wheel
+ * speed, current, stop distance and wheel-slip response for all four axes.
+ */
+
 #include "platform.h"
 
 #include "board.h"

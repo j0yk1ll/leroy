@@ -7,6 +7,16 @@ Unconfigured/missing/invalid GPIO => both interlocks false.
 Uses libgpiod v2 Python API when the real hardware is provisioned.
 """
 
+# TODO(AUTONOMY) [hardware-specific safety status]: These two libgpiod
+# pins belong to an older, *unconfigured* bridge design. Leroy currently
+# has a hardwired downstream power-cut E-stop, but no commissioned GPIO
+# E-stop/contactor telemetry. Measure its electrical stop behavior and
+# integrate a real driver-power/status interface if needed by the new
+# authority architecture; never invent pin offsets or return fixed True.
+# Acceptance: stop-command failure, power loss, restored power, broken
+# feedback wire and missing chip all remain non-arming fault conditions.
+
+
 
 class PhysicalMotorFeedback:
     def __init__(self, chip, estop_offset, motor_power_offset):

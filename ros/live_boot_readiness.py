@@ -6,6 +6,15 @@ Never publishes ROS topics or controls the MCU, bridge, wheels or navigation.
 The existing offline startup model is evaluated with *unproven* physical
 qualification flags; its output is not a command.
 """
+
+# TODO(AUTONOMY) [trusted readiness]: Extend passive endpoint checks with
+# measured camera/IMU phase, calibrated TF provenance, known camera mode,
+# sensor age and real odom/costmap covariance before reporting readiness.
+# Publish a versioned observation/evidence record to the future supervisor,
+# not a Bool that can authorize movement by itself. Check independent owners.
+# Acceptance: malformed/stale/duplicate topics, invalid map scale, missing
+# coverage, transient tracking and simulated data never produce NAV_READY.
+
 import json
 import math
 import os

@@ -4,6 +4,15 @@ Uses existing PROVISIONAL sensor mounts, not asserted validated geometry.
 No odometry, planners, controller_server, ROS command authority or motors.
 Only launch in an isolated single-container motor-disconnected experiment.
 """
+
+# TODO(AUTONOMY) [navigation costmaps]: Replace the current diagnostic
+# costmap fixture and provisional static TF with measured base geometry,
+# dynamic odom/map transforms and all-sided obstacle sensing. Configure
+# separate appropriate local/global Nav2 layers with safe unknown-space
+# behavior, clearing, inflation and recovery handling only after validation.
+# Acceptance: replayed and real moving obstacles, TF gaps and sensor loss
+# produce bounded stop/replan behavior without changing sensor-only defaults.
+
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
