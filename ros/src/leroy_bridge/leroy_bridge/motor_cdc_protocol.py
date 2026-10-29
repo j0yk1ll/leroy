@@ -4,6 +4,19 @@ Tracks exactly one MCU transaction at a time. Missing/mismatched ACK or
 deadline lapses latch a fault. ACK confirms MCU command acceptance, NOT
 physical motion or a safety-rated stop. No USB/ROS dependencies.
 """
+
+# TODO(AUTONOMY) [durable MCU sequence numbers]: The bridge counter starts
+# at one on process creation, while the STM32 can retain accepted wheel
+# transaction sequence across reconnects. Reconcile this implementation
+# with the persistent MotorSequenceLedger used in attended commissioning.
+# Require one monotonic, crash-consistent sequence owner per MCU, including
+# wrap/reflash behavior and a clearly bounded resynchronization handshake.
+# TODO(AUTONOMY) [verified stopping]: Measure real STOP ACK latency,
+# watchdog expiration and physical wheel stop distance; protocol ACKs alone
+# are not actual stopped-chassis evidence. Record latched protocol failures.
+# Acceptance: restart, delayed ACK, stale sequence, unplug/replug and MCU
+# reboot never accept unintended nonzero output or silently resume motion.
+
 import re
 import threading
 
