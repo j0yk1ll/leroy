@@ -1,4 +1,4 @@
-# TODO(AUTONOMY) [production enable gate]: Keep deployment.enabled and
+# TODO(AUTONOMY) #042 [production enable gate]: Keep deployment.enabled and
 # bridge_command_output_enabled false until independent measured evidence
 # exists for: hardware stopping and no-auto-restart, wheel calibration,
 # full robot swept-volume coverage, metric odom/map TF and localization
