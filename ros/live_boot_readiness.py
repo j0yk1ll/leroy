@@ -74,8 +74,11 @@ def parse_auto_imu_candidate(text, now_ns):
                 or d.get("physical_heading_accuracy_validated") is not False
                 or d.get("absolute_heading_validated") is not False
                 or d.get("camera_imu_extrinsics_validated") is not False
-                or d.get("samples", 0) < 350
-                or d.get("window_elapsed_s", 0) < 8.0):
+                or type(d.get("samples")) is not int
+                or d.get("samples") < 350
+                or type(d.get("window_elapsed_s")) not in (float, int)
+                or not math.isfinite(d["window_elapsed_s"])
+                or d["window_elapsed_s"] < 8.0):
             return None
         stamp = d.get("monotonic_status_ns")
         if type(stamp) is not int or not 0 <= now_ns - stamp <= 350_000_000:
@@ -193,6 +196,8 @@ def run():
                     return
                 v = d.get("yaw_relative_rad")
                 t = d.get("monotonic_status_ns")
+                if type(t) is not int:
+                    return
                 age = time.monotonic_ns() - t
                 if (d.get("schema") != "leroy_boot_yaw_v1"
                         or d.get("state") != "HEADING_ACTIVE"
