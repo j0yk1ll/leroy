@@ -5,7 +5,7 @@ This is the **camera-only, non-actuating** live integration demonstrated on
 bringup. Its contract is:
 
 ```text
-REAL USB camera /dev/video2
+REAL HOST USB camera /dev/video8 (mapped to container /dev/video2)
   -> usb_cam (pinned timestamp fix), CameraInfo -> image_proc rectifier
     -> real CPU DepthART -> raw optical PointCloud2
       -> Nav2 rolling diagnostic costmap (base_link, provisional static TF)
@@ -35,7 +35,7 @@ git worktree add --detach ../leroy-stage3-main origin/main
 cd ../leroy-stage3-main/ros
 ```
 
-This main branch will also contain motor-authority source and MCU firmware
+This main branch also contains motor-authority source and MCU firmware
 development. **Those files are not invoked by this Stage 3 runner** and their
 presence does not certify motor commissioning or permit physical movement.
 The feature branch's YAML-based `description.launch.py` is now the
@@ -79,8 +79,8 @@ Stop any older `leroy-live-xrslam` and `leroy-live-costmap` instances
 remove or overwrite existing same-named containers.
 
 Confirm the independent motor power cutoff, leave the STM32 and motor driver
-disconnected from the runtime, and confirm `/dev/video2` is the verified
-front camera. The environment variable below records an **operator
+disconnected from the runtime, and confirm host `/dev/video8` is the verified
+front camera, mapped to `/dev/video2` only inside the container. The environment variable below records an **operator
 assertion**, not an automatic measurement of motor power:
 
 ```bash
