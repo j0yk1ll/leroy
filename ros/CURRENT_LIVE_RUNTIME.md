@@ -212,6 +212,32 @@ Run the snapshot before and after a known, independently measured
 returns `BOOT_YAW_SNAPSHOT=BLOCKED_...` if no live source or fresh
 heading exists. It has no MCU access or ROS command publisher.
 
+### Operator-observed clockwise yaw sign (2026-10-29)
+
+The operator took two **fresh live read-only yaw snapshots**, with a
+manual approximately 90-degree **clockwise** rotation between them,
+using the sensor-only service with motor command output absent:
+
+| Phase | Relative yaw | Sample count | Freshness |
+| --- | ---: | ---: | ---: |
+| Before rotation | −0.0386634149° | 481 | 200.4 ms |
+| After clockwise rotation | −91.0251943239° | 1070 | 106.0 ms |
+
+Observed difference: **−90.9865309091°**. This establishes the
+expected clockwise-negative ROS yaw sign and a plausible angle scale
+under manual handling. It is **not a subdegree sensor-calibration claim**:
+the reference was a user-reported manual ~90° turn rather than an
+independently measured precision angle. Gyro-Z bias in both snapshots
+was −0.0015275591 rad/s, and `dynamic_accel_samples` reached 16
+without invalidating the second heading.
+
+Both reported `BOOT_YAW_SNAPSHOT=PASS_FRESH_READ_ONLY` and
+`state=HEADING_ACTIVE`. A STOP ACK for this specific run has not
+yet been supplied; don't claim shutdown acceptance from these two
+snapshots. Heading is verified for sign and approximate scale only;
+physical motor stopping, all-around swept-space clearance and the
+motion command authority remain uncommissioned.
+
 The earlier `live_stage4_imu_sidecar.sh` and
 `live_boot_yaw.sh` 75s/25s acceptance recipes remain unchanged
 unless explicitly run in persistent mode by the new launcher. No
