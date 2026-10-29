@@ -118,6 +118,7 @@ def run():
             self.last_heading = None
             self.last_imu_stamp = None
             self.last_imu_receipt = None
+            self.last_control_heading_receipt = None
             self.start_ns = time.monotonic_ns()
             self.rearm_issued_ns = None
             self.sequence = 0
@@ -341,7 +342,16 @@ def run():
             # before the first motion command; premature commands latch it.
             if now_ns-self.rearm_issued_ns < 1_150_000_000:
                 return
-            decision = self.motor.step(self.last_heading, now_ns)
+            # Do not pretend a repeated ROS callback sample is a new
+            # observation on every 20 Hz command tick.
+            new_feedback = (
+                self.last_control_heading_receipt
+                != self.last_heading.receipt_ns)
+            fresh_heading = self.last_heading if new_feedback else None
+            decision = self.motor.step(fresh_heading, now_ns)
+            if new_feedback:
+                self.last_control_heading_receipt = (
+                    self.last_heading.receipt_ns)
             if decision.state in ("LATCHED", "INHIBITED"):
                 self.fail("YAW_CONTROL_" + decision.reason)
                 return
