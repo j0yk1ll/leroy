@@ -172,6 +172,46 @@ power. The continuous stream is **not** an actuation or navigation
 authorization; the startup sweep core's real physical-release and
 obstacle-coverage evidence remain unset.
 
+### Live acceleration fault and bounded heading snapshots
+
+The operator confirmed the persistent session started successfully on
+real hardware: `BOOT_LIVE_SESSION=IMU_STREAM_READY` and
+`BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY`. A later attempt to
+sample manually rotated yaw hung in `ros2 topic echo --once`: the
+heading estimator had faulted, ending its publisher. The session
+correctly received `BOOT_IMU_SOURCE_STOP_ACK=PASS` from the MCU.
+This is not yet a physical 90-degree yaw-accuracy acceptance.
+
+The reported heading fault was `ACCEL_MAGNITUDE_IMPLAUSIBLE` after
+11,504 IMU samples. Previously the estimator enforced a
+**stationary-only** near-gravity acceleration magnitude during
+the entire active yaw session. Actual manual rotation can generate
+accelerations outside that window; the precise failing IMU sample
+was not logged, so its exact cause remains unproven.
+
+The estimator now requires near-gravity measurements while
+calibrating *stationary gyro bias*, but permits plausible dynamic
+acceleration once relative heading has been established. Grossly
+invalid acceleration, nonfinite sensor data, gyro faults, active
+timestamp gaps, stale IMU and source-ownership faults still latch.
+The reported `last_accel_norm_m_s2` and `dynamic_accel_samples`
+make motion transients visible without falsely presenting calibrated
+heading accuracy.
+
+A separate read-only one-shot query now has a built-in 6-second
+timeout; it never hangs when the yaw publisher stops:
+
+```bash
+cd /home/kevin/Code/leroy-boot-sweep/ros
+bash ./live_boot_yaw_snapshot.sh
+```
+
+Run the snapshot before and after a known, independently measured
+*unpowered* manual rotation; compare the two
+`BOOT_YAW_SNAPSHOT_JSON.yaw_relative_deg` values. The script
+returns `BOOT_YAW_SNAPSHOT=BLOCKED_...` if no live source or fresh
+heading exists. It has no MCU access or ROS command publisher.
+
 The earlier `live_stage4_imu_sidecar.sh` and
 `live_boot_yaw.sh` 75s/25s acceptance recipes remain unchanged
 unless explicitly run in persistent mode by the new launcher. No
