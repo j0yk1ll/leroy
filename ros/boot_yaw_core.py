@@ -4,6 +4,16 @@ A short stationary section measures this session's gyro-Z offset before
 integrating heading. This is NOT absolute heading or calibrated odometry.
 The source must provide the actual MCU-mapped ROS timestamps.
 """
+
+# TODO(AUTONOMY) [heading quality]: Measure gyro bias/temperature dependence,
+# vibration, timebase uncertainty, yaw drift across repeated power cycles,
+# and agreement with independent rotation observations on the real chassis.
+# TODO(AUTONOMY) [fusion]: Supply uncertainty/covariance and source status
+# to a qualified metric pose estimator; relative integrated yaw is not
+# absolute heading and must not become odom->base_link without calibration.
+# Acceptance: hardware timestamp jumps, dropped samples and excess drift
+# invalidate heading without silently extrapolating through faults.
+
 from dataclasses import dataclass
 import math
 import statistics
