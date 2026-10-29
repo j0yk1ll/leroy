@@ -34,7 +34,7 @@ LEASE_FIELDS = frozenset((
     "whole_envelope_observed", "whole_envelope_clear",
     "independent_stop_proven", "stop_distance_measured",
     "command_owner_exclusive", "motor_output_interlock_proven",
-    "max_yaw_rate_rad_s", "measured_stop_distance_m",
+    "stopped_verified", "max_yaw_rate_rad_s", "measured_stop_distance_m",
     "free_clearance_margin_m", "safety_monitor_id", "mac",
 ))
 
@@ -52,6 +52,7 @@ class VerifiedLease:
     expires_ns: int
     max_yaw_rate_rad_s: float
     safety_monitor_id: str
+    stopped_verified: bool
     # Only SafetyLeaseVerifier can return this data as accepted evidence.
     # It is NEVER a physical stop circuit or a motor release by itself.
 
@@ -113,6 +114,7 @@ class SafetyLeaseVerifier:
                     or not 0 <= data["measured_stop_distance_m"]
                     or data["free_clearance_margin_m"]
                     < data["measured_stop_distance_m"] + MIN_STOP_MARGIN_M
+                    or type(data["stopped_verified"]) is not bool
                     or type(data["swept_footprint_id"]) is not str
                     or not data["swept_footprint_id"]
                     or type(data["safety_monitor_id"]) is not str
@@ -130,7 +132,8 @@ class SafetyLeaseVerifier:
                 sequence=data["sequence"],
                 expires_ns=data["expires_ns"],
                 max_yaw_rate_rad_s=data["max_yaw_rate_rad_s"],
-                safety_monitor_id=data["safety_monitor_id"])
+                safety_monitor_id=data["safety_monitor_id"],
+                stopped_verified=data["stopped_verified"])
         except (ValueError, TypeError, KeyError, OverflowError):
             return None
 
