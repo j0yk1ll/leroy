@@ -44,6 +44,68 @@ bash ./live_boot_readiness.sh
 
 This consumes existing real camera/DepthART/XRSLAM ROS topics for 12 seconds without starting the MCU or opening a motor-control channel. Do not repeat it simply to measure FPS; the operator has already confirmed it passes.
 
+## Real E-stop topology and live yaw integration (2026-10-29)
+
+The operator reports a **hardwired E-stop that cuts power to all
+downstream robot components, shutting the robot down**. This is the
+intended mechanical/electrical stopping topology. There is **no
+requirement to invent obsolete GPIO status offsets** for that cutoff.
+Software cannot read a GPIO state from an unpowered computer or MCU.
+After the E-stop is released and power returns, every motor command
+session must begin inhibited; reset must never cause unattended
+motion. Actual shutdown and stopping performance remain matters for
+the supervised physical commissioning procedure.
+
+The immediate supported upgrade is **live relative yaw from the real
+50 Hz MCU IMU stream**, independent of XRSLAM's monocular initialization:
+
+- `ros/boot_yaw_core.py`: first establishes the session-specific gyro-Z
+  bias from at least 2.5 s of stationary IMU samples, then integrates
+  the original MCU-mapped stamp differences to produce an **unwrapped
+  relative heading**, with latched loss/clock/freshness faults.
+- `ros/live_boot_yaw.py`: subscribes to real `/imu/data_raw` from the
+  single accepted `/m18_imu_source`, and publishes only
+  `/leroy_boot/relative_yaw_status` (JSON String, diagnostic status)
+  in ROS domain 170. Each message identifies the owner, heading,
+  session bias, freshness-monitoring state and explicit
+  `motor_motion_authorized=false`.
+- `ros/live_boot_yaw.sh`: one disposable, read-only, **no-device**
+  sidecar that joins Stage 3's isolated DDS and refuses an absent M18
+  source. It DOES NOT map the MCU, modify motor power, publish
+  `/cmd_vel`, activate Nav2 or request an XRSLAM pose.
+- `ros/boot_yaw_core_test.py`: 11 no-device tests; no additional
+  camera-FPS benchmark or rosbag needed.
+
+**One live test, reusing the commissioned Stage 4A M18 source:**
+Start the existing `live_stage4_imu_sidecar.sh` in terminal 1 under
+its *unchanged* source/STM32 ownership gate and verified physical
+motor-rail isolation; its previous tests passed at 50 Hz. In
+terminal 2, with that source running:
+
+```bash
+cd /home/kevin/Code/leroy-boot-sweep/ros
+git fetch origin feature/live-boot-imu-yaw
+git switch --detach origin/feature/live-boot-imu-yaw
+bash ./live_boot_yaw.sh
+```
+
+The yaw sidecar runs ~25 s. Look for:
+`BOOT_LIVE_YAW_JSON={...}`,
+`BOOT_LIVE_YAW=PASS_RELATIVE_GYRO_HEADING_ONLY`,
+`BOOT_LIVE_MOTION=BLOCKED_NO_ACTUATION`.
+This is **real IMU integration**, not a simulated input, but a
+stationary observation alone cannot prove yaw accuracy under rotation
+or authorize motors.
+
+**Isolation caveat:** the existing M18 Stage 4A source runner still
+requires motor rails physically disconnected while MCU logic and
+sensors operate. The whole-robot E-stop **cannot satisfy that
+condition while simultaneously powering the IMU**; don't claim it
+does. If there is no separate means of isolating motor power, do not
+misrepresent the condition or bypass the old runner. A new reviewed
+commissioning path must instead reflect the actual hardwired cutoff
+and independently bound any unexpected movement.
+
 ## Shortest path to a physical autonomous yaw sweep
 
 1. **Identify the deployed drive/motor safety interface**, not old YAML guesses: current independent cutoff and E-stop mechanism, motor safe-state and test evidence, command owner, motion protocol, and what the wheel/heading feedback actually is. Record verified hardware facts in a separate current configuration, not as magic `True` booleans. No implicit enable.
