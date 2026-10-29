@@ -1,4 +1,4 @@
-/* TODO(AUTONOMY) [IMU acquisition fidelity]: Measure onboard sensor axis
+/* TODO(AUTONOMY) #001 [IMU acquisition fidelity]: Measure onboard sensor axis
  * alignment, timing phase vs camera exposure, temperature-dependent gyro
  * drift, accel noise and magnetometer distortion. Provide versioned
  * calibration and timestamp provenance to the ROS estimator; do not use
