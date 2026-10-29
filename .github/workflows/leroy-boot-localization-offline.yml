@@ -1,0 +1,40 @@
+name: Leroy boot localization sweep - offline fail-closed model
+
+on:
+  pull_request:
+    paths:
+      - 'ros/boot_localization_*.py'
+      - 'ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md'
+      - '.github/workflows/leroy-boot-localization-offline.yml'
+  push:
+    branches:
+      - design/boot-localization-sweep
+    paths:
+      - 'ros/boot_localization_*.py'
+      - 'ros/BOOT_LOCALIZATION_SWEEP_DESIGN.md'
+      - '.github/workflows/leroy-boot-localization-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-no-device:
+    name: Sweep state machine and latched-stop diagnostics (no ROS/device)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fail-closed supervisor regressions
+        working-directory: ros
+        run: python3 -m unittest -v boot_localization_core_test
+      - name: Deterministic no-hardware diagnostic simulation
+        working-directory: ros
+        run: |
+          python3 boot_localization_demo.py | tee /tmp/leroy-boot-model.log
+          grep -Fx 'BOOT_SYNTHETIC_SWEEP=PASS_NEEDS_PARALLAX' /tmp/leroy-boot-model.log
+          grep -Fx 'BOOT_SYNTHETIC_OBSTACLE=PASS_LATCHED' /tmp/leroy-boot-model.log
+          grep -Fx 'BOOT_MODEL=PASS_NO_ROS_NO_DEVICES_NO_ACTUATION' /tmp/leroy-boot-model.log
