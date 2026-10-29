@@ -212,6 +212,13 @@ class BootYawTests(unittest.TestCase):
         self.assertNotIn("serial.Serial(", src)
         self.assertNotIn("set_wheels", src)
 
+    def test_live_imu_uses_bounded_sensor_qos(self):
+        source = (ROOT / 'live_boot_yaw.py').read_text()
+        self.assertIn('depth=32', source)
+        self.assertIn('ReliabilityPolicy.BEST_EFFORT', source)
+        self.assertIn('self.on_imu, imu_qos', source)
+        self.assertIn('IMU_HEADER_AGE_INVALID', source)
+
     def test_yaw_launcher_cannot_get_device_or_motor_access(self):
         shell = (ROOT/"live_boot_yaw.sh").read_text()
         self.assertIn('source=leroy-stage4-imu', shell)
