@@ -104,9 +104,10 @@ cleanup() {
   exit "$rc"
 }
 trap cleanup EXIT
-# The child owns its MCU START/STOP lifecycle. Do not kill -9 or force
-# an early serial release on Ctrl-C.
-trap 'exit 130' INT
+# The child owns its MCU START/STOP lifecycle. It handles Ctrl-C,
+# performs MCU stream STOP/ACK, and reports its exit result. Do not
+# replace a successful child STOP with a synthetic 130 return code.
+trap ':' INT
 trap 'exit 143' TERM
 
 echo 'LEROY_RUNTIME=STARTING_UNIFIED_SENSOR_GRAPH'
