@@ -41,9 +41,9 @@ jobs:
           cd ros
           python -m unittest -v live_stage4c_capture_test live_stage4c_source_meta_test live_stage4c_source_meta_ros_test live_stage4c_synthetic_dds_test
           python -Werror::SyntaxWarning live_stage4c_passive_recorder.py --contract-smoke
-      - name: Block accidental Stage 4C runtime activation
+      - name: Check separately commissioned capture with inert image default
         run: |
-          grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = False' ros/live_stage4c_passive_recorder.py
+          grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' ros/live_stage4c_passive_recorder.py
           grep -Fq 'if not LIVE_CAPTURE_COMMISSIONED:' ros/live_stage4c_passive_recorder.py
           grep -Fqx 'CMD ["/bin/false"]' ros/Dockerfile.live-stage4c-capture
           ! grep -Eq '^(ENTRYPOINT|CMD \["/opt/stage4c)' ros/Dockerfile.live-stage4c-capture
