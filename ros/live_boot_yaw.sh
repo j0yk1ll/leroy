@@ -23,8 +23,10 @@ image=localhost/leroy-ros:stage4c-capture-offline
   fail IPC_NOT_ISOLATED
 [[ "$(podman inspect -f '{{.HostConfig.PidMode}}' "$parent")" == private ]] ||
   fail PID_NOT_PRIVATE
-[[ "$(podman inspect -f '{{.State.Running}}' "$source" 2>/dev/null)" == true ]] ||
+if [[ "$(podman inspect -f '{{.State.Running}}' "$source" 2>/dev/null)" != true ]]; then
+  echo "BOOT_LIVE_YAW_HINT=RUN_IN_SECOND_TERMINAL_AFTER_STAGE4A_IMU_START_ACK_BEFORE_STOP_ACK" >&2
   fail REAL_STAGE4A_M18_IMU_SOURCE_NOT_RUNNING
+fi
 podman exec "$parent" test ! -e /dev/ttyACM0 ||
   fail MOTOR_CAPABLE_MCU_VISIBLE_TO_PARENT
 podman image exists "$image" || fail ROS_IMAGE_MISSING
