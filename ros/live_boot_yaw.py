@@ -130,6 +130,8 @@ def run():
                 "bias_window_restarts": e.bias_window_restarts,
                 "last_stamp_delta_s": e.last_stamp_delta_s,
                 "last_receipt_delta_s": e.last_receipt_delta_s,
+                "last_accel_norm_m_s2": e.last_accel_norm_m_s2,
+                "dynamic_accel_samples": e.dynamic_accel_samples,
                 "owner_verified": self._owner_ok,
                 "physical_heading_accuracy_validated": False,
                 "motor_motion_authorized": False,
