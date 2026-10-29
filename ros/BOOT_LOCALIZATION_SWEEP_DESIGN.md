@@ -1,6 +1,6 @@
 # Leroy — fail-closed autonomous localization boot (design proposal)
 
-**Status: DESIGN ONLY, NO-GO FOR PHYSICAL MOTION.** This document adds no executable action, motor/MCU access, GPIO operation, ROS publisher, bridge binding, enabled navigation stack, control-loop timing or authority exception. The accepted Stage 3 camera+DepthART/costmap+XRSLAM and Stage 4C recorder remain diagnostic-only. No deployment image, firmware, signed motor ingress, power isolation or hardware manifest is modified.
+**Status: OFFLINE FAIL-CLOSED MODEL IMPLEMENTED, NO-GO FOR PHYSICAL MOTION.** The implementation is a pure Python, standard-library diagnostic model and synthetic simulation only. It adds no physical actuator command, motor/MCU access, GPIO operation, ROS publisher, bridge binding, enabled navigation stack, control-loop timing or authority exception. The accepted Stage 3 camera+DepthART/costmap+XRSLAM and Stage 4C recorder remain diagnostic-only. No deployment image, firmware, signed motor ingress, power isolation or hardware manifest is modified.
 
 ## Desired user behavior
 
@@ -9,6 +9,30 @@ Leroy should eventually boot unattended, check its sensors and immediate surroun
 A ±90-degree scan is useful for **coverage and feature acquisition**, but is **not a sufficient monocular SLAM initializer**. Leroy's current `m23bv_v3_stage3_xrslam_monocular_diag.yaml` requires at least eight keyframes, 50 matches, 10 units of triangulation parallax and 30 landmarks; *pure yaw about the camera optical center* does not create the translational camera baseline needed to triangulate landmark depths. A robot yaw in place may introduce a small camera translation if the optical center is offset from the yaw center, but its scale and parallax are not verified; it cannot be assumed to satisfy initialization, especially with Leroy's provisional camera-center translation. The active Stage 3 sidecar uses **monocular camera-only** mode, and IMU observations cannot initialize that mode. Mono-IMU deployment additionally requires validated camera–IMU clock phase, extrinsics and noise, which Stage 4C's stationary bag did not establish.
 
 The target is therefore **preflight → safe sweep → check SLAM → optional short translation to generate parallax → check SLAM → navigation**, never move merely to make the status flip to `tracking`.
+
+## Implemented no-device prototype (PR #166)
+
+- `ros/boot_localization_core.py`: deterministic, fail-closed startup state machine. Holds an inhibited default, requires every **fictional/supplied** qualification flag to be explicitly true before producing *diagnostic yaw setpoints* (-90°, +90°, return 0° relative to the initial unwrapped yaw), monitors observation freshness and clearance on every tick, requires consecutive stable heading observations, and latches on all faults without automatic rearm. The result has **no velocities, motor commands, signed tokens or physical enable bits**.
+- `ros/boot_localization_core_test.py`: 16 standard-library regression tests: sweeps, tracking/metric distinction, safety-gate defaults, 400 ms stale-frame fault, unknown/occupied footprint, clockwise/heading frame, repeated/backwards clocks, target settling, timeouts, and post-READY fault handling.
+- `ros/boot_localization_demo.py`: scripted synthetic trial of the full ±90° sweep, absence of blind translation, and latched obstacle fault; demonstrates explicit blocking of an unqualified physical/default observation.
+- `.github/workflows/leroy-boot-localization-offline.yml`: device-free CI; no ROS, MCU or motor interface.
+
+Reproduce from `ros/` (offline, no dependencies beyond Python 3.11+):
+
+```bash
+python3 -m unittest -v boot_localization_core_test
+python3 boot_localization_demo.py
+```
+
+Expected demonstration markers:
+```text
+BOOT_UNQUALIFIED=FAULT_LATCHED:INDEPENDENT_STOP_UNPROVEN
+BOOT_SYNTHETIC_SWEEP=PASS_NEEDS_PARALLAX
+BOOT_SYNTHETIC_OBSTACLE=PASS_LATCHED
+BOOT_MODEL=PASS_NO_ROS_NO_DEVICES_NO_ACTUATION
+```
+
+**Explicit limitation:** All positive qualification flags in the demonstration are synthetic fixtures. The active Stage 3 costmap cannot produce measured full-rotation obstacle clearance; no code currently connects real trustable sensor evidence or closed-loop motor output to this model. Tests and CI prove software decision behavior under invented inputs, **not physical collision avoidance, real actuation, or autonomous boot readiness**. The numerical freshness, dwell and waypoint limits are for synthetic test coverage only, not validated robot motion limits.
 
 ## Current repository constraints (block autonomous motion)
 
