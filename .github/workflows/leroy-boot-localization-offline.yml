@@ -5,6 +5,7 @@ on:
     paths:
       - 'ros/boot_localization_*.py'
       - 'ros/boot_yaw_*.py'
+      - 'ros/live_manual_yaw_witness*'
       - 'ros/live_boot_yaw*'
       - 'ros/live_boot_imu_service.py'
       - 'ros/live_boot_session.sh'
@@ -24,6 +25,7 @@ on:
     paths:
       - 'ros/boot_localization_*.py'
       - 'ros/boot_yaw_*.py'
+      - 'ros/live_manual_yaw_witness*'
       - 'ros/live_boot_yaw*'
       - 'ros/live_boot_imu_service.py'
       - 'ros/live_boot_session.sh'
@@ -67,6 +69,9 @@ jobs:
       - name: Persistent real IMU lifecycle contract
         working-directory: ros
         run: python3 -m unittest -v live_boot_service_test
+      - name: Live yaw tracking witness and zero-command boundaries
+        working-directory: ros
+        run: python3 -m unittest -v boot_yaw_tracking_test
       - name: Deterministic no-hardware diagnostic simulation
         working-directory: ros
         run: |
