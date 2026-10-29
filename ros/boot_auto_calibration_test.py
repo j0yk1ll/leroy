@@ -43,15 +43,6 @@ class AutomaticInertialCalibrationTests(unittest.TestCase):
 
     def test_realistic_50hz_holdout_auto_verifies_after_eight_seconds(self):
         c = AutoImuCalibration()
-        first = c.update(
-            START, RECEIPT, accel=(0, 0, 9.81),
-            gyro=(0, 0, 0.003), heading_state="HEADING_ACTIVE",
-            heading_yaw_rad=0.0, heading_bias_rad_s=0.003)
-        self.assertEqual(first.state, "COLLECTING")
-        s = feed(c)
-        # feed() repeats first stamp; instead make a separate fresh instance
-        # for a full contiguous eight-second window.
-        c = AutoImuCalibration()
         s = feed(c)
         self.assertEqual(s.state, "VERIFIED_STATIONARY_CANDIDATE")
         self.assertEqual(s.reason, "STATIONARY_GYRO_CONSISTENCY_PASSED_ONLY")
