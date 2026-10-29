@@ -1,3 +1,12 @@
+/* TODO(AUTONOMY) [IMU acquisition fidelity]: Measure onboard sensor axis
+ * alignment, timing phase vs camera exposure, temperature-dependent gyro
+ * drift, accel noise and magnetometer distortion. Provide versioned
+ * calibration and timestamp provenance to the ROS estimator; do not use
+ * nominal IMU scale alone as metric pose or yaw accuracy evidence.
+ * Acceptance: bench motion and repeated stationary/rotating sessions meet
+ * measured timestamp, axis and uncertainty bounds with faults reported.
+ */
+
 #include "imu.h"
 
 #include "board.h"
