@@ -5,6 +5,15 @@ This process does not own the MCU, create motion interfaces, accept motion
 requests or grant an actuator session. It requires the separately controlled,
 already accepted M18 IMU source in the isolated domain.
 """
+
+# TODO(AUTONOMY) [heading observation]: Replace the current standalone
+# diagnostic result with a typed, fresh estimator status carrying measured
+# uncertainty, continuity and calibration provenance for a boot supervisor.
+# Cross-check IMU frame/clock alignment against actual camera and wheel data
+# before allowing other modules to rely on yaw for metric localization.
+# Acceptance: stale/duplicate IMU publishers, nonmonotonic time and sensor
+# losses never yield a trusted heading or independent motion authorization.
+
 import json
 import math
 import os
