@@ -1,4 +1,4 @@
-"""No-device source and explicit Stage 4A safety regression tests.
+"""No-device source and explicit IMU safety regression tests.
 
 Does NOT open a serial port or import ROS runtime. Executes only parser logic.
 """
@@ -7,7 +7,7 @@ import pathlib
 import sys
 import unittest
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(HERE))
 from leroy_imu_observer import imu_protocol as m18
 

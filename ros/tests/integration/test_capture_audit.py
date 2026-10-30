@@ -13,7 +13,7 @@ from live_stage4c_capture_contract import CaptureContract, CaptureError
 from live_stage4d_bag_audit import ExactWriteBagAudit
 from live_stage4d_capture_ingress import CaptureIngress
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[2]
 STAMP = 1_790_000_000_000_000_000
 
 

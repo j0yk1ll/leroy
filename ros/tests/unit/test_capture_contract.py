@@ -1,4 +1,4 @@
-"""Stage 4C passive capture candidate: pure no-device validation and guards."""
+"""Capture passive capture candidate: pure no-device validation and guards."""
 import ast
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ from live_stage4c_passive_recorder import (
     LIVE_CAPTURE_COMMISSIONED, _contract_smoke,
 )
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[2]
 
 
 def meta(stamp=1_000_000_000, seq=40, ticks=1_000_000, source_mono=1000):

@@ -6,7 +6,7 @@ import unittest
 from live_stage4c_capture_contract import CaptureError, source_metadata
 from live_stage4c_source_meta import SourceMetadataTap
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[2]
 
 
 class MetadataTapContract(unittest.TestCase):

@@ -1,11 +1,11 @@
-"""Source-only safety and reproducibility contract for the Stage 3 runner.
+"""Source-only safety and reproducibility contract for the Camera runner.
 
 No ROS installation, camera, STM32 or motor connection is required.
 """
 from pathlib import Path
 import unittest
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[2]
 
 
 class CameraPerceptionStartupTest(unittest.TestCase):

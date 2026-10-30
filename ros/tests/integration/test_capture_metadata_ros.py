@@ -1,4 +1,4 @@
-"""No-device simulated-node tests for Stage 4C ROS metadata publisher adapter."""
+"""No-device simulated-node tests for Capture ROS metadata publisher adapter."""
 import json
 from pathlib import Path
 import unittest
@@ -6,7 +6,7 @@ import unittest
 from live_stage4c_capture_contract import CaptureError, METADATA_TOPIC, source_metadata
 from live_stage4c_source_meta_ros import SourceMetadataRosAdapter
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[2]
 
 
 class FakeString:

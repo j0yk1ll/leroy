@@ -1,8 +1,8 @@
-"""Stage 3 Fast DDS sidecar uses isolated parent's network, IPC and PID."""
+"""Camera Fast DDS sidecar uses isolated parent's network, IPC and PID."""
 import pathlib
 import unittest
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = pathlib.Path(__file__).resolve().parents[2]
 
 
 class CameraLocalizationSidecarContract(unittest.TestCase):

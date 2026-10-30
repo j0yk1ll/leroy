@@ -84,7 +84,7 @@ assert "motor" not in (root/"live_stage3_build.sh").read_text().split(
     "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY
-PYTHONPATH="src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
+PYTHONPATH=".:src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
     boot_localization_core_test \
     boot_yaw_core_test \
     boot_auto_calibration_test \
@@ -96,15 +96,15 @@ PYTHONPATH="src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unitte
     tests.unit.test_imu_protocol \
     leroy_runtime_test \
     tests.safety.test_operator_stop \
-    test_camera_perception_startup \
-    test_camera_localization_sidecar \
-    test_imu_source_safety \
-    test_imu_delivery \
-    test_capture_contract \
-    test_capture_metadata \
-    test_capture_metadata_ros \
-    test_capture_ingress \
-    test_capture_audit
+    tests.integration.test_camera_perception_startup \
+    tests.integration.test_camera_localization_sidecar \
+    tests.safety.test_imu_source_safety \
+    tests.unit.test_imu_delivery \
+    tests.unit.test_capture_contract \
+    tests.unit.test_capture_metadata \
+    tests.integration.test_capture_metadata_ros \
+    tests.integration.test_capture_ingress \
+    tests.integration.test_capture_audit
 
 python3 -m unittest discover -s src/leroy_nav2_perception/test \
   -p test_live_costmap_static_contract.py -v

@@ -1,4 +1,4 @@
-"""Stage 4D no-device validation, fault injection and virtual 75-second load."""
+"""Capture no-device validation, fault injection and virtual 75-second load."""
 import gc
 import json
 import weakref
@@ -11,7 +11,7 @@ from live_stage4c_capture_contract import (
 )
 from live_stage4d_capture_ingress import CaptureIngress
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[2]
 T0 = 1_790_000_000_000_000_000
 R0 = 2_000_000_000_000
 IMAGE_CDR = b"v" * (640 * 480)

@@ -1,4 +1,4 @@
-"""Stage 4B pure-Python fail-closed callback budget and exact-stamp trace tests.
+"""IMU pure-Python fail-closed callback budget and exact-stamp trace tests.
 
 No rclpy, video, serial port or physical device required.
 """
@@ -8,7 +8,7 @@ import unittest
 from live_stage4b_delivery_trace import DeliveryTrace
 from live_stage4b_spin_budget import service_callbacks
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class BoundedSpin(unittest.TestCase):
