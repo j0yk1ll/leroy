@@ -41,8 +41,9 @@ class SingleRunbookTest(unittest.TestCase):
         self.assertIn("plain `make` or `make all` also flashes", guide)
 
     def test_perception_package_does_not_install_deleted_readme(self):
-        setup = (REPO / "ros/src/leroy_nav2_perception/setup.py").read_text()
-        self.assertNotIn("['README.md']", setup)
+        cmake = (REPO / "ros/src/leroy_nav2_perception/CMakeLists.txt").read_text()
+        self.assertNotIn("README.md", cmake)
+        self.assertIn("ament_python_install_package", cmake)
 
     def test_operator_safety_and_uncommissioned_components_are_explicit(self):
         guide = (REPO / "README.md").read_text()
@@ -111,7 +112,7 @@ class SingleRunbookTest(unittest.TestCase):
             "m18_imu_stream_test.py",
         ])
         integration = (
-            ros / "src/leroy_nav2_integration/leroy_nav2_integration"
+            ros / "src/leroy_imu_observer/leroy_imu_observer"
         )
         self.assertEqual(sorted(p.name for p in integration.glob("*.py")), [
             "__init__.py", "fault_contract.py", "m15_sensor_contract.py",
@@ -119,10 +120,10 @@ class SingleRunbookTest(unittest.TestCase):
         ])
         source = (ros / "m18_imu_stream_source.py").read_text()
         self.assertIn(
-            "leroy_nav2_integration.m16_passive_observer", source,
+            "leroy_imu_observer.m16_passive_observer", source,
         )
         setup = (
-            ros / "src/leroy_nav2_integration/setup.py"
+            ros / "src/leroy_imu_observer/setup.py"
         ).read_text()
         self.assertIn("m16_passive_observer:main", setup)
         self.assertNotIn("m14_software_gate", setup)
@@ -134,8 +135,8 @@ class SingleRunbookTest(unittest.TestCase):
         for legacy in ["m23bv_sensor_qos.yaml","m23bv_v3_stage3_smoke_device.yaml","m23bv_v3_stage3_smoke_monocular.yaml","m23bv_v3_stage3_xrslam_vio_diag.yaml","m23g_sensor_qos.yaml"]:
             self.assertFalse((ros / legacy).exists(), legacy)
         self.assertFalse((ros / "m16_sensor_only_run.sh").exists())
-        self.assertFalse((ros / "src/leroy_nav2_integration/launch").exists())
-        self.assertFalse((ros / "src/leroy_nav2_integration/test").exists())
+        self.assertFalse((ros / "src/leroy_imu_observer/launch").exists())
+        self.assertFalse((ros / "src/leroy_imu_observer/test").exists())
 
     def test_autonomy_todos_are_in_the_owner_files(self):
         required = (

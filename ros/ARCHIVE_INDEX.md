@@ -73,7 +73,7 @@ pre-pruning `main` revision.
 `m18_imu_stream_contract.py` still implement the live STM32 IMU
 publisher and packet parser. They deliberately keep their physically
 validated names. The IMU source still imports the passive observer
-`leroy_nav2_integration.m16_passive_observer`. That ROS package
+`leroy_imu_observer.m16_passive_observer`. That ROS package
 therefore retains only its observer, `m16_passive_contract`,
 `m15_sensor_contract`, `fault_contract` and Python package marker.
 None of the old synthetic Nav2 behavior is built or launched. The
@@ -124,10 +124,10 @@ milestone filenames alone are not a reason to retain or remove a file.
 
 - **Live runtime/build required:** `leroy_bridge`, `leroy_bringup`,
   `leroy_description`, `leroy_msgs`, `leroy_depthart`,
-  `leroy_nav2_perception`, `leroy_nav2_costmap_fixture` and
+  `leroy_nav2_perception` and
   `leroy_xrslam`. The costmap fixture is explicitly built and checked in
   `Dockerfile.live-costmap`; it is not an orphan.
-- **Sensor source dependency:** `leroy_nav2_integration` remains because
+- **Sensor source dependency:** `leroy_imu_observer` remains because
   the live M18 IMU source imports its passive observer and the package
   retains the corresponding installed console entry point.
 - **Inhibited/future work, not a live motion permission:**
@@ -150,3 +150,10 @@ The audit is based on the repository's tracked imports, COPY statements,
 installed package interfaces and test manifests. It does **not** establish
 physical acceptance, prove absence of external consumers, or replace the
 container build and live hardware safety qualification.
+
+**Perception package build migration:** The former standalone
+`leroy_nav2_costmap_fixture` C++ target is now installed as
+`leroy_nav2_perception costmap_fixture`. The perception package uses
+`ament_cmake` plus `ament_cmake_python` so its C++ costmap fixture and
+three Python entry points live in one ROS package. The passive IMU
+observer package is now named `leroy_imu_observer`.
