@@ -75,9 +75,9 @@ old Nav2 Docker recipes are additionally preserved at
 `archive/pre-ros-python-cleanup`. **The active checkout now contains
 132 Python files, 14 shell scripts and six Dockerfiles.** The current
 build, runtime and numbered autonomy TODO owners remain in the tree.
-See [`ros/ARCHIVE_INDEX.md`](ros/ARCHIVE_INDEX.md) for specific
-recovery commands. Technical evidence and specialized .md reports are
-not alternative startup instructions.
+Historical experiments and evidence reports have been removed from the
+maintained working tree. The current README and runtime code are the
+supported source of operating instructions.
 
 ## 3. Verify source and build ALL images
 
