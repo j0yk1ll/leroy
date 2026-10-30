@@ -55,27 +55,45 @@ git show archive/full-runtime-history-2026-10-29:ros/m23bv_v3_stage3_vio_host.sh
 git show archive/full-runtime-history-2026-10-29:ros/m22h_no_device_run.sh
 ```
 
-**Retained exception:** `ros/m16_sensor_only_run.sh` is copied by
-`Dockerfile.nav2`, so it remains in the active source alongside the
-14 current build, diagnostic and runtime shell entry points,
-including the new unified `leroy.sh`.
+**Current shell and container recipe inventory:** The obsolete M16
+sensor fixture launcher, its matching `m16_sensor_only_run.sh`, and
+the detached `Dockerfile.nav2` / `Dockerfile.m16-sensors` experiments
+are now archived. The active checkout has **14 shell scripts** and
+**six Dockerfiles**, all in the canonical build/check script contract.
 
-The current shell interface is enforced by
-`ros/check_current_checkout.sh`: all 15 scripts are syntax-checked,
-and changes to their inventory require an intentional update to that
-source-only contract.
+**Historical Python cleanup (2026-10-30):** 169 historical Python
+modules, probes, tests and standalone M16–M23 launch files were
+removed from the active source tree. These include the abandoned
+synthetic Nav2 integration launchers, fake sensor publishers and
+unneeded standalone evidence/rosbag programs. All originals are
+available in `archive/pre-ros-python-cleanup`, pinned to the exact
+pre-pruning `main` revision.
+
+**Protected runtime dependency:** `m18_imu_stream_source.py` and
+`m18_imu_stream_contract.py` still implement the live STM32 IMU
+publisher and packet parser. They deliberately keep their physically
+validated names. The IMU source still imports the passive observer
+`leroy_nav2_integration.m16_passive_observer`. That ROS package
+therefore retains only its observer, `m16_passive_contract`,
+`m15_sensor_contract`, `fault_contract` and Python package marker.
+None of the old synthetic Nav2 behavior is built or launched. The
+mecanum kinematics library and geometry tests also remain for the
+numbered odometry TODOs.
+
+`ros/check_current_checkout.sh` now checks the maintained shell,
+Python source, build recipes and key no-device contracts. The archived
+milestone experiments are **not** part of that active regression suite.
 
 **Do not delete the only copy of the archive branch or its Git bundle**
 until the historical development work is backed up elsewhere. A fresh
 GitHub repo created from a source-only export will not include Git refs,
 old pull requests or their discussions.
 
-The current six-image family includes:
+The entire **current** six-image family uses:
 `Dockerfile`, `Dockerfile.live-perception`,
 `Dockerfile.live-costmap`, `Dockerfile.xrslam`,
 `Dockerfile.live-stage4-imu`, `Dockerfile.live-stage4c-capture`.
-The additional `Dockerfile.nav2` and `Dockerfile.m16-sensors` are
-retained as a pair for the independent Nav2 offline development build.
+No milestone-only Nav2 image is a supported build target.
 
 ## Completed stage division
 
