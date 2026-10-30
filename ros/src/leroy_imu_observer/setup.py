@@ -22,5 +22,6 @@ setup(
     license='Apache-2.0',
     entry_points={'console_scripts': [
         'm16_passive_observer = leroy_imu_observer.m16_passive_observer:main',
+        'imu_source = leroy_imu_observer.imu_source:run',
     ]},
 )

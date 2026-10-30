@@ -12,7 +12,7 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     live_boot_session.sh live_boot_yaw.sh \
     live_boot_imu_service.py live_boot_yaw.py \
     boot_yaw_core.py boot_auto_calibration_core.py \
-    m18_imu_stream_source.py \
+    src/leroy_imu_observer/leroy_imu_observer/imu_source.py \
     src/leroy_imu_observer/leroy_imu_observer/imu_protocol.py \
     src/leroy_bridge/package.xml src/leroy_xrslam/package.xml \
     src/leroy_nav2_perception/package.xml \

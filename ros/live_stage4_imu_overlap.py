@@ -26,7 +26,7 @@ from tf2_msgs.msg import TFMessage
 from leroy_imu_observer.imu_protocol import START, STOP, PORT
 from live_stage4b_delivery_trace import DeliveryTrace
 from live_stage4b_spin_budget import service_callbacks
-from m18_imu_stream_source import (
+from leroy_imu_observer.imu_source import (
     ImuStreamSource, send_only_whitelisted_serial_command, wait_ack,
 )
 

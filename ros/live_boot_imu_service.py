@@ -80,7 +80,7 @@ def run():
     import serial
     import rclpy
     from leroy_imu_observer.imu_protocol import START, STOP, PORT
-    from m18_imu_stream_source import (
+    from leroy_imu_observer.imu_source import (
         ImuStreamSource, send_only_whitelisted_serial_command, wait_ack,
     )
 

@@ -112,17 +112,15 @@ class SingleRunbookTest(unittest.TestCase):
         """Ensure deprecated milestone modules do not re-enter the build."""
         ros = REPO / "ros"
         active_milestones = sorted(p.name for p in ros.glob("m[0-9]*.py"))
-        self.assertEqual(active_milestones, [
-            "m18_imu_stream_source.py",
-        ])
+        self.assertEqual(active_milestones, [])
         integration = (
             ros / "src/leroy_imu_observer/leroy_imu_observer"
         )
         self.assertEqual(sorted(p.name for p in integration.glob("*.py")), [
-            "__init__.py", "fault_contract.py", "imu_protocol.py", "m15_sensor_contract.py",
+            "__init__.py", "fault_contract.py", "imu_protocol.py", "imu_source.py", "m15_sensor_contract.py",
             "m16_passive_contract.py", "m16_passive_observer.py",
         ])
-        source = (ros / "m18_imu_stream_source.py").read_text()
+        source = (integration / "imu_source.py").read_text()
         self.assertIn(
             "leroy_imu_observer.m16_passive_observer", source,
         )

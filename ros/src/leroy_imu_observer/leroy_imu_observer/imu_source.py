@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M18 experimental MCU IMU-only ROS 2 sender + passive observer.
+"""STM32 IMU-only ROS 2 source and passive observer.
 
 NOT a motor bridge. The only outbound serial packets are a fixed
 set_imu_stream_hz 50 request and set_imu_stream_hz 0 cleanup request.
