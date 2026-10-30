@@ -93,7 +93,7 @@ PYTHONPATH="src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unitte
     live_boot_service_test \
     current_live_runtime_test \
     repository_readme_test \
-    m18_imu_stream_test \
+    tests.unit.test_imu_protocol \
     leroy_runtime_test \
     tests.safety.test_operator_stop \
     live_stage3_start_static_test \

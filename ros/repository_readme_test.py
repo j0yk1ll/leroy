@@ -114,7 +114,6 @@ class SingleRunbookTest(unittest.TestCase):
         active_milestones = sorted(p.name for p in ros.glob("m[0-9]*.py"))
         self.assertEqual(active_milestones, [
             "m18_imu_stream_source.py",
-            "m18_imu_stream_test.py",
         ])
         integration = (
             ros / "src/leroy_imu_observer/leroy_imu_observer"
