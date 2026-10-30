@@ -131,6 +131,8 @@ class SingleRunbookTest(unittest.TestCase):
             "Dockerfile.live-perception", "Dockerfile.live-stage4-imu",
             "Dockerfile.live-stage4c-capture", "Dockerfile.xrslam",
         ])
+        for legacy in ["m23bv_sensor_qos.yaml","m23bv_v3_stage3_smoke_device.yaml","m23bv_v3_stage3_smoke_monocular.yaml","m23bv_v3_stage3_xrslam_vio_diag.yaml","m23g_sensor_qos.yaml"]:
+            self.assertFalse((ros / legacy).exists(), legacy)
         self.assertFalse((ros / "m16_sensor_only_run.sh").exists())
         self.assertFalse((ros / "src/leroy_nav2_integration/launch").exists())
         self.assertFalse((ros / "src/leroy_nav2_integration/test").exists())
