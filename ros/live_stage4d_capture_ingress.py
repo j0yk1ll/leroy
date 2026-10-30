@@ -46,6 +46,44 @@ class CaptureIngress:
             self.terminal_fault = "ingress_closed"
         self._write = None
 
+    @staticmethod
+    def _extract_stamp_and_frame(topic, msg):
+        """Extract source metadata or ROS header without mutating the message."""
+        if topic == METADATA_TOPIC:
+            metadata = source_metadata(msg.data)
+            return metadata["imu_stamp_ns"], None, metadata
+        return (int(msg.header.stamp.sec) * 1_000_000_000
+                + int(msg.header.stamp.nanosec)), msg.header.frame_id, None
+
+    @staticmethod
+    def _validate_message(topic, msg):
+        """Keep payload checks ahead of serialization and the bag write."""
+        if topic == "/camera/image_rect":
+            width = msg.width
+            height = msg.height
+            step = msg.step
+            if (type(width) is not int or type(height) is not int
+                    or type(step) is not int or width <= 0 or height <= 0
+                    or step < width or not isinstance(msg.encoding, str)
+                    or not msg.encoding or len(msg.data) != height * step):
+                raise CaptureError("invalid_image_geometry_or_payload")
+        elif topic == "/camera/camera_info":
+            if (msg.width <= 0 or msg.height <= 0
+                    or len(msg.k) != 9 or
+                    not all(math.isfinite(v) for v in (*msg.k, *msg.d))
+                    or msg.k[0] <= 0 or msg.k[4] <= 0):
+                raise CaptureError("invalid_camera_intrinsics")
+        elif topic == "/imu/data_raw":
+            values = (
+                msg.angular_velocity.x, msg.angular_velocity.y,
+                msg.angular_velocity.z, msg.linear_acceleration.x,
+                msg.linear_acceleration.y, msg.linear_acceleration.z,
+            )
+            if not all(math.isfinite(v) for v in values):
+                raise CaptureError("nonfinite_imu_measurement")
+
+
+
     def accept(self, topic, msg, *, receipt_ns=None):
         if self.terminal_fault is not None:
             raise CaptureError("ingress_terminal_fault_latched")
@@ -53,40 +91,8 @@ class CaptureIngress:
             if topic not in TOPICS:
                 raise CaptureError("unexpected_topic")
             received = self._clock() if receipt_ns is None else receipt_ns
-            metadata = None
-            if topic == METADATA_TOPIC:
-                metadata = source_metadata(msg.data)
-                stamp = metadata["imu_stamp_ns"]
-                frame = None
-            else:
-                stamp = (int(msg.header.stamp.sec) * 1_000_000_000
-                         + int(msg.header.stamp.nanosec))
-                frame = msg.header.frame_id
-
-            if topic == "/camera/image_rect":
-                width = msg.width
-                height = msg.height
-                step = msg.step
-                if (type(width) is not int or type(height) is not int
-                        or type(step) is not int or width <= 0 or height <= 0
-                        or step < width or not isinstance(msg.encoding, str)
-                        or not msg.encoding or len(msg.data) != height * step):
-                    raise CaptureError("invalid_image_geometry_or_payload")
-            elif topic == "/camera/camera_info":
-                if (msg.width <= 0 or msg.height <= 0
-                        or len(msg.k) != 9 or
-                        not all(math.isfinite(v) for v in (*msg.k, *msg.d))
-                        or msg.k[0] <= 0 or msg.k[4] <= 0):
-                    raise CaptureError("invalid_camera_intrinsics")
-            elif topic == "/imu/data_raw":
-                values = (
-                    msg.angular_velocity.x, msg.angular_velocity.y,
-                    msg.angular_velocity.z, msg.linear_acceleration.x,
-                    msg.linear_acceleration.y, msg.linear_acceleration.z,
-                )
-                if not all(math.isfinite(v) for v in values):
-                    raise CaptureError("nonfinite_imu_measurement")
-
+            stamp, frame, metadata = self._extract_stamp_and_frame(topic, msg)
+            self._validate_message(topic, msg)
             raw = self._serialize(msg)
             self.contract.accept(
                 topic, stamp, frame, raw, received, self._write,
