@@ -41,7 +41,7 @@ expected_scripts = {
     "leroy.sh",
     "live_actuated_yaw_calibration.sh", "live_boot_readiness.sh",
     "live_boot_session.sh", "live_boot_yaw.sh",
-    "live_boot_yaw_snapshot.sh", "live_manual_yaw_witness.sh",
+    "live_boot_yaw_snapshot.sh",
     "live_stage3_build.sh", "live_stage3_monocular_sidecar.sh",
     "live_stage3_start.sh", "live_stage4_imu_sidecar.sh",
 }

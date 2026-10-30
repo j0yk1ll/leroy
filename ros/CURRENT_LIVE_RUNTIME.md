@@ -153,8 +153,9 @@ not affect the accepted sensor-only runtime.
 
 Current read-only readiness is available via
 `ros/live_boot_readiness.sh` against the already running camera
-graph. Snapshot and witnessed manual rotation tools remain
-diagnostics, not additional startup phases.
+graph. The read-only yaw snapshot remains a diagnostic, not an additional startup phase.
+The standalone manually rotated yaw witness was retired as an optional
+experiment; the supported yaw sensor runtime is unchanged.
 
 For original milestone investigations and scripts, retrieve the
 unmodified `archive/full-runtime-history-2026-10-29` snapshot.
