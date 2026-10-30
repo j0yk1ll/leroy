@@ -22,8 +22,6 @@ setup(
     maintainer_email='maintainer@example.com',
     description='Synthetic mecanum wheel odometry and TF, no motor authority',
     license='Apache-2.0',
-    entry_points={'console_scripts': [
-        'synthetic_odom = leroy_nav2_odometry.synthetic_odom:main',
-        'odom_probe = leroy_nav2_odometry.odom_probe:main',
-    ]},
+    # Historical synthetic odom/ROS probe entry points were archived.
+    entry_points={'console_scripts': []},
 )
