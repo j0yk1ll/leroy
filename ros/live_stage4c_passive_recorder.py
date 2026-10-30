@@ -6,7 +6,6 @@ It never opens any device or publishes ROS topics. The guarded live entry
 point requires the independent hardware-isolated M18 wrapper and operator consent.
 """
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -20,6 +19,7 @@ from live_stage4c_capture_contract import (
     CaptureContract, CaptureError, METADATA_TOPIC, TOPICS,
 )
 from live_stage4d_capture_ingress import CaptureIngress
+from live_stage4c_storage import capture_hashes, write_capture_summary
 
 # Explicit source-code enablement in the operator-commissioning branch ONLY.
 # This is not a runtime flag. Default image command remains /bin/false;
@@ -58,27 +58,6 @@ def safe_bag_path(name):
     if output.exists() or output.is_symlink():
         raise CaptureError("capture_target_already_exists")
     return output
-
-
-def capture_hashes(bag_dir):
-    """SHA256 ordinary rosbag2 files, never following symlinks."""
-    result = {}
-    files = list(bag_dir.iterdir())
-    if len(files) > 16:
-        raise CaptureError("unexpected_output_file_count")
-    for path in sorted(files):
-        if path.is_symlink() or not path.is_file():
-            raise CaptureError("unsafe_output_file")
-        if path.name not in ("metadata.yaml",) and not path.name.endswith(".db3"):
-            raise CaptureError("unexpected_output_filename")
-        digest = hashlib.sha256()
-        with path.open("rb") as fp:
-            for block in iter(lambda: fp.read(1024 * 1024), b""):
-                digest.update(block)
-        result[path.name] = digest.hexdigest()
-    if not result or "metadata.yaml" not in result or not any(k.endswith(".db3") for k in result):
-        raise CaptureError("incomplete_rosbag_storage")
-    return result
 
 
 def _run_live(name):
@@ -366,13 +345,10 @@ def _run_live(name):
                 manifest["error"] = failure
         # The calibration authority is always BLOCKED, even with valid inputs.
         if bag_open:
-            out = Path("/capture") / (name + "-capture-summary.json")
-            if out.exists() or out.is_symlink():
+            try:
+                write_capture_summary(name, manifest)
+            except CaptureError:
                 failure = "summary_already_exists"
-            else:
-                with out.open("x", encoding="utf8") as fp:
-                    json.dump(manifest, fp, sort_keys=True)
-                    fp.write("\n")
         print("STAGE4C_CAPTURE_JSON=" + json.dumps(manifest, sort_keys=True),
               flush=True)
         print("STAGE4C_CALIBRATION=BLOCKED_NOT_VALIDATED", flush=True)
