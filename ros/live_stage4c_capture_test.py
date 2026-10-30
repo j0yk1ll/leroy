@@ -220,13 +220,14 @@ class StaticNonActuation(unittest.TestCase):
 
     def test_graph_requires_single_source_provenance_and_no_devices(self):
         s = (HERE / "live_stage4c_passive_recorder.py").read_text()
+        graph_policy = (HERE / "live_stage4c_graph_contract.py").read_text()
+        self.assertIn('"m18_imu_source"', graph_policy)
+        self.assertIn("unexpected_publisher_", graph_policy)
         for token in (
             "get_publishers_info_by_topic(topic)",
-            '"m18_imu_source"',
             "FORBIDDEN_NODES", "FORBIDDEN_TOPICS",
             "STAGE4C_CALIBRATION=BLOCKED_NOT_VALIDATED",
             "rosbag2_py.SequentialWriter",
-            "metadata.yaml",
             "if not node.graph_ready():",
             '"/dev/ttyACM0"',
             '"/dev/video2"',

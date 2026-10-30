@@ -102,6 +102,18 @@ class IngressNoDevice(unittest.TestCase):
             self.ingress.accept(METADATA_TOPIC, bad, receipt_ns=R0+2)
         self.assertEqual(self.calls, [])
 
+    def test_invalid_header_latches_before_serialization(self):
+        calls = []
+        ingress = CaptureIngress(
+            serialize=lambda msg: calls.append("serialize") or msg.cdr,
+            write=lambda *args: calls.append("write"))
+        bad = image(T0)
+        bad.header.stamp.sec = "invalid"
+        with self.assertRaises(ValueError):
+            ingress.accept("/camera/image_rect", bad, receipt_ns=R0+2)
+        self.assertEqual(calls, [])
+        self.assertIsNotNone(ingress.terminal_fault)
+
     def test_writer_disk_full_latches_and_keeps_accounting_atomic(self):
         n = [0]
         def fail_after_one(*args):

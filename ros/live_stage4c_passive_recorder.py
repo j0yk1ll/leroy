@@ -6,7 +6,6 @@ It never opens any device or publishes ROS topics. The guarded live entry
 point requires the independent hardware-isolated M18 wrapper and operator consent.
 """
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -20,6 +19,11 @@ from live_stage4c_capture_contract import (
     CaptureContract, CaptureError, METADATA_TOPIC, TOPICS,
 )
 from live_stage4d_capture_ingress import CaptureIngress
+from live_stage4c_graph_contract import (
+    REQUIRED_NODES, FORBIDDEN_NODES, FORBIDDEN_TOPICS,
+    graph_ready as capture_graph_ready,
+)
+from live_stage4c_storage import capture_hashes, write_capture_summary
 
 # Explicit source-code enablement in the operator-commissioning branch ONLY.
 # This is not a runtime flag. Default image command remains /bin/false;
@@ -32,21 +36,6 @@ REQUIRED_ENV = {
     "LEROY_NAV2_DRY_RUN": "1",
     "LEROY_STAGE4C_CAPTURE_ONLY": "1",
 }
-REQUIRED_NODES = {
-    "usb_cam", "rectify_node", "depthart", "depth_obstacles",
-    "costmap", "leroy_xrslam", "m18_imu_source",
-}
-FORBIDDEN_NODES = {
-    "leroy_bridge", "leroy_bridge_node", "controller_server",
-    "planner_server", "bt_navigator", "behavior_server",
-    "velocity_smoother", "collision_monitor", "motor_bridge",
-}
-FORBIDDEN_TOPICS = {
-    "/cmd_vel", "/cmd_vel_nav", "/cmd_vel_smoothed",
-    "/motor/command", "/motor/enable", "/joint_commands",
-}
-
-
 def safe_bag_path(name):
     """Allow a new immediate /capture/stage4c-* directory only."""
     if not re.fullmatch(r"stage4c-[a-zA-Z0-9_-]{6,50}", name):
@@ -58,27 +47,6 @@ def safe_bag_path(name):
     if output.exists() or output.is_symlink():
         raise CaptureError("capture_target_already_exists")
     return output
-
-
-def capture_hashes(bag_dir):
-    """SHA256 ordinary rosbag2 files, never following symlinks."""
-    result = {}
-    files = list(bag_dir.iterdir())
-    if len(files) > 16:
-        raise CaptureError("unexpected_output_file_count")
-    for path in sorted(files):
-        if path.is_symlink() or not path.is_file():
-            raise CaptureError("unsafe_output_file")
-        if path.name not in ("metadata.yaml",) and not path.name.endswith(".db3"):
-            raise CaptureError("unexpected_output_filename")
-        digest = hashlib.sha256()
-        with path.open("rb") as fp:
-            for block in iter(lambda: fp.read(1024 * 1024), b""):
-                digest.update(block)
-        result[path.name] = digest.hexdigest()
-    if not result or "metadata.yaml" not in result or not any(k.endswith(".db3") for k in result):
-        raise CaptureError("incomplete_rosbag_storage")
-    return result
 
 
 def _run_live(name):
@@ -178,23 +146,18 @@ def _run_live(name):
         def graph_ready(self):
             names = {name for name, _ in self.get_node_names_and_namespaces()}
             topics = {name for name, _ in self.get_topic_names_and_types()}
+            # Do not query publishers until forbidden graph and missing-node
+            # checks pass; preserve the previous fail-closed ordering.
             if names & FORBIDDEN_NODES or topics & FORBIDDEN_TOPICS:
                 raise CaptureError("forbidden_motor_or_navigation_graph")
             if not REQUIRED_NODES <= names:
                 return False
-            for topic, (typ, _) in TOPICS.items():
-                publishers = self.get_publishers_info_by_topic(topic)
-                if len(publishers) != 1:
-                    return False
-                pub = publishers[0]
-                expected = "m18_imu_source" if topic in (
-                    "/imu/data_raw", METADATA_TOPIC) else None
-                if pub.topic_type != typ or (
-                    expected and (pub.node_name != expected
-                                  or pub.node_namespace != "/")
-                ):
-                    raise CaptureError("unexpected_publisher_" + topic)
-            return self.valid is False and self.map_valid is False
+            publishers = {
+                topic: self.get_publishers_info_by_topic(topic)
+                for topic in TOPICS
+            }
+            return capture_graph_ready(
+                names, topics, publishers, self.valid, self.map_valid)
 
         def receive(self, topic, msg):
             if self.writer is None or self.failures:
@@ -366,13 +329,10 @@ def _run_live(name):
                 manifest["error"] = failure
         # The calibration authority is always BLOCKED, even with valid inputs.
         if bag_open:
-            out = Path("/capture") / (name + "-capture-summary.json")
-            if out.exists() or out.is_symlink():
+            try:
+                write_capture_summary(name, manifest)
+            except CaptureError:
                 failure = "summary_already_exists"
-            else:
-                with out.open("x", encoding="utf8") as fp:
-                    json.dump(manifest, fp, sort_keys=True)
-                    fp.write("\n")
         print("STAGE4C_CAPTURE_JSON=" + json.dumps(manifest, sort_keys=True),
               flush=True)
         print("STAGE4C_CALIBRATION=BLOCKED_NOT_VALIDATED", flush=True)

@@ -100,6 +100,8 @@ python3 -m unittest -v \
     live_stage4_contract_test \
     live_stage4b_test \
     live_stage4c_capture_test \
+    live_stage4c_storage_test \
+    live_stage4c_graph_contract_test \
     live_stage4c_source_meta_test \
     live_stage4c_source_meta_ros_test \
     live_stage4c_synthetic_dds_test \
