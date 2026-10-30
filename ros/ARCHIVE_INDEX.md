@@ -73,7 +73,7 @@ pre-pruning `main` revision.
 `m18_imu_stream_contract.py` still implement the live STM32 IMU
 publisher and packet parser. They deliberately keep their physically
 validated names. The IMU source still imports the passive observer
-`leroy_nav2_integration.m16_passive_observer`. That ROS package
+`leroy_imu_observer.m16_passive_observer`. That ROS package
 therefore retains only its observer, `m16_passive_contract`,
 `m15_sensor_contract`, `fault_contract` and Python package marker.
 None of the old synthetic Nav2 behavior is built or launched. The
