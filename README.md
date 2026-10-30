@@ -69,9 +69,15 @@ The project layout is:
 This README is the only README in the active tree. Original
 component-level instructions and obsolete milestone runbooks remain
 in Git history at `archive/before-single-readme-2026-10-29` and
-`archive/full-runtime-history-2026-10-29`. Technical evidence and
-specialized .md reports are retained but are **not** alternative startup
-instructions.
+`archive/full-runtime-history-2026-10-29`. Historical M16–M23
+Python scripts, synthetic Nav2 launchers, milestone tests and optional
+old Nav2 Docker recipes are additionally preserved at
+`archive/pre-ros-python-cleanup`. **The active checkout now contains
+132 Python files, 14 shell scripts and six Dockerfiles.** The current
+build, runtime and numbered autonomy TODO owners remain in the tree.
+See [`ros/ARCHIVE_INDEX.md`](ros/ARCHIVE_INDEX.md) for specific
+recovery commands. Technical evidence and specialized .md reports are
+not alternative startup instructions.
 
 ## 3. Verify source and build ALL images
 
