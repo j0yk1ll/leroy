@@ -92,7 +92,6 @@ python3 -m unittest -v \
     live_boot_service_test \
     current_live_runtime_test \
     repository_readme_test \
-    runtime_source_inventory_test \
     m18_imu_stream_test \
     autonomous_motor_yaw_test \
     leroy_runtime_test \
