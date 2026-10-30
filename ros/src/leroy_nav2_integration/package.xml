@@ -2,29 +2,15 @@
 <package format="3">
   <name>leroy_nav2_integration</name>
   <version>0.1.0</version>
-  <description>Isolated synthetic odometry, depth and rolling obstacle costmap integration.</description>
+  <description>Passive ROS sensor observer required by Leroy's physical STM32 IMU source.</description>
   <maintainer email="maintainer@example.com">Leroy contributors</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>nav2_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>nav2_controller</exec_depend>
-  <exec_depend>nav2_mppi_controller</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>sensor_msgs_py</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>std_srvs</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
-  <exec_depend>launch</exec_depend>
-  <exec_depend>launch_ros</exec_depend>
-  <exec_depend>ament_index_python</exec_depend>
-  <exec_depend>leroy_nav2_perception</exec_depend>
-  <exec_depend>leroy_nav2_odometry</exec_depend>
-  <exec_depend>leroy_nav2_costmap_fixture</exec_depend>
-  <exec_depend>nav2_lifecycle_manager</exec_depend>
   <test_depend>python3-pytest</test_depend>
-  <test_depend>python3-yaml</test_depend>
   <export><build_type>ament_python</build_type></export>
 </package>
