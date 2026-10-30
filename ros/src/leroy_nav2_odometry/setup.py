@@ -1,8 +1,5 @@
 """ROS 2 Jazzy, M3 synthetic-only mecanum odometry package."""
 
-from glob import glob
-import os
-
 from setuptools import setup
 
 name = 'leroy_nav2_odometry'
@@ -13,7 +10,6 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + name]),
         ('share/' + name, ['package.xml']),
-        (os.path.join('share', name, 'launch'), glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     tests_require=['pytest'],
