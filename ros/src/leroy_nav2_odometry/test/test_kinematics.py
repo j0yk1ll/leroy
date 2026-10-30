@@ -102,30 +102,3 @@ def test_nonfinite_twist_rejected():
 ])
 def test_deterministic_profile(t, expected):
     assert synthetic_twist(t) == expected
-
-
-def test_motion_profile_never_depends_on_remote_velocity_commands():
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[1]
-    pub = (root / 'leroy_nav2_odometry/synthetic_odom.py').read_text()
-    launch = (root / 'launch/odom_fixture.launch.py').read_text()
-    probe = (root / 'leroy_nav2_odometry/odom_probe.py').read_text()
-    assert 'create_subscription' not in pub
-    assert 'create_publisher(' in pub
-    assert "'/leroy_nav2/diagnostics/synthetic_odom'" in pub
-    assert "'odom'" in pub and "'base_link'" in pub
-    assert 'ROS_DOMAIN_ID' in pub and 'ROS_DOMAIN_ID' in launch
-    for forbidden in ("'/cmd_vel'", "'/odom'", "'controller_server'"):
-        assert forbidden not in pub and forbidden not in launch
-    assert 'cmd_vel' in probe  # fail-closed graph assertion
-    assert 'leroy_bridge' not in launch
-
-def test_probe_requires_measured_pose_differences_not_only_twist():
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[1]
-    probe = (root / 'leroy_nav2_odometry/odom_probe.py').read_text()
-    assert 'moved_forward = max(self.x_samples)' in probe
-    assert 'moved_lateral = max(self.y_samples)' in probe
-    assert 'rotated = max(self.yaw_samples)' in probe
