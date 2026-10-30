@@ -422,10 +422,10 @@ or claim that earlier tasks are complete.
 | 029 | Unlocalized boot policy | [`ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py`](ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py) |
 | 030 | Real boot-readiness evidence | [`ros/live_boot_readiness.py`](ros/live_boot_readiness.py) |
 | 031 | Actual yaw maneuver dynamics | [`ros/boot_yaw_tracking_core.py`](ros/boot_yaw_tracking_core.py) |
-| 032 | Commissioned turn-control dynamics | [`ros/autonomous_motor_yaw_core.py`](ros/autonomous_motor_yaw_core.py) |
-| 033 | Complete turn-swept clearance | [`ros/autonomous_motor_yaw_core.py`](ros/autonomous_motor_yaw_core.py) |
-| 034 | Attended powered calibration | [`ros/live_actuated_yaw_calibration.py`](ros/live_actuated_yaw_calibration.py) |
-| 035 | Real yaw and STOP feedback | [`ros/live_actuated_yaw_calibration.py`](ros/live_actuated_yaw_calibration.py) |
+| 032 | Commissioned turn-control dynamics | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
+| 033 | Complete turn-swept clearance | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
+| 034 | Attended powered calibration | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
+| 035 | Real yaw and STOP feedback | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
 | 036 | Boot localization state machine | [`ros/boot_localization_core.py`](ros/boot_localization_core.py) |
 | 037 | Unlocalized recovery/parallax | [`ros/boot_localization_core.py`](ros/boot_localization_core.py) |
 | 038 | Integrated runtime supervisor | [`ros/leroy.sh`](ros/leroy.sh) |

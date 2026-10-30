@@ -121,7 +121,7 @@ mean localization or autonomous physical movement is complete.
   physical footprint. Provisional depth/costmap geometry is
   diagnostic and not collision-avoidance clearance evidence.
 - **Motor bridge:** The historical M22 signed bridge and newer
-  `live_actuated_yaw_calibration.py` implement possible signed
+  archived powered-yaw experiments implement possible signed
   motor commands but **are not physically commissioned**. The old
   bridge expects unconfigured GPIO feedback and the experimental
   motor calibration launcher requires a separate uncommissioned
