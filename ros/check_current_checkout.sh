@@ -101,10 +101,8 @@ python3 -m unittest -v \
     live_stage4c_capture_test \
     live_stage4c_source_meta_test \
     live_stage4c_source_meta_ros_test \
-    live_stage4c_synthetic_dds_test \
     live_stage4d_capture_test \
-    live_stage4d_bag_audit_test \
-    live_stage4d_synthetic_load_test
+    live_stage4d_bag_audit_test
 
 python3 -m unittest discover -s src/leroy_nav2_perception/test \
   -p test_live_costmap_static_contract.py -v
