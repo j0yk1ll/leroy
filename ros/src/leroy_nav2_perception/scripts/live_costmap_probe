@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+from leroy_nav2_perception.live_costmap_probe import main
+
+if __name__ == "__main__":
+    main()

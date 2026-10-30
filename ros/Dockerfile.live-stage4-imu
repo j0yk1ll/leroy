@@ -7,12 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # M18 imports the existing read-only M16 observer library at module scope;
 # install its Python package but DO NOT launch its synthetic Nav2 fixtures.
-COPY src/leroy_nav2_integration /leroy_ws/src/leroy_nav2_integration
+COPY src/leroy_imu_observer /leroy_ws/src/leroy_imu_observer
 RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; \
     source /leroy_ws/install/setup.bash; cd /leroy_ws; \
-    colcon build --packages-select leroy_nav2_integration; \
+    colcon build --packages-select leroy_imu_observer; \
     source /leroy_ws/install/setup.bash; \
-    python3 -c "from leroy_nav2_integration.m16_passive_observer import PassiveSensorObserver"'
+    python3 -c "from leroy_imu_observer.m16_passive_observer import PassiveSensorObserver"'
 
 COPY m18_imu_stream_contract.py /opt/stage4/m18_imu_stream_contract.py
 COPY m18_imu_stream_source.py /opt/stage4/m18_imu_stream_source.py

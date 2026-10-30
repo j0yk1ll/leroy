@@ -4,6 +4,10 @@ FROM localhost/leroy-ros:jazzy
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ros-jazzy-sensor-msgs-py \
+      ros-jazzy-ament-cmake-python \
+      ros-jazzy-nav2-costmap-2d \
+      ros-jazzy-nav2-util \
+      ros-jazzy-rclcpp-lifecycle \
     && rm -rf /var/lib/apt/lists/*
 
 COPY src/leroy_nav2_perception /leroy_ws/src/leroy_nav2_perception

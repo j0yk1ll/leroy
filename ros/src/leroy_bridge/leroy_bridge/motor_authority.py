@@ -20,6 +20,17 @@ key provisioning and MCU-stop implementation at the sole serial writer.
 # Acceptance: each missing/stale independent observation, outdated motion
 # instruction, incompatible session or emergency cut forces a latched STOP.
 
+# TODO(AUTONOMY) #032 [commissioned turn control]: Measure real chassis
+# yaw acceleration, braking and overshoot before authorizing rotation.
+# TODO(AUTONOMY) #033 [trusted swept clearance]: Require independent,
+# fresh obstacle and stopping-margin evidence over the whole swept footprint.
+# TODO(AUTONOMY) #034 [attended powered calibration]: Commission a locally
+# held deadman and physically verified motor-power STOP; do not use a
+# synthetic safety monitor or a second STM32 serial writer.
+# TODO(AUTONOMY) #035 [real yaw and STOP feedback]: Validate wheel polarity,
+# yaw sign, command latency and actual stopped-at-waypoint evidence on
+# the physical robot; faults must latch STOP.
+
 from dataclasses import dataclass
 import math
 

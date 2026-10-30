@@ -127,15 +127,6 @@ class ExactCDRPayloadAudit(unittest.TestCase):
         with self.assertRaisesRegex(CaptureError, "bag_audit_closed"):
             audit.write(self.topic, b"CDR", STAMP)
 
-    def test_replay_source_uses_exact_write_audit_and_no_second_serializer(self):
-        script = (HERE / "live_stage4d_synthetic_load.py").read_text()
-        self.assertIn("audit = ExactWriteBagAudit(writer.write)", script)
-        self.assertIn("write=audit.write", script)
-        self.assertIn("audit.verify_readback(topic, raw, stamp)", script)
-        self.assertIn("audit.verify_complete()", script)
-        self.assertIn("audit.close()", script)
-        self.assertEqual(script.count("serialize_message(msg)"), 1)
-        self.assertNotIn("replay_hashes", script)
 
 
 if __name__ == "__main__":

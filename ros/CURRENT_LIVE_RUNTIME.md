@@ -121,7 +121,7 @@ mean localization or autonomous physical movement is complete.
   physical footprint. Provisional depth/costmap geometry is
   diagnostic and not collision-avoidance clearance evidence.
 - **Motor bridge:** The historical M22 signed bridge and newer
-  `live_actuated_yaw_calibration.py` implement possible signed
+  archived powered-yaw experiments implement possible signed
   motor commands but **are not physically commissioned**. The old
   bridge expects unconfigured GPIO feedback and the experimental
   motor calibration launcher requires a separate uncommissioned
@@ -153,8 +153,8 @@ not affect the accepted sensor-only runtime.
 
 Current read-only readiness is available via
 `ros/live_boot_readiness.sh` against the already running camera
-graph. Snapshot and witnessed manual rotation tools remain
-diagnostics, not additional startup phases.
+graph. The read-only yaw snapshot remains a diagnostic, not an additional startup phase.
+The historical manually rotated yaw witness has been retired; the supported yaw sensor runtime is unchanged.
 
 For original milestone investigations and scripts, retrieve the
 unmodified `archive/full-runtime-history-2026-10-29` snapshot.

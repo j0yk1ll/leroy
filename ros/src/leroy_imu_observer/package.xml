@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>leroy_nav2_integration</name>
+  <name>leroy_imu_observer</name>
   <version>0.1.0</version>
   <description>Passive ROS sensor observer required by Leroy's physical STM32 IMU source.</description>
   <maintainer email="maintainer@example.com">Leroy contributors</maintainer>
