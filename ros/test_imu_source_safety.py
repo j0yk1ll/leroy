@@ -12,7 +12,7 @@ sys.path.insert(0, str(HERE))
 from leroy_imu_observer import imu_protocol as m18
 
 
-class Stage4aStatic(unittest.TestCase):
+class ImuSourceSafetyContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.supervisor = (HERE / "live_stage4_imu_overlap.py").read_text()
@@ -55,7 +55,7 @@ class Stage4aStatic(unittest.TestCase):
             any(isinstance(n, ast.Return) for n in runner.body),
             "run_must_return_a_verdict_after_cleanup")
 
-    def test_only_prevalidated_m18_serial_commands(self):
+    def test_serial_commands_are_allowlisted(self):
         self.assertEqual(m18.START, b"set_imu_stream_hz 50\r\n")
         self.assertEqual(m18.STOP, b"set_imu_stream_hz 0\r\n")
         self.assertEqual(m18.PORT, "/dev/ttyACM0")
@@ -137,7 +137,7 @@ class Stage4aStatic(unittest.TestCase):
         self.assertNotIn("ENTRYPOINT", s)
         self.assertNotIn("CMD [\"/usr/local/bin/leroy-entrypoint\"]", s)
 
-    def test_existing_m18_packet_sequence_contract(self):
+    def test_imu_packet_sequence_contract(self):
         fields = {
             "seq": 17, "t_us": 1_000_000, "cal": 1,
             "af_mm_s2": 100, "al_mm_s2": 200, "au_mm_s2": 9900,

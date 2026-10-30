@@ -26,7 +26,7 @@ class FakePublisher:
         self.messages.append(message)
 
 
-class FakeM18:
+class FakeImuSource:
     def __init__(self, name="m18_imu_source", namespace="/", remap=False):
         self.name = name
         self.namespace = namespace
@@ -55,7 +55,7 @@ class RosAdapterSimulation(unittest.TestCase):
             node, message_type=FakeString, qos=object(),
             monotonic_ns=lambda: next(sequence))
 
-    def test_m18_source_writes_one_original_mcu_metadata_string(self):
+    def test_source_metadata_preserves_mcu_fields(self):
         node = FakeM18()
         adapter = self.make(node)
         output = adapter.on_imu_published(
@@ -122,7 +122,7 @@ class RosAdapterSimulation(unittest.TestCase):
                 {"cal": 1}, 1_000_000_000, 55)
         self.assertEqual(len(node.pub.messages), 0)
 
-    def test_no_real_stage4b_or_serial_integration(self):
+    def test_metadata_adapter_has_no_serial_ownership(self):
         wrapper = (HERE / "live_stage4c_source_meta_ros.py").read_text()
         m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
         runner = (HERE / "live_stage4_imu_overlap.py").read_text()

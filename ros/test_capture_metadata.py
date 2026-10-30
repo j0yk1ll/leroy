@@ -89,7 +89,7 @@ class MetadataTapContract(unittest.TestCase):
             tap.on_imu_published(
                 {"seq": 2, "t_us": 40_000, "cal": 1}, 200, 42)
 
-    def test_adapter_has_no_implicit_live_m18_integration(self):
+    def test_metadata_tap_is_opt_in(self):
         adapter = (HERE / "live_stage4c_source_meta.py").read_text()
         runner = (HERE / "live_stage4_imu_overlap.py").read_text()
         m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()

@@ -96,15 +96,15 @@ PYTHONPATH="src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unitte
     tests.unit.test_imu_protocol \
     leroy_runtime_test \
     tests.safety.test_operator_stop \
-    live_stage3_start_static_test \
-    live_stage3_sidecar_static_test \
-    live_stage4_contract_test \
-    live_stage4b_test \
-    live_stage4c_capture_test \
-    live_stage4c_source_meta_test \
-    live_stage4c_source_meta_ros_test \
-    live_stage4d_capture_test \
-    live_stage4d_bag_audit_test
+    test_camera_perception_startup \
+    test_camera_localization_sidecar \
+    test_imu_source_safety \
+    test_imu_delivery \
+    test_capture_contract \
+    test_capture_metadata \
+    test_capture_metadata_ros \
+    test_capture_ingress \
+    test_capture_audit
 
 python3 -m unittest discover -s src/leroy_nav2_perception/test \
   -p test_live_costmap_static_contract.py -v

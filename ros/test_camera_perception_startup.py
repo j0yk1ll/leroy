@@ -8,7 +8,7 @@ import unittest
 HERE = Path(__file__).resolve().parent
 
 
-class LiveStage3ReproducibilityTest(unittest.TestCase):
+class CameraPerceptionStartupTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.start_script = (HERE / "live_stage3_start.sh").read_text()

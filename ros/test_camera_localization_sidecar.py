@@ -5,7 +5,7 @@ import unittest
 HERE = pathlib.Path(__file__).resolve().parent
 
 
-class LiveStage3SidecarContract(unittest.TestCase):
+class CameraLocalizationSidecarContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.script = (HERE / "live_stage3_monocular_sidecar.sh").read_text()

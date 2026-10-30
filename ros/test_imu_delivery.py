@@ -100,7 +100,7 @@ class StampMatching(unittest.TestCase):
         self.assertEqual(r["negative_host_monotonic_delays"], 1)
         self.assertIsNone(r["callback_delivery_delay_ms_p95"])
 
-    def test_launcher_explicitly_selects_verified_stage4b_image(self):
+    def test_launcher_selects_verified_imu_image(self):
         launcher = (ROOT / "live_stage4_imu_sidecar.sh").read_text()
         for token in (
             "LEROY_STAGE4_IMU_IMAGE",
