@@ -17,12 +17,13 @@ cd "$(dirname "$0")"
 
 usage() {
   cat <<'HELP'
-Usage: bash ./leroy.sh {check|build|run|status|help}
+Usage: bash ./leroy.sh {check|build|run|status|stop|help}
   check   No-device checkout and regression tests
   build   Build every current Leroy container image
   run     Start camera, depth, XRSLAM, STM32 IMU and yaw in one session
           Ctrl-C: supervised IMU STOP/ACK, then reverse-order graph shutdown
   status  Read current container states
+  stop    Stop the existing sensor-only session; require IMU STOP acknowledgement
 
 For run: disconnect motor/actuator rails independently of STM32 USB, then:
   LEROY_MOTOR_RAILS_DISCONNECTED=YES
@@ -57,6 +58,36 @@ case "$command" in
       fi
       printf 'LEROY_CONTAINER=%s:%s\n' "$name" "$state"
     done
+    exit 0 ;;
+  stop)
+    rootless
+    rc=0
+    # Only stop known sensor-only containers. Never touch an unrelated
+    # motor-capable owner. Preserve the IMU process's normal STOP/ACK path.
+    source=leroy-boot-imu-source
+    if podman container exists "$source"; then
+      podman stop -t 10 "$source" >/dev/null || rc=2
+      logs="$(podman logs "$source" 2>&1)" || rc=2
+      if ! grep -Fxq 'BOOT_IMU_SOURCE_STOP_ACK=PASS' <<<"$logs"; then
+        echo 'LEROY_RUNTIME=IMU_STOP_UNVERIFIED_DISCONNECT_POWER' >&2
+        rc=2
+      fi
+      # Preserve a failed container for postmortem investigation.
+      if [[ "$rc" == 0 ]]; then
+        podman rm "$source" >/dev/null || rc=2
+      fi
+    fi
+    # Reverse the established startup dependency order.
+    for name in leroy-live-boot-yaw-persistent leroy-live-xrslam leroy-live-costmap; do
+      if podman container exists "$name"; then
+        podman stop -t 10 "$name" >/dev/null || rc=2
+      fi
+    done
+    if [[ "$rc" != 0 ]]; then
+      echo 'LEROY_RUNTIME=STOP_FAILED_OR_IMU_UNVERIFIED' >&2
+      exit 2
+    fi
+    echo 'LEROY_RUNTIME=STOPPED_SENSOR_ONLY_NO_MOTION_AUTHORITY'
     exit 0 ;;
   run) ;;
   *) usage >&2; fail UNKNOWN_COMMAND ;;

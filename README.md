@@ -484,3 +484,19 @@ commissioning run.
 No powered autonomous rotation, full-environment collision protection,
 metric localization, or Nav2 motor authority has been commissioned.
 All of those remain explicit tracked engineering TODOs.
+
+
+## Sensor-only operator stop (uncommissioned motion)
+
+The supported `ros/leroy.sh stop` command stops the existing sensor-only
+containers in reverse graph order. It requests shutdown of the exclusive
+STM32 IMU source first, checks its emitted `BOOT_IMU_SOURCE_STOP_ACK=PASS`
+evidence, and treats missing acknowledgement as a **failure**. A failed IMU
+container is retained for investigation. In that case isolate power and
+verify hardware state before another session. This is not an emergency-stop
+substitute and does not establish autonomous motor authorization.
+
+The current monocular XRSLAM diagnostic launcher still depends on an
+**uncalibrated** device template. Metric localization, autonomous navigation,
+and motor actuation remain uncommissioned; the template must not be treated
+as physical calibration evidence.

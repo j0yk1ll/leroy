@@ -94,6 +94,7 @@ python3 -m unittest -v \
     repository_readme_test \
     m18_imu_stream_test \
     leroy_runtime_test \
+    tests.safety.test_operator_stop \
     live_stage3_start_static_test \
     live_stage3_sidecar_static_test \
     live_stage4_contract_test \
