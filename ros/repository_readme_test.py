@@ -101,6 +101,40 @@ class SingleRunbookTest(unittest.TestCase):
             self.assertEqual(label, path)
             self.assertEqual(path, entries[expected])
 
+    def test_current_python_and_container_dependency_inventory(self):
+        """Ensure deprecated milestone modules do not re-enter the build."""
+        ros = REPO / "ros"
+        active_milestones = sorted(p.name for p in ros.glob("m[0-9]*.py"))
+        self.assertEqual(active_milestones, [
+            "m18_imu_stream_contract.py",
+            "m18_imu_stream_source.py",
+            "m18_imu_stream_test.py",
+        ])
+        integration = (
+            ros / "src/leroy_nav2_integration/leroy_nav2_integration"
+        )
+        self.assertEqual(sorted(p.name for p in integration.glob("*.py")), [
+            "__init__.py", "fault_contract.py", "m15_sensor_contract.py",
+            "m16_passive_contract.py", "m16_passive_observer.py",
+        ])
+        source = (ros / "m18_imu_stream_source.py").read_text()
+        self.assertIn(
+            "leroy_nav2_integration.m16_passive_observer", source,
+        )
+        setup = (
+            ros / "src/leroy_nav2_integration/setup.py"
+        ).read_text()
+        self.assertIn("m16_passive_observer:main", setup)
+        self.assertNotIn("m14_software_gate", setup)
+        self.assertEqual(sorted(p.name for p in ros.glob("Dockerfile*")), [
+            "Dockerfile", "Dockerfile.live-costmap",
+            "Dockerfile.live-perception", "Dockerfile.live-stage4-imu",
+            "Dockerfile.live-stage4c-capture", "Dockerfile.xrslam",
+        ])
+        self.assertFalse((ros / "m16_sensor_only_run.sh").exists())
+        self.assertFalse((ros / "src/leroy_nav2_integration/launch").exists())
+        self.assertFalse((ros / "src/leroy_nav2_integration/test").exists())
+
     def test_autonomy_todos_are_in_the_owner_files(self):
         required = (
             "ros/leroy.sh",
