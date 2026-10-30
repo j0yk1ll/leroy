@@ -33,10 +33,9 @@ from pathlib import Path
 import re
 
 root = Path(".")
-# The current checked-in runtime has an intentionally small, explicit shell
-# interface. The old M17-M23 experiment runners are archived, not runnable
-# commands from a fresh checkout. The M16 Nav2 fixture is still a Docker COPY
-# dependency and must remain.
+# The current checked-in runtime has one maintained shell interface.
+# Historical M16-M23 experiments and optional Nav2 fixture Dockerfiles are
+# archived, not additional startup procedures.
 expected_scripts = {
     "build_current_images.sh", "check_current_checkout.sh", "exec.sh",
     "leroy.sh",
@@ -45,7 +44,6 @@ expected_scripts = {
     "live_boot_yaw_snapshot.sh", "live_manual_yaw_witness.sh",
     "live_stage3_build.sh", "live_stage3_monocular_sidecar.sh",
     "live_stage3_start.sh", "live_stage4_imu_sidecar.sh",
-    "m16_sensor_only_run.sh",
 }
 found_scripts = {p.name for p in root.glob("*.sh")}
 if found_scripts != expected_scripts:
@@ -94,6 +92,8 @@ python3 -m unittest -v \
     live_boot_service_test \
     current_live_runtime_test \
     repository_readme_test \
+    runtime_source_inventory_test \
+    m18_imu_stream_test \
     autonomous_motor_yaw_test \
     leroy_runtime_test \
     live_stage3_start_static_test \
