@@ -72,7 +72,13 @@ class SingleRunbookTest(unittest.TestCase):
         for relative in filter(None, output.split("\0")):
             if not relative.endswith((".py", ".sh", ".yaml", ".c", ".cpp")):
                 continue
-            content = (REPO / relative).read_text(errors="replace")
+            source = REPO / relative
+            # A tracked, locally deleted unrelated file is not a TODO owner.
+            # The final numbered-owner/index comparison still detects a
+            # deleted source file containing a required autonomy TODO.
+            if not source.is_file():
+                continue
+            content = source.read_text(errors="replace")
             for line in content.splitlines():
                 if not line.lstrip().startswith(("# TODO(AUTONOMY)", "// TODO(AUTONOMY)", "/* TODO(AUTONOMY)", "* TODO(AUTONOMY)")):
                     continue

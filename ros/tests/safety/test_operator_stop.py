@@ -2,7 +2,7 @@
 import pathlib
 import unittest
 
-SCRIPT = pathlib.Path(__file__).resolve().parents[1] / "leroy.sh"
+SCRIPT = pathlib.Path(__file__).resolve().parents[2] / "leroy.sh"
 
 
 class OperatorShutdownContract(unittest.TestCase):
