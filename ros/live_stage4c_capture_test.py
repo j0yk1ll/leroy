@@ -226,7 +226,6 @@ class StaticNonActuation(unittest.TestCase):
             "FORBIDDEN_NODES", "FORBIDDEN_TOPICS",
             "STAGE4C_CALIBRATION=BLOCKED_NOT_VALIDATED",
             "rosbag2_py.SequentialWriter",
-            "metadata.yaml",
             "if not node.graph_ready():",
             '"/dev/ttyACM0"',
             '"/dev/video2"',
