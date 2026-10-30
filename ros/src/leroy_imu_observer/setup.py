@@ -5,7 +5,7 @@ part of the current runtime or the supported clean-checkout build.
 """
 from setuptools import setup
 
-package_name = 'leroy_nav2_integration'
+package_name = 'leroy_imu_observer'
 setup(
     name=package_name,
     version='0.1.0',
@@ -21,6 +21,6 @@ setup(
     description='Passive read-only ROS sensor observer used by the STM32 IMU runtime',
     license='Apache-2.0',
     entry_points={'console_scripts': [
-        'm16_passive_observer = leroy_nav2_integration.m16_passive_observer:main',
+        'm16_passive_observer = leroy_imu_observer.m16_passive_observer:main',
     ]},
 )

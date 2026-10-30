@@ -111,7 +111,7 @@ class SingleRunbookTest(unittest.TestCase):
             "m18_imu_stream_test.py",
         ])
         integration = (
-            ros / "src/leroy_nav2_integration/leroy_nav2_integration"
+            ros / "src/leroy_imu_observer/leroy_imu_observer"
         )
         self.assertEqual(sorted(p.name for p in integration.glob("*.py")), [
             "__init__.py", "fault_contract.py", "m15_sensor_contract.py",
@@ -119,10 +119,10 @@ class SingleRunbookTest(unittest.TestCase):
         ])
         source = (ros / "m18_imu_stream_source.py").read_text()
         self.assertIn(
-            "leroy_nav2_integration.m16_passive_observer", source,
+            "leroy_imu_observer.m16_passive_observer", source,
         )
         setup = (
-            ros / "src/leroy_nav2_integration/setup.py"
+            ros / "src/leroy_imu_observer/setup.py"
         ).read_text()
         self.assertIn("m16_passive_observer:main", setup)
         self.assertNotIn("m14_software_gate", setup)
@@ -132,8 +132,8 @@ class SingleRunbookTest(unittest.TestCase):
             "Dockerfile.live-stage4c-capture", "Dockerfile.xrslam",
         ])
         self.assertFalse((ros / "m16_sensor_only_run.sh").exists())
-        self.assertFalse((ros / "src/leroy_nav2_integration/launch").exists())
-        self.assertFalse((ros / "src/leroy_nav2_integration/test").exists())
+        self.assertFalse((ros / "src/leroy_imu_observer/launch").exists())
+        self.assertFalse((ros / "src/leroy_imu_observer/test").exists())
 
     def test_autonomy_todos_are_in_the_owner_files(self):
         required = (
