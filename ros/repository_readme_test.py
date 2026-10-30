@@ -41,8 +41,9 @@ class SingleRunbookTest(unittest.TestCase):
         self.assertIn("plain `make` or `make all` also flashes", guide)
 
     def test_perception_package_does_not_install_deleted_readme(self):
-        setup = (REPO / "ros/src/leroy_nav2_perception/setup.py").read_text()
-        self.assertNotIn("['README.md']", setup)
+        cmake = (REPO / "ros/src/leroy_nav2_perception/CMakeLists.txt").read_text()
+        self.assertNotIn("README.md", cmake)
+        self.assertIn("ament_python_install_package", cmake)
 
     def test_operator_safety_and_uncommissioned_components_are_explicit(self):
         guide = (REPO / "README.md").read_text()
