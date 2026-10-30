@@ -6,7 +6,7 @@ import unittest
 
 import live_boot_imu_service as source
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class PersistentBootService(unittest.TestCase):

@@ -85,16 +85,16 @@ assert "motor" not in (root/"live_stage3_build.sh").read_text().split(
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY
 PYTHONPATH=".:src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
-    boot_localization_core_test \
-    boot_yaw_core_test \
-    boot_auto_calibration_test \
-    boot_yaw_tracking_test \
-    live_boot_readiness_test \
-    live_boot_service_test \
-    current_live_runtime_test \
-    repository_readme_test \
+    tests.unit.boot_localization_core_test \
+    tests.unit.boot_yaw_core_test \
+    tests.unit.boot_auto_calibration_test \
+    tests.unit.boot_yaw_tracking_test \
+    tests.integration.live_boot_readiness_test \
+    tests.integration.live_boot_service_test \
+    tests.integration.current_live_runtime_test \
+    tests.integration.repository_readme_test \
     tests.unit.test_imu_protocol \
-    leroy_runtime_test \
+    tests.safety.leroy_runtime_test \
     tests.safety.test_operator_stop \
     tests.integration.test_camera_perception_startup \
     tests.integration.test_camera_localization_sidecar \

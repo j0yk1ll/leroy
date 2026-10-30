@@ -7,7 +7,7 @@ import re
 import subprocess
 import unittest
 
-ROS = Path(__file__).resolve().parent
+ROS = Path(__file__).resolve().parents[2]
 REPO = ROS.parent
 
 

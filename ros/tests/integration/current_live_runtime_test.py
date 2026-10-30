@@ -5,7 +5,7 @@ This does NOT validate hardware stopping or authorize motor output.
 from pathlib import Path
 import unittest
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "src/leroy_bridge/config/leroy_bridge.yaml"
 BRIDGE = ROOT / "src/leroy_bridge/leroy_bridge/node.py"
 MANIFEST = ROOT / "src/leroy_nav2/config/hardware.disabled.yaml"

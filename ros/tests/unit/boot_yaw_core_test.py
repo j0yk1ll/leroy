@@ -7,7 +7,7 @@ import unittest
 from boot_yaw_core import BootYaw
 import live_boot_yaw as live
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def samples(bias=0.003, dt_ns=20_000_000, count=140):

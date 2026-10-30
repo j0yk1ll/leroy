@@ -12,7 +12,7 @@ from boot_yaw_tracking_core import (
     DIAGNOSTIC_RATE_CAP_RAD_S,
 )
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 BASE = 10_000_000_000
 
 

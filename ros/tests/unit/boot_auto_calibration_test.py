@@ -8,7 +8,7 @@ import unittest
 from boot_auto_calibration_core import AutoImuCalibration
 import live_boot_yaw
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 START = 1_800_000_000_000_000_000
 RECEIPT = 5_000_000_000
 DT = 20_000_000

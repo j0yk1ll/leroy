@@ -201,7 +201,7 @@ class BootLocalizationTests(unittest.TestCase):
     def test_no_ros_device_or_actuation_in_pure_core(self):
         from pathlib import Path
         import ast
-        path = Path(__file__).with_name("boot_localization_core.py")
+        path = Path(__file__).resolve().parents[2] / "boot_localization_core.py"
         s = path.read_text()
         parsed = ast.parse(s)
         names = set()

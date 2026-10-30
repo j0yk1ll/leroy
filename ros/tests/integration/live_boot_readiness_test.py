@@ -7,7 +7,7 @@ import unittest
 
 import live_boot_readiness as live
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class LiveBootReadOnlyContract(unittest.TestCase):
