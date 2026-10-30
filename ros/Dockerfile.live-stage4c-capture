@@ -29,6 +29,7 @@ RUN bash -lc 'set -e; \
     source /leroy_ws/install/setup.bash; \
     python3 -m py_compile \
       /opt/stage4c/live_stage4c_capture_contract.py \
+      /opt/stage4c/live_stage4c_graph_contract.py \
       /opt/stage4c/live_stage4c_passive_recorder.py \
       /opt/stage4c/live_stage4d_capture_ingress.py \
       /opt/stage4c/live_stage4c_source_meta.py \
