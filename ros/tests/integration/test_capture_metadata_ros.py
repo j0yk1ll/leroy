@@ -56,7 +56,7 @@ class RosAdapterSimulation(unittest.TestCase):
             monotonic_ns=lambda: next(sequence))
 
     def test_source_metadata_preserves_mcu_fields(self):
-        node = FakeM18()
+        node = FakeImuSource()
         adapter = self.make(node)
         output = adapter.on_imu_published(
             {"seq": 701, "t_us": 124_000, "cal": 1},
@@ -78,7 +78,7 @@ class RosAdapterSimulation(unittest.TestCase):
 
     def test_wrong_source_identity_rejected_before_publisher_creation(self):
         for name, namespace in (("other", "/"), ("m18_imu_source", "/wrong")):
-            node = FakeM18(name=name, namespace=namespace)
+            node = FakeImuSource(name=name, namespace=namespace)
             with self.subTest(name=name, namespace=namespace), self.assertRaisesRegex(
                 CaptureError, "source_node_identity_not_m18"
             ):
@@ -86,13 +86,13 @@ class RosAdapterSimulation(unittest.TestCase):
             self.assertEqual(node.calls, [])
 
     def test_topic_remap_rejected(self):
-        node = FakeM18(remap=True)
+        node = FakeImuSource(remap=True)
         with self.assertRaisesRegex(CaptureError, "metadata_topic_remapped"):
             self.make(node)
         self.assertEqual(node.calls[0][1], METADATA_TOPIC)
 
     def test_sender_failure_latches_and_does_not_commit_count(self):
-        node = FakeM18()
+        node = FakeImuSource()
         adapter = self.make(node)
         node.pub.reject = True
         with self.assertRaisesRegex(RuntimeError, "simulated_metadata_publish_failure"):
@@ -105,7 +105,7 @@ class RosAdapterSimulation(unittest.TestCase):
                 {"seq": 2, "t_us": 40_000, "cal": 1}, 1_020_000_000, 34)
 
     def test_original_tick_discontinuity_rejected_before_second_publish(self):
-        node = FakeM18()
+        node = FakeImuSource()
         adapter = self.make(node)
         adapter.on_imu_published(
             {"seq": 4, "t_us": 100_000, "cal": 1}, 1_000_000_000, 55)
@@ -115,7 +115,7 @@ class RosAdapterSimulation(unittest.TestCase):
         self.assertEqual(len(node.pub.messages), 1)
 
     def test_provenance_fields_not_backfilled_from_ros_header(self):
-        node = FakeM18()
+        node = FakeImuSource()
         adapter = self.make(node)
         with self.assertRaisesRegex(CaptureError, "missing_original_mcu_fields"):
             adapter.on_imu_published(
