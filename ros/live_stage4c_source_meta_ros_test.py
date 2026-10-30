@@ -124,7 +124,7 @@ class RosAdapterSimulation(unittest.TestCase):
 
     def test_no_real_stage4b_or_serial_integration(self):
         wrapper = (HERE / "live_stage4c_source_meta_ros.py").read_text()
-        m18 = (HERE / "m18_imu_stream_source.py").read_text()
+        m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
         runner = (HERE / "live_stage4_imu_overlap.py").read_text()
         for token in ("serial.Serial(", "device.write(", "/cmd_vel", "rclpy.init("):
             self.assertNotIn(token, wrapper)
