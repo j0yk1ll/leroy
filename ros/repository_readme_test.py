@@ -135,6 +135,26 @@ class SingleRunbookTest(unittest.TestCase):
         self.assertFalse((ros / "src/leroy_nav2_integration/launch").exists())
         self.assertFalse((ros / "src/leroy_nav2_integration/test").exists())
 
+    def test_stage4_runtime_helpers_are_not_orphaned(self):
+        """Retained diagnostic names are runtime/build dependencies, not trash."""
+        ros = REPO / "ros"
+        capture_image = (ros / "Dockerfile.live-stage4c-capture").read_text()
+        imu_sidecar = (ros / "live_stage4_imu_sidecar.sh").read_text()
+        for filename in (
+            "live_stage4_imu_overlap.py",
+            "live_stage4c_capture_contract.py",
+            "live_stage4c_passive_recorder.py",
+            "live_stage4d_capture_ingress.py",
+            "live_stage4c_source_meta.py",
+            "live_stage4c_source_meta_ros.py",
+            "live_stage4c_rosbag_smoke.py",
+        ):
+            with self.subTest(filename=filename):
+                self.assertTrue((ros / filename).is_file())
+                self.assertIn("COPY " + filename + " ", capture_image)
+        self.assertIn("/opt/stage4/live_stage4_imu_overlap.py", imu_sidecar)
+        self.assertIn("/opt/stage4c/live_stage4c_passive_recorder.py", imu_sidecar)
+
     def test_autonomy_todos_are_in_the_owner_files(self):
         required = (
             "ros/leroy.sh",
