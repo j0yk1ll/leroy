@@ -39,9 +39,9 @@ root = Path(".")
 expected_scripts = {
     "build_current_images.sh", "check_current_checkout.sh", "exec.sh",
     "leroy.sh",
-    "live_actuated_yaw_calibration.sh", "live_boot_readiness.sh",
+    "live_boot_readiness.sh",
     "live_boot_session.sh", "live_boot_yaw.sh",
-    "live_boot_yaw_snapshot.sh", "live_manual_yaw_witness.sh",
+    "live_boot_yaw_snapshot.sh",
     "live_stage3_build.sh", "live_stage3_monocular_sidecar.sh",
     "live_stage3_start.sh", "live_stage4_imu_sidecar.sh",
 }
@@ -93,7 +93,6 @@ python3 -m unittest -v \
     current_live_runtime_test \
     repository_readme_test \
     m18_imu_stream_test \
-    autonomous_motor_yaw_test \
     leroy_runtime_test \
     live_stage3_start_static_test \
     live_stage3_sidecar_static_test \

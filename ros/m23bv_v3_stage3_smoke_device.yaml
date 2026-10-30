@@ -1,4 +1,0 @@
-# Deliberately incomplete no-device XRSLAM template.
-# The adapter must NOT initialize XRSLAMCreate without CameraInfo and TF.
-cam0: {}
-imu: {}

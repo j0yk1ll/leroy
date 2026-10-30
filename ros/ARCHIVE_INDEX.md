@@ -115,3 +115,38 @@ Legacy separate Stage 3 / 4 GitHub Actions workflows were folded into
 the single maintained `.github/workflows/leroy-current-checkout.yml`
 no-device integration regression workflow. The archived Git history
 retains their original definitions.
+
+## Final ROS dependency audit (2026-10-30)
+
+The maintained interface is `ros/leroy.sh` (check/build/status/run). The
+source-only CI and six-image build are the preservation boundaries; arbitrary
+milestone filenames alone are not a reason to retain or remove a file.
+
+- **Live runtime/build required:** `leroy_bridge`, `leroy_bringup`,
+  `leroy_description`, `leroy_msgs`, `leroy_depthart`,
+  `leroy_nav2_perception`, `leroy_nav2_costmap_fixture` and
+  `leroy_xrslam`. The costmap fixture is explicitly built and checked in
+  `Dockerfile.live-costmap`; it is not an orphan.
+- **Sensor source dependency:** `leroy_nav2_integration` remains because
+  the live M18 IMU source imports its passive observer and the package
+  retains the corresponding installed console entry point.
+- **Inhibited/future work, not a live motion permission:**
+  `leroy_nav2` keeps `hardware.disabled.yaml` and dry-run contracts;
+  `leroy_nav2_odometry` retains the kinematics library and tests for
+  future measured wheel odometry. Empty launch installation metadata was
+  retired from its setup.py; no runtime nodes were added.
+- **Current bounded diagnostics:** Stage 4B callback service and exact-stamp
+  trace remain dependencies of `live_stage4_imu_overlap.py`. Stage 4C/4D
+  capture, ingress, source metadata, bag audit, and paced synthetic DDS
+  regression files remain, as do the corresponding no-device tests.
+  The M18 source and two startup-mounted XRSLAM YAMLs are active despite
+  milestone-derived names.
+- **Retired in the consolidated cleanup:** uncommissioned powered-yaw
+  controllers, standalone manual-yaw witness, historical Stage 4A text-log
+  audit, unused rosbag round-trip utility, and obsolete QoS/smoke/VIO YAML
+  fixtures. Their historical contents remain in Git.
+
+The audit is based on the repository's tracked imports, COPY statements,
+installed package interfaces and test manifests. It does **not** establish
+physical acceptance, prove absence of external consumers, or replace the
+container build and live hardware safety qualification.
