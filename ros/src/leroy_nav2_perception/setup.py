@@ -1,7 +1,5 @@
 """ROS 2 Jazzy package for Leroy's opt-in diagnostic depth adapter."""
 
-from glob import glob
-import os
 from setuptools import setup
 
 package_name = 'leroy_nav2_perception'
@@ -13,9 +11,14 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-        (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
+        ('share/' + package_name + '/config', [
+            'config/depth_diagnostics.yaml',
+            'config/live_diagnostic_costmap.yaml',
+        ]),
+        ('share/' + package_name + '/launch', [
+            'launch/live_depth_costmap.launch.py',
+            'launch/live_depth_pipeline.launch.py',
+        ]),
     ],
     install_requires=['setuptools'],
     # Colcon uses this metadata to choose pytest rather than setup.py test.
