@@ -4,9 +4,12 @@ project(leroy_description)
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY
-    launch
-    config
+  FILES launch/description.launch.py
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+
+install(
+  DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 
