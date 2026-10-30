@@ -1,8 +1,8 @@
-"""M18: strict MCU IMU streaming packet contract; no ROS/hardware imports.
+"""Strict STM32 IMU streaming packet contract; no ROS/hardware imports.
 
 This parser is deliberately not part of the motor-capable Leroy bridge.
 The only permitted device writes are stream control START and STOP in the
-separately isolated M18 runner, not wheel, manipulator or keepalive actions.
+separately isolated sensor runner, not wheel, manipulator or keepalive actions.
 """
 import math
 import re

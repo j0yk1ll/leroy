@@ -79,7 +79,7 @@ def run():
     preflight()
     import serial
     import rclpy
-    from m18_imu_stream_contract import START, STOP, PORT
+    from leroy_imu_observer.imu_protocol import START, STOP, PORT
     from m18_imu_stream_source import (
         ImuStreamSource, send_only_whitelisted_serial_command, wait_ack,
     )

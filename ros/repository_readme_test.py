@@ -113,7 +113,6 @@ class SingleRunbookTest(unittest.TestCase):
         ros = REPO / "ros"
         active_milestones = sorted(p.name for p in ros.glob("m[0-9]*.py"))
         self.assertEqual(active_milestones, [
-            "m18_imu_stream_contract.py",
             "m18_imu_stream_source.py",
             "m18_imu_stream_test.py",
         ])
@@ -121,13 +120,14 @@ class SingleRunbookTest(unittest.TestCase):
             ros / "src/leroy_imu_observer/leroy_imu_observer"
         )
         self.assertEqual(sorted(p.name for p in integration.glob("*.py")), [
-            "__init__.py", "fault_contract.py", "m15_sensor_contract.py",
+            "__init__.py", "fault_contract.py", "imu_protocol.py", "m15_sensor_contract.py",
             "m16_passive_contract.py", "m16_passive_observer.py",
         ])
         source = (ros / "m18_imu_stream_source.py").read_text()
         self.assertIn(
             "leroy_imu_observer.m16_passive_observer", source,
         )
+        self.assertIn("leroy_imu_observer.imu_protocol", source)
         setup = (
             ros / "src/leroy_imu_observer/setup.py"
         ).read_text()

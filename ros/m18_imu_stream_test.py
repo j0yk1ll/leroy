@@ -3,7 +3,7 @@ import ast
 from pathlib import Path
 import unittest
 
-from m18_imu_stream_contract import (
+from leroy_imu_observer.imu_protocol import (
     START, STOP, PORT, STREAM_HZ, PacketError, parse_packet, sequence_gap,
 )
 

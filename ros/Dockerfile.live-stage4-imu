@@ -12,16 +12,14 @@ RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; \
     source /leroy_ws/install/setup.bash; cd /leroy_ws; \
     colcon build --packages-select leroy_imu_observer; \
     source /leroy_ws/install/setup.bash; \
-    python3 -c "from leroy_imu_observer.m16_passive_observer import PassiveSensorObserver"'
+    python3 -c "from leroy_imu_observer.imu_protocol import parse_packet; from leroy_imu_observer.m16_passive_observer import PassiveSensorObserver"'
 
-COPY m18_imu_stream_contract.py /opt/stage4/m18_imu_stream_contract.py
 COPY m18_imu_stream_source.py /opt/stage4/m18_imu_stream_source.py
 COPY live_stage4_imu_overlap.py /opt/stage4/live_stage4_imu_overlap.py
 COPY live_stage4b_delivery_trace.py /opt/stage4/live_stage4b_delivery_trace.py
 COPY live_stage4b_spin_budget.py /opt/stage4/live_stage4b_spin_budget.py
 ENV PYTHONPATH=/opt/stage4
 RUN python3 -m py_compile /opt/stage4/m18_imu_stream_source.py \
-    /opt/stage4/m18_imu_stream_contract.py \
     /opt/stage4/live_stage4_imu_overlap.py \
     /opt/stage4/live_stage4b_delivery_trace.py \
     /opt/stage4/live_stage4b_spin_budget.py
