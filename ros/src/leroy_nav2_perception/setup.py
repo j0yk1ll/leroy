@@ -29,7 +29,5 @@ setup(
         'depth_obstacles = leroy_nav2_perception.depth_obstacles:main',
         'live_pipeline_probe = leroy_nav2_perception.live_pipeline_probe:main',
         'live_costmap_probe = leroy_nav2_perception.live_costmap_probe:main',
-        'synthetic_depth_fixture = leroy_nav2_perception.synthetic_depth_fixture:main',
-        'fixture_probe = leroy_nav2_perception.fixture_probe:main',
     ]},
 )
