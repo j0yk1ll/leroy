@@ -58,7 +58,7 @@ def generate_launch_description():
                 "sensor_mounts_file": "/etc/leroy/sensor_mounts.yaml",
             }),
         Node(
-            package="leroy_nav2_costmap_fixture",
+            package="leroy_nav2_perception",
             executable="costmap_fixture",
             name="costmap",
             output="screen",

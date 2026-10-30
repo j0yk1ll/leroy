@@ -9,7 +9,6 @@ RUN apt-get update \
       python3-yaml \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/leroy_nav2_costmap_fixture /leroy_ws/src/leroy_nav2_costmap_fixture
 COPY src/leroy_nav2_perception /leroy_ws/src/leroy_nav2_perception
 # Stage 1's base image may carry an older description.launch.py.
 # Force this branch's six static TF owners into the installed overlay.
@@ -24,12 +23,12 @@ RUN bash -lc 'set -e; \
     source /leroy_ws/install/setup.bash; \
     cd /leroy_ws; \
     colcon build --symlink-install \
-       --packages-select leroy_description leroy_nav2_costmap_fixture leroy_nav2_perception; \
+       --packages-select leroy_description leroy_nav2_perception; \
     source /leroy_ws/install/setup.bash; \
     cmp -s /leroy_ws/src/leroy_nav2_perception/config/live_diagnostic_costmap.yaml \
       /leroy_ws/install/leroy_nav2_perception/share/leroy_nav2_perception/config/live_diagnostic_costmap.yaml; \
-    ros2 pkg executables leroy_nav2_costmap_fixture | grep -Fx \
-       "leroy_nav2_costmap_fixture costmap_fixture"; \
+    ros2 pkg executables leroy_nav2_perception | grep -Fx \
+       "leroy_nav2_perception costmap_fixture"; \
     ros2 pkg executables leroy_nav2_perception | grep -Fx \
        "leroy_nav2_perception live_costmap_probe"; \
     grep -Fq "static_transform_publisher" /leroy_ws/install/leroy_description/share/leroy_description/launch/description.launch.py; \

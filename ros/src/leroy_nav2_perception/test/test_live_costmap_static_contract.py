@@ -17,6 +17,7 @@ class LiveCostmapStaticTest(unittest.TestCase):
         self.assertIn('"live_depth_pipeline.launch.py"', source)
         self.assertIn('"description.launch.py"', source)
         self.assertIn('"sensor_mounts_file": "/etc/leroy/sensor_mounts.yaml"', source)
+        self.assertIn('package="leroy_nav2_perception"', source)
         self.assertIn('"costmap_fixture"', source)
         for denied in ('package="leroy_bridge"',
                        'package="nav2_controller"',
