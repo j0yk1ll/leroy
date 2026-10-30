@@ -83,6 +83,12 @@ assert "motor" not in (root/"live_stage3_build.sh").read_text().split(
     "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY
+# Generated interpreter bytecode must never be part of the source checkout.
+# .gitignore alone does not untrack a previously committed cache file.
+if git ls-files -z -- '*.pyc' '*.pyo' '**/__pycache__/*' | grep -zq .; then
+    echo 'REPO_PORTABILITY=BLOCKED_TRACKED_PYTHON_BYTECODE' >&2
+    exit 2
+fi
 python3 -m unittest -v \
     boot_localization_core_test \
     boot_yaw_core_test \
