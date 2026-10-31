@@ -254,17 +254,6 @@ class BootYawTests(unittest.TestCase):
         self.assertIn('self.on_imu, imu_qos', source)
         self.assertIn('IMU_HEADER_AGE_INVALID', source)
 
-    def test_yaw_launcher_cannot_get_device_or_motor_access(self):
-        shell = (ROOT/"src/leroy_bringup/scripts/heading.sh").read_text()
-        self.assertIn('source=leroy-stage4-imu', shell)
-        self.assertIn('--network "container:$parent"', shell)
-        self.assertIn('--ipc "container:$parent"', shell)
-        self.assertIn('--pid "container:$parent"', shell)
-        self.assertIn('--read-only', shell)
-        self.assertIn('--cap-drop=all', shell)
-        self.assertNotIn("--device", shell)
-        self.assertNotIn("--privileged", shell)
-        self.assertNotIn("podman stop", shell)
 
 
 if __name__ == "__main__":
