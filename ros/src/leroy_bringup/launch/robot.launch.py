@@ -16,7 +16,7 @@ def _launch_xrslam(context, *args, **kwargs):
 # TODO(AUTONOMY) #039 [unified ROS bringup]: Align this optional legacy launch
 # with the physically verified leroy.sh container graph. Avoid duplicate
 # camera, IMU and static TF publishers and ensure one STM32 serial owner.
-# When transitioning beyond diagnostics, explicitly integrate validated
+# When transitioning toward a commissioned runtime, explicitly integrate validated
 # VIO/metric odometry and Nav2 lifecycle under a fault-latched boot manager
 # rather than enabling optional components solely through launch flags.
 # Acceptance: source-controlled launch graph matches runtime topic owners;
@@ -73,9 +73,9 @@ def _launch_xrslam(context, *args, **kwargs):
         xrslam_params['camera_imu_offset_sec'] = offset
 
     return [Node(
-        package='leroy_xrslam',
+        package='leroy_localization',
         executable='leroy_xrslam_node',
-        name='leroy_xrslam',
+        name='leroy_localization',
         output='screen',
         parameters=[xrslam_params],
     )]
@@ -109,9 +109,9 @@ def generate_launch_description():
     bridge = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('leroy_bridge'),
+                FindPackageShare('leroy_mcu'),
                 'launch',
-                'leroy_bridge.launch.py',
+                'leroy_mcu.launch.py',
             ])
         )
     )
@@ -162,7 +162,7 @@ def generate_launch_description():
     depthart = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('leroy_depthart'),
+                FindPackageShare('leroy_perception'),
                 'launch',
                 'depthart.launch.py',
             ])
@@ -193,7 +193,7 @@ def generate_launch_description():
         # Managed as calibration assets by the Leroy deployment.
         DeclareLaunchArgument('xrslam_slam_yaml', default_value=''),
         DeclareLaunchArgument('xrslam_device_template_yaml', default_value=''),
-        # Required for monocular_imu only; omit for visual-only diagnostics.
+        # Required for monocular_imu only; omit for visual-only operation.
         DeclareLaunchArgument('xrslam_camera_imu_offset_sec', default_value=''),
         DeclareLaunchArgument(
             'xrslam_pose_convention_validated', default_value='false',

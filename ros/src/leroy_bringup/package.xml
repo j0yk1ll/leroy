@@ -7,15 +7,16 @@
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>leroy_description</exec_depend>
-  <exec_depend>leroy_bridge</exec_depend>
+  <exec_depend>leroy_mcu</exec_depend>
   <exec_depend>usb_cam</exec_depend>
   <exec_depend>image_proc</exec_depend>
   <exec_depend>rclcpp_components</exec_depend>
-  <exec_depend>leroy_depthart</exec_depend>
+  <exec_depend>leroy_perception</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

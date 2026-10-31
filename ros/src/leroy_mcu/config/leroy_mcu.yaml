@@ -1,0 +1,53 @@
+# TODO(AUTONOMY) #015 [commissioning configuration]: Replace provisional
+# wheel geometry, velocity-to-PWM conversion, encoder counts/signs and
+# watchdog assumptions with measured robot-specific values, validated on
+# the actual STM32 firmware version and four mecanum wheel directions.
+leroy_mcu:
+  ros__parameters:
+    serial_port: /dev/ttyACM0
+    baudrate: 115200
+
+    imu_stream_hz: 100
+    encoder_stream_hz: 50
+    watchdog_ms: 500
+    keepalive_period_s: 0.10
+    cmd_vel_timeout_s: 0.25
+
+    # Signed motor ingress is OPT-IN; provision distinct protected
+    # 32-byte key files outside Git. No key material belongs in YAML.
+    motor_motion_key_file: ''
+    motor_operator_key_file: ''
+
+    # Uncommissioned signed-bridge GPIO feedback is NOT an active Leroy
+    # startup configuration. Keep its code-level default (unprovisioned),
+    # and keep independent physical stopping verification as a separate
+    # deployment requirement. Do not synthesize healthy GPIO flags here.
+
+    imu_frame_id: imu_link
+
+    wheel_radius_m: 0.020
+    half_wheelbase_m: 0.180
+    half_track_m: 0.275
+
+    # sensor graph/command allowlist: raw /cmd_vel and nonzero legacy set_wheels remain
+    # disabled. Signed motor sessions use the separately sequenced MCU
+    # command path only after all live interlock/sensor gates are met.
+    # This is PROVISIONAL calibration; measure wheel response on the robot
+    # before trusting any duty-to-velocity relationship.
+    wheel_velocity_to_pwm_gain: 12.75
+    # Independent 25%-of-full-scale motor duty ceiling.
+    max_pwm: 64
+
+    # Legacy FL/RL+gyro odometry fallback only. Disabled below.
+    # No current wheel-encoder calibration is asserted here.
+    encoder_counts_per_rev: 2464
+    front_left_encoder_sign: -1
+    rear_left_encoder_sign: -1
+
+    # Unqualified odometry fallback is disabled; never enable alongside XRSLAM.
+    # With this disabled the bridge does not advertise /odom or dynamic odom TF.
+    degraded_odometry_enabled: false
+
+    odom_frame_id: odom
+    base_frame_id: base_link
+    publish_odom_tf: false

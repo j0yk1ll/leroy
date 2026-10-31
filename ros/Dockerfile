@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Pin upstream DepthART for reproducible builds.
 ARG DEPTHART_REF=0384521b3bcb4c64adf03eeb5d55ebdb1cbdd84c
 
-# CPU-only PyTorch runtime for the development image.
+# CPU-only PyTorch inference runtime.
 # DepthART was validated locally with torch 2.1 / Python 3.9; Jazzy uses
 # Python 3.12, so use the closest PyTorch line with Python 3.12 wheels.
 ARG TORCH_VERSION=2.2.2
@@ -19,12 +19,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-serial \
+    python3-yaml \
     ros-jazzy-usb-cam \
     ros-jazzy-image-proc \
     ros-jazzy-rqt-image-view \
     ros-jazzy-image-transport-plugins \
     ros-jazzy-rclcpp-components \
     ros-jazzy-cv-bridge \
+    ros-jazzy-ament-cmake-python \
+    ros-jazzy-nav2-costmap-2d \
+    ros-jazzy-nav2-util \
+    ros-jazzy-rclcpp-lifecycle \
+    ros-jazzy-sensor-msgs-py \
     ros-jazzy-xacro \
     ros-jazzy-robot-state-publisher \
     ros-jazzy-tf2-ros \
@@ -113,7 +119,7 @@ from network import tvimblock
 print("DepthART metric imports OK")
 PY
 
-# Verify that the checkpoint expected by leroy_depthart exists.
+# Verify the pinned depth model required by perception exists.
 RUN test -f /opt/DepthART/checkpoints/metric/depthart_metric_indoor_s_448.pth
 
 # ------------------------------------------------------------
@@ -128,21 +134,22 @@ RUN mkdir -p /leroy_ws/src
 #
 #   ros/
 #   ├── Dockerfile
-#   ├── exec.sh
+#   ├── src/leroy_bringup/scripts/container_entrypoint.sh
 #   └── src/
-#       ├── leroy_bridge/
+#       ├── leroy_mcu/
 #       ├── leroy_bringup/
 #       ├── leroy_description/
 #       ├── leroy_msgs/
-#       ├── leroy_depthart/
-#       └── leroy_xrslam/
+#       ├── leroy_perception/
+#       └── leroy_localization/
 #
-COPY src/leroy_bridge /leroy_ws/src/leroy_bridge
+COPY src/leroy_mcu /leroy_ws/src/leroy_mcu
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_description /leroy_ws/src/leroy_description
 COPY src/leroy_msgs /leroy_ws/src/leroy_msgs
-COPY src/leroy_depthart /leroy_ws/src/leroy_depthart
-# leroy_xrslam is source-controlled here but must be built separately after libxrslam.so is available.
+COPY src/leroy_perception /leroy_ws/src/leroy_perception
+COPY src/leroy_navigation /leroy_ws/src/leroy_navigation
+# The XRSLAM localization adapter is built in Dockerfile.xrslam only, after libxrslam.so is available.
 
 COPY config /config
 
@@ -154,7 +161,8 @@ RUN . /opt/ros/jazzy/setup.sh \
          --symlink-install \
          --packages-up-to \
            leroy_bringup \
-           leroy_depthart
+           leroy_perception \
+           leroy_navigation
 
 # Basic build-time validation.
 RUN . /opt/ros/jazzy/setup.sh \
@@ -225,7 +233,7 @@ RUN . /opt/ros/jazzy/setup.sh \
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc \
     && echo "source /leroy_ws/install/setup.bash" >> /root/.bashrc
 
-COPY exec.sh /usr/local/bin/leroy-entrypoint
+COPY src/leroy_bringup/scripts/container_entrypoint.sh /usr/local/bin/leroy-entrypoint
 RUN chmod +x /usr/local/bin/leroy-entrypoint
 
 CMD ["/usr/local/bin/leroy-entrypoint"]
