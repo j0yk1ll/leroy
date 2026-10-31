@@ -194,7 +194,7 @@ through `ros/check_current_checkout.sh`. The camera graph is started by
 `ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py`.
 The MCU/yaw graph is started by `ros/src/leroy_bringup/scripts/live_boot_session.sh` and
 `ros/src/leroy_bringup/scripts/live_boot_yaw.sh`, with the serial writer in
-`ros/live_boot_imu_service.py`. This is an implementation map,
+`ros/src/leroy_sensors/leroy_sensors/imu_service.py`. This is an implementation map,
 **not** an instruction to run these internal scripts simultaneously.
 Firmware is independently built using `firmware/Makefile`.
 
@@ -392,7 +392,7 @@ or claim that earlier tasks are complete.
 | Order | Implementation task | Owner file |
 | ---: | --- | --- |
 | 001 | IMU acquisition fidelity | [`firmware/src/imu.c`](firmware/src/imu.c) |
-| 002 | MCU sensor ownership | [`ros/live_boot_imu_service.py`](ros/live_boot_imu_service.py) |
+| 002 | MCU sensor ownership | [`ros/src/leroy_sensors/leroy_sensors/imu_service.py`](ros/src/leroy_sensors/leroy_sensors/imu_service.py) |
 | 003 | Heading quality | [`ros/src/leroy_localization/leroy_localization/yaw_core.py`](ros/src/leroy_localization/leroy_localization/yaw_core.py) |
 | 004 | Repeatable stationary check | [`ros/src/leroy_localization/leroy_localization/auto_calibration_core.py`](ros/src/leroy_localization/leroy_localization/auto_calibration_core.py) |
 | 005 | Heading observation | [`ros/src/leroy_localization/leroy_localization/heading_node.py`](ros/src/leroy_localization/leroy_localization/heading_node.py) |

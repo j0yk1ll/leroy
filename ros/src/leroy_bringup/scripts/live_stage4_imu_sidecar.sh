@@ -76,9 +76,9 @@ if [[ "$image" == localhost/leroy-ros:stage4b-imu ]]; then
     podman run --rm --pull=never --network=none \
       --read-only --cap-drop=all --security-opt=no-new-privileges \
       --entrypoint /bin/sh "$image" -c '
-        test -s /opt/stage4/live_stage4b_delivery_trace.py
-        test -s /opt/stage4/live_stage4b_spin_budget.py
-        grep -Fq "stage4b_delivery_trace" /opt/stage4/live_stage4_imu_overlap.py
+        python3 -c "from leroy_sensors.delivery_trace import DeliveryTrace"
+        python3 -c "from leroy_sensors.spin_budget import service_callbacks"
+        grep -Fq "leroy_sensors.delivery_trace" /opt/stage4/live_stage4_imu_overlap.py
         grep -Fq "service_callbacks(" /opt/stage4/live_stage4_imu_overlap.py
       ' || fail STAGE4B_IMAGE_TRACE_NOT_INSTALLED
     echo 'STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE'
@@ -88,8 +88,8 @@ if [[ "$image" == localhost/leroy-ros:stage4c-capture-offline ]]; then
       --read-only --cap-drop=all --security-opt=no-new-privileges \
       -e LEROY_STAGE4C_RECORD="$record_mode" \
       --entrypoint /bin/sh "$image" -c '
-        test -s /opt/stage4c/live_stage4c_source_meta_ros.py
-        test -s /opt/stage4c/live_stage4c_source_meta.py
+        python3 -c "from leroy_capture.metadata_ros import SourceMetadataRosAdapter"
+        python3 -c "from leroy_capture.source_metadata import SourceMetadataTap"
         grep -Fq "SourceMetadataRosAdapter(source)" /opt/stage4/live_stage4_imu_overlap.py
         grep -Fq "source_metadata_requires_capture_only_session" /opt/stage4/live_stage4_imu_overlap.py
         grep -Fq "if not LIVE_CAPTURE_COMMISSIONED:" /leroy_ws/src/leroy_capture/leroy_capture/recorder.py

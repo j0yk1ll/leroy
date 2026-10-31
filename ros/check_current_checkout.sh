@@ -10,7 +10,11 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     leroy.sh \
     src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh \
     src/leroy_bringup/scripts/live_boot_session.sh src/leroy_bringup/scripts/live_boot_yaw.sh \
-    live_boot_imu_service.py src/leroy_localization/leroy_localization/heading_node.py \
+    src/leroy_sensors/leroy_sensors/imu_service.py \
+    src/leroy_sensors/leroy_sensors/imu_overlap.py \
+    src/leroy_sensors/leroy_sensors/delivery_trace.py \
+    src/leroy_sensors/leroy_sensors/spin_budget.py \
+    src/leroy_localization/leroy_localization/heading_node.py \
     src/leroy_bringup/leroy_bringup/readiness.py \
     src/leroy_localization/leroy_localization/yaw_core.py \
     src/leroy_localization/leroy_localization/auto_calibration_core.py \
@@ -85,7 +89,7 @@ assert "motor" not in (root/"src/leroy_bringup/scripts/live_stage3_build.sh").re
     "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY
-PYTHONPATH=".:src/leroy_bringup:src/leroy_localization:src/leroy_capture:src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
+PYTHONPATH=".:src/leroy_sensors:src/leroy_bringup:src/leroy_localization:src/leroy_capture:src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
     tests.unit.boot_localization_core_test \
     tests.unit.boot_yaw_core_test \
     tests.unit.boot_auto_calibration_test \

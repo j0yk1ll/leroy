@@ -14,11 +14,9 @@ RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; \
     source /leroy_ws/install/setup.bash; \
     python3 -c "from leroy_imu_observer.imu_protocol import parse_packet; from leroy_imu_observer.m16_passive_observer import PassiveSensorObserver"'
 
-COPY live_stage4_imu_overlap.py /opt/stage4/live_stage4_imu_overlap.py
-COPY live_stage4b_delivery_trace.py /opt/stage4/live_stage4b_delivery_trace.py
-COPY live_stage4b_spin_budget.py /opt/stage4/live_stage4b_spin_budget.py
+COPY src/leroy_sensors /leroy_ws/src/leroy_sensors
+RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; source /leroy_ws/install/setup.bash; cd /leroy_ws; colcon build --packages-select leroy_sensors'
+COPY src/leroy_sensors/leroy_sensors/imu_overlap.py /opt/stage4/live_stage4_imu_overlap.py
 ENV PYTHONPATH=/opt/stage4
-RUN python3 -m py_compile /opt/stage4/live_stage4_imu_overlap.py \
-    /opt/stage4/live_stage4b_delivery_trace.py \
-    /opt/stage4/live_stage4b_spin_budget.py
+RUN python3 -m py_compile /opt/stage4/live_stage4_imu_overlap.py
 CMD ["/bin/false"]

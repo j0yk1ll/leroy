@@ -5,8 +5,8 @@ No rclpy, video, serial port or physical device required.
 from pathlib import Path
 import unittest
 
-from live_stage4b_delivery_trace import DeliveryTrace
-from live_stage4b_spin_budget import service_callbacks
+from leroy_sensors.delivery_trace import DeliveryTrace
+from leroy_sensors.spin_budget import service_callbacks
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -50,14 +50,14 @@ class BoundedSpin(unittest.TestCase):
                 service_callbacks(spin, lambda: None, **kwargs)
 
     def test_serial_bounded_multi_spin_integration(self):
-        script = (ROOT / "live_stage4_imu_overlap.py").read_text()
+        script = (ROOT / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
         image = (ROOT / "Dockerfile.live-stage4-imu").read_text()
-        self.assertIn("from live_stage4b_spin_budget import service_callbacks", script)
+        self.assertIn("from leroy_sensors.spin_budget import service_callbacks", script)
         self.assertIn("lambda: rclpy.spin_once(observer, timeout_sec=0.0)", script)
         self.assertIn('spin_stats["spin_attempts"] += attempts', script)
         self.assertIn('"stage4b_executor_service": {', script)
         self.assertIn("send_only_whitelisted_serial_command(device, STOP)", script)
-        self.assertIn("COPY live_stage4b_spin_budget.py", image)
+        self.assertIn("COPY src/leroy_sensors /leroy_ws/src/leroy_sensors", image)
         self.assertIn('CMD ["/bin/false"]', image)
 
 
@@ -108,7 +108,7 @@ class StampMatching(unittest.TestCase):
             "localhost/leroy-ros:stage4b-imu",
             "UNAPPROVED_STAGE4_IMAGE",
             "STAGE4B_IMAGE_TRACE_NOT_INSTALLED",
-            "/opt/stage4/live_stage4b_spin_budget.py",
+            "from leroy_sensors.spin_budget import service_callbacks",
             'grep -Fq "service_callbacks("',
             "STAGE4B_IMAGE_TRACE=VERIFIED_OFFLINE",
             "--network=none",
@@ -123,12 +123,12 @@ class StampMatching(unittest.TestCase):
         self.assertNotIn("--privileged", launcher)
 
     def test_integrated_image_stays_mcu_isolated(self):
-        script = (ROOT / "live_stage4_imu_overlap.py").read_text()
+        script = (ROOT / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
         image = (ROOT / "Dockerfile.live-stage4-imu").read_text()
         for token in ("on_imu_published=", "trace.source(stamp, time.monotonic_ns())",
                       "trace.subscriber(", '"stage4b_delivery_trace": trace.report()'):
             self.assertIn(token, script)
-        self.assertIn("COPY live_stage4b_delivery_trace.py", image)
+        self.assertIn("COPY src/leroy_sensors /leroy_ws/src/leroy_sensors", image)
         self.assertIn('CMD ["/bin/false"]', image)
         self.assertNotIn("device.write(", script)
         self.assertNotIn("XRSLAM_SENSOR_", script)

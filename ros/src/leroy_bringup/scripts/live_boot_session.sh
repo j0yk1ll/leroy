@@ -44,7 +44,7 @@ podman image exists "$image" || fail ACCEPTED_STAGE4B_IMAGE_MISSING
 for name in "$source" leroy-stage4-imu leroy-live-boot-yaw-persistent; do
   if podman container exists "$name"; then fail EXISTING_SOURCE_OR_YAW_CONTAINER; fi
 done
-for file in live_boot_imu_service.py boot_yaw_core.py live_boot_yaw.py; do
+for file in src/leroy_sensors/leroy_sensors/imu_service.py src/leroy_localization/leroy_localization/yaw_core.py src/leroy_localization/leroy_localization/heading_node.py; do
   [[ -f "$file" && ! -L "$file" ]] || fail SOURCE_FILE_MISSING_OR_SYMLINK
 done
 [[ -L "$LEROY_STAGE4_MCU_BY_ID" &&
@@ -93,7 +93,7 @@ podman run --detach --pull=never --name "$source" \
   --device="$mcu:/dev/ttyACM0:rw" --group-add keep-groups \
   --read-only --cap-drop=all --security-opt=no-new-privileges \
   --tmpfs /tmp:rw,nosuid,nodev,size=128m \
-  --mount "type=bind,src=$PWD/live_boot_imu_service.py,dst=/opt/stage4/live_boot_imu_service.py,readonly" \
+  --mount "type=bind,src=$PWD/src/leroy_sensors/leroy_sensors/imu_service.py,dst=/opt/stage4/live_boot_imu_service.py,readonly" \
   -e ROS_DOMAIN_ID=170 \
   -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \

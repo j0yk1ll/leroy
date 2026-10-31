@@ -125,7 +125,7 @@ class RosAdapterSimulation(unittest.TestCase):
     def test_metadata_adapter_has_no_serial_ownership(self):
         wrapper = (HERE / "src/leroy_capture/leroy_capture/metadata_ros.py").read_text()
         m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
-        runner = (HERE / "live_stage4_imu_overlap.py").read_text()
+        runner = (HERE / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
         for token in ("serial.Serial(", "device.write(", "/cmd_vel", "rclpy.init("):
             self.assertNotIn(token, wrapper)
         self.assertNotIn("live_stage4c_source_meta_ros", m18)
@@ -152,7 +152,7 @@ class RosAdapterSimulation(unittest.TestCase):
         ):
             self.assertIn(token, wrapper)
         self.assertIn("LIVE_CAPTURE_COMMISSIONED = True", recorder)
-        runner = (HERE / "live_stage4_imu_overlap.py").read_text()
+        runner = (HERE / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
         self.assertIn('capture_not_armed_before_serial', runner)
         self.assertIn("CAPTURE_SOURCE_DURATION_S = 65.0", runner)
         self.assertIn("source_stop_ack_completion_not_received", recorder)

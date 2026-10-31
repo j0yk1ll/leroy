@@ -15,7 +15,7 @@ from leroy_imu_observer import imu_protocol as m18
 class ImuSourceSafetyContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.supervisor = (HERE / "live_stage4_imu_overlap.py").read_text()
+        cls.supervisor = (HERE / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
         cls.sidecar = (HERE / "src/leroy_bringup/scripts/live_stage4_imu_sidecar.sh").read_text()
         cls.dockerfile = (HERE / "Dockerfile.live-stage4-imu").read_text()
         cls.run_ast = ast.parse(cls.supervisor)

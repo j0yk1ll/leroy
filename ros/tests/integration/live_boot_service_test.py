@@ -4,7 +4,7 @@ from pathlib import Path
 import subprocess
 import unittest
 
-import live_boot_imu_service as source
+from leroy_sensors import imu_service as source
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,7 +31,7 @@ class PersistentBootService(unittest.TestCase):
                                      lambda p: p in (source.DEVICE, unexpected))
 
     def test_single_source_only_whitelisted_commands(self):
-        s = (ROOT / "live_boot_imu_service.py").read_text()
+        s = (ROOT / "src/leroy_sensors/leroy_sensors/imu_service.py").read_text()
         tree = ast.parse(s)
         imports = {a.name for node in ast.walk(tree)
                    if isinstance(node, ast.Import)

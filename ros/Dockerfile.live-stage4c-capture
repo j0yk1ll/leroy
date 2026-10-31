@@ -13,7 +13,7 @@ RUN apt-get update \
 COPY src/leroy_capture /leroy_ws/src/leroy_capture
 RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; source /leroy_ws/install/setup.bash; cd /leroy_ws; colcon build --packages-select leroy_capture'
 # Keep the original Stage 4B M18 source and MCU command handling unchanged.
-COPY live_stage4_imu_overlap.py /opt/stage4/live_stage4_imu_overlap.py
+COPY src/leroy_sensors/leroy_sensors/imu_overlap.py /opt/stage4/live_stage4_imu_overlap.py
 ENV PYTHONPATH=/opt/stage4
 
 # ROS Python bindings are under /opt/ros/jazzy and the installed overlay,

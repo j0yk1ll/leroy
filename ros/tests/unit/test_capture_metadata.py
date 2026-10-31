@@ -91,7 +91,7 @@ class MetadataTapContract(unittest.TestCase):
 
     def test_metadata_tap_is_opt_in(self):
         adapter = (HERE / "src/leroy_capture/leroy_capture/source_metadata.py").read_text()
-        runner = (HERE / "live_stage4_imu_overlap.py").read_text()
+        runner = (HERE / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
         m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
         self.assertIn("leroy_capture.metadata_ros", runner)
         self.assertIn("metadata_adapter.on_imu_published(fields, stamp, steady)", runner)
