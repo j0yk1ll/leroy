@@ -93,7 +93,7 @@ class MetadataTapContract(unittest.TestCase):
         adapter = (HERE / "src/leroy_capture/leroy_capture/source_metadata.py").read_text()
         runner = (HERE / "live_stage4_imu_overlap.py").read_text()
         m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
-        self.assertIn("live_stage4c_source_meta_ros", runner)
+        self.assertIn("leroy_capture.metadata_ros", runner)
         self.assertIn("metadata_adapter.on_imu_published(fields, stamp, steady)", runner)
         self.assertIn("source_metadata_requires_capture_only_session", runner)
         self.assertNotIn("live_stage4c_source_meta", m18)
