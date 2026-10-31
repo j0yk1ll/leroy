@@ -7,14 +7,14 @@ import pytest
 import yaml
 from launch import LaunchContext
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2] / 'src' / 'leroy_navigation'
 LAUNCH = ROOT / 'launch' / 'dry_run.launch.py'
 SIM = ROOT / 'config' / 'simulation.yaml'
 HARDWARE = ROOT / 'config' / 'hardware.disabled.yaml'
 
 
 def load_launch():
-    spec = importlib.util.spec_from_file_location('leroy_nav2_dry_run', LAUNCH)
+    spec = importlib.util.spec_from_file_location('leroy_navigation_dry_run', LAUNCH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

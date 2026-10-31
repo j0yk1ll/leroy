@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>leroy_nav2</name>
+  <name>leroy_navigation</name>
   <version>0.1.0</version>
   <description>Isolated, inactive-by-default Nav2 Jazzy dry-run configuration for Leroy.</description>
   <maintainer email="maintainer@example.com">Leroy contributors</maintainer>

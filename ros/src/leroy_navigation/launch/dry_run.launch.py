@@ -51,7 +51,7 @@ def _guard(context, *args, **kwargs):
 
 def generate_launch_description():
     params = str(
-        Path(get_package_share_directory('leroy_nav2')) / 'config' / 'simulation.yaml'
+        Path(get_package_share_directory('leroy_navigation')) / 'config' / 'simulation.yaml'
     )
     return LaunchDescription([
         DeclareLaunchArgument('mode', default_value='simulation',

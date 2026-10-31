@@ -152,7 +152,7 @@ class SingleRunbookTest(unittest.TestCase):
             "ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py",
             "ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py",
             "ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp",
-            "ros/src/leroy_nav2/config/hardware.disabled.yaml",
+            "ros/src/leroy_navigation/config/hardware.disabled.yaml",
         )
         for file in required:
             with self.subTest(file=file):

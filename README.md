@@ -430,9 +430,9 @@ or claim that earlier tasks are complete.
 | 037 | Unlocalized recovery/parallax | [`ros/src/leroy_localization/leroy_localization/localization_core.py`](ros/src/leroy_localization/leroy_localization/localization_core.py) |
 | 038 | Integrated runtime supervisor | [`ros/leroy.sh`](ros/leroy.sh) |
 | 039 | Unified ROS node bringup | [`ros/src/leroy_bringup/launch/robot.launch.py`](ros/src/leroy_bringup/launch/robot.launch.py) |
-| 040 | Real Nav2 lifecycle | [`ros/src/leroy_nav2/launch/dry_run.launch.py`](ros/src/leroy_nav2/launch/dry_run.launch.py) |
-| 041 | Navigation failure recovery | [`ros/src/leroy_nav2/launch/dry_run.launch.py`](ros/src/leroy_nav2/launch/dry_run.launch.py) |
-| 042 | Production enable acceptance | [`ros/src/leroy_nav2/config/hardware.disabled.yaml`](ros/src/leroy_nav2/config/hardware.disabled.yaml) |
+| 040 | Real Nav2 lifecycle | [`ros/src/leroy_navigation/launch/dry_run.launch.py`](ros/src/leroy_navigation/launch/dry_run.launch.py) |
+| 041 | Navigation failure recovery | [`ros/src/leroy_navigation/launch/dry_run.launch.py`](ros/src/leroy_navigation/launch/dry_run.launch.py) |
+| 042 | Production enable acceptance | [`ros/src/leroy_navigation/config/hardware.disabled.yaml`](ros/src/leroy_navigation/config/hardware.disabled.yaml) |
 
 The list intentionally **excludes security-specific TODOs** about keys,
 cryptographic signatures and credential handling. It retains real-world

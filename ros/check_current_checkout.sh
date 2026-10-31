@@ -21,7 +21,8 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     src/leroy_localization/leroy_localization/auto_calibration_core.py \
     src/leroy_imu_observer/leroy_imu_observer/imu_source.py \
     src/leroy_imu_observer/leroy_imu_observer/imu_protocol.py \
-    src/leroy_bridge/package.xml src/leroy_xrslam/package.xml \
+    src/leroy_bridge/package.xml src/leroy_navigation/package.xml \
+    src/leroy_xrslam/package.xml \
     src/leroy_nav2_perception/package.xml \
     m23bv_v3_stage3_xrslam_monocular_diag.yaml \
     m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml; do
