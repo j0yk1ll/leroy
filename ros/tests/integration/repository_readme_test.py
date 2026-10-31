@@ -133,9 +133,9 @@ class SingleRunbookTest(unittest.TestCase):
         self.assertIn("passive_observer:main", setup)
         self.assertNotIn("m14_software_gate", setup)
         self.assertEqual(sorted(p.name for p in ros.glob("Dockerfile*")), [
-            "Dockerfile", "Dockerfile.live-costmap",
-            "Dockerfile.live-perception", "Dockerfile.imu",
-            "Dockerfile.capture", "Dockerfile.xrslam",
+            "Dockerfile", "Dockerfile.capture", "Dockerfile.imu",
+            "Dockerfile.live-costmap", "Dockerfile.live-perception",
+            "Dockerfile.xrslam",
         ])
         for legacy in ["m23bv_sensor_qos.yaml","m23bv_v3_stage3_smoke_device.yaml","m23bv_v3_stage3_smoke_monocular.yaml","m23bv_v3_stage3_xrslam_vio_diag.yaml","m23g_sensor_qos.yaml"]:
             self.assertFalse((ros / legacy).exists(), legacy)
