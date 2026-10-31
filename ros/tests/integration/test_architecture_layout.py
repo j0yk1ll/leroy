@@ -21,12 +21,35 @@ SCRIPTS = {
 class ArchitectureLayoutTest(unittest.TestCase):
     def test_exactly_nine_ros_packages(self):
         src = ROS / "src"
-        actual = {p.name for p in src.iterdir() if p.is_dir()}
+        # A Git checkout can retain untracked __pycache__ under deleted packages.
+        # Only directories with package manifests are ROS packages.
+        actual = {
+            p.name for p in src.iterdir()
+            if p.is_dir() and (p / "package.xml").is_file()
+        }
         self.assertEqual(actual, PACKAGES)
         for pkg in PACKAGES:
             manifest = src / pkg / "package.xml"
             self.assertTrue(manifest.is_file(), manifest)
             self.assertEqual(ET.parse(manifest).getroot().findtext("name"), pkg)
+
+    def test_deleted_package_cache_is_not_a_package(self):
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        with TemporaryDirectory() as temp:
+            source = Path(temp) / "src"
+            source.mkdir()
+            for package in PACKAGES:
+                directory = source / package
+                directory.mkdir()
+                (directory / "package.xml").write_text(
+                    f"<package><name>{package}</name></package>"
+                )
+            stale = source / "leroy_nav2_perception" / "test" / "__pycache__"
+            stale.mkdir(parents=True)
+            (stale / "test_cache.pyc").write_bytes(b"stale cache")
+            with patch(f"{__name__}.ROS", Path(temp)):
+                self.test_exactly_nine_ros_packages()
 
     def test_root_has_only_three_shell_interfaces_and_no_python_modules(self):
         self.assertEqual({p.name for p in ROS.glob("*.sh")},
