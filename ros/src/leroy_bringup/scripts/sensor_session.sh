@@ -128,7 +128,7 @@ printf 'BOOT_LIVE_SESSION=IMU_STREAM_READY\n'
 # This foreground observer uses the existing, real, exclusive M18 source
 # and publishes ONLY /leroy_boot/relative_yaw_status.
 set +e
-LEROY_BOOT_YAW_PERSISTENT=1 bash ./src/leroy_bringup/scripts/live_boot_yaw.sh
+LEROY_BOOT_YAW_PERSISTENT=1 bash ./src/leroy_bringup/scripts/heading.sh
 yaw_rc=$?
 set -e
 exit "$yaw_rc"

@@ -8,10 +8,13 @@ HERE = pathlib.Path(__file__).resolve().parents[2]
 class CameraLocalizationSidecarContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.script = (HERE / "src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh").read_text()
+        cls.script = (HERE / "src/leroy_bringup/scripts/xrslam_diagnostic.sh").read_text()
 
     def test_parent_shareable_ipc_contract(self):
         s = self.script
+        self.assertIn("config/xrslam_monocular_diagnostic.yaml", s)
+        self.assertIn("config/xrslam_device_template_UNCALIBRATED.yaml", s)
+        self.assertNotIn("m23bv_v3_stage3", s)
         self.assertIn("{{.HostConfig.IpcMode}}", s)
         self.assertIn('== shareable', s)
         self.assertIn(

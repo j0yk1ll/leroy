@@ -6,10 +6,10 @@ cd "$(dirname "$0")"
 for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     Dockerfile.xrslam Dockerfile.live-stage4-imu \
     Dockerfile.live-stage4c-capture \
-    src/leroy_bringup/scripts/live_stage3_build.sh src/leroy_bringup/scripts/live_stage3_start.sh \
+    src/leroy_bringup/scripts/build_diagnostic_images.sh src/leroy_bringup/scripts/sensor_graph.sh \
     leroy.sh \
-    src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh \
-    src/leroy_bringup/scripts/live_boot_session.sh src/leroy_bringup/scripts/live_boot_yaw.sh \
+    src/leroy_bringup/scripts/xrslam_diagnostic.sh \
+    src/leroy_bringup/scripts/sensor_session.sh src/leroy_bringup/scripts/heading.sh \
     src/leroy_sensors/leroy_sensors/imu_protocol.py \
     src/leroy_sensors/leroy_sensors/imu_source.py \
     src/leroy_sensors/leroy_sensors/imu_service.py \
@@ -26,8 +26,8 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     src/leroy_bridge/package.xml src/leroy_navigation/package.xml \
     src/leroy_localization/package.xml \
     src/leroy_perception/package.xml \
-    m23bv_v3_stage3_xrslam_monocular_diag.yaml \
-    m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml; do
+    config/xrslam_monocular_diagnostic.yaml \
+    config/xrslam_device_template_UNCALIBRATED.yaml; do
     [[ -f "$file" && ! -L "$file" ]] || {
         echo "REPO_PORTABILITY=BLOCKED_MISSING_$file" >&2; exit 2;
     }
@@ -52,10 +52,10 @@ found_scripts = {p.name for p in root.glob("*.sh")}
 if found_scripts != expected_scripts:
     raise SystemExit("Unexpected root shell entry points: " + str(sorted(found_scripts ^ expected_scripts)))
 required_bringup_scripts = {
-    "exec.sh", "live_boot_readiness.sh", "live_boot_session.sh",
-    "live_boot_yaw.sh", "live_boot_yaw_snapshot.sh",
-    "live_stage3_build.sh", "live_stage3_monocular_sidecar.sh",
-    "live_stage3_start.sh", "live_stage4_imu_sidecar.sh",
+    "container_entrypoint.sh", "readiness.sh", "sensor_session.sh",
+    "heading.sh", "heading_snapshot.sh",
+    "build_diagnostic_images.sh", "xrslam_diagnostic.sh",
+    "sensor_graph.sh", "imu_diagnostic.sh",
 }
 bringup_scripts = {p.name for p in (root/"src/leroy_bringup/scripts").glob("*.sh")}
 if bringup_scripts != required_bringup_scripts:
@@ -86,10 +86,10 @@ for name in dockerfiles:
 builder = (root/"build_current_images.sh").read_text()
 for tag in ("jazzy", "perception", "costmap", "xrslam",
             "stage4b-imu", "stage4c-capture-offline"):
-    if tag not in builder and tag not in (root/"src/leroy_bringup/scripts/live_stage3_build.sh").read_text():
+    if tag not in builder and tag not in (root/"src/leroy_bringup/scripts/build_diagnostic_images.sh").read_text():
         raise SystemExit("Missing canonical image tag " + tag)
-assert "/dev/video8" in (root/"src/leroy_bringup/scripts/live_stage3_start.sh").read_text()
-assert "motor" not in (root/"src/leroy_bringup/scripts/live_stage3_build.sh").read_text().split(
+assert "/dev/video8" in (root/"src/leroy_bringup/scripts/sensor_graph.sh").read_text()
+assert "motor" not in (root/"src/leroy_bringup/scripts/build_diagnostic_images.sh").read_text().split(
     "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY
@@ -102,6 +102,7 @@ PYTHONPATH=".:src/leroy_perception:src/leroy_sensors:src/leroy_bringup:src/leroy
     tests.integration.live_boot_service_test \
     tests.integration.current_live_runtime_test \
     tests.integration.repository_readme_test \
+    tests.integration.test_architecture_layout \
     tests.unit.test_imu_protocol \
     tests.safety.leroy_runtime_test \
     tests.safety.test_operator_stop \

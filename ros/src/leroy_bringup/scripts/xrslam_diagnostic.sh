@@ -47,7 +47,7 @@ podman image exists "$image" || fail EXISTING_XRSLAM_IMAGE_MISSING
 if podman container exists "$sidecar"; then
     fail SIDECAR_NAME_IN_USE
 fi
-for file in     m23bv_v3_stage3_xrslam_monocular_diag.yaml     m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml
+for file in     config/xrslam_monocular_diagnostic.yaml     config/xrslam_device_template_UNCALIBRATED.yaml
 do
     [[ -f "$file" && ! -L "$file" ]] || fail DIAGNOSTIC_CONFIG_MISSING
 done
@@ -66,8 +66,8 @@ exec podman run "${run_flags[@]}" --pull=never --name "$sidecar" \
     --pid "container:$parent" \
     --read-only --cap-drop=all --security-opt=no-new-privileges \
     --tmpfs /tmp:rw,nosuid,nodev,size=256m \
-    --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_monocular_diag.yaml,dst=/opt/leroy_stage3_slam.yaml,readonly" \
-    --mount "type=bind,src=$PWD/m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml,dst=/opt/leroy_stage3_device.yaml,readonly" \
+    --mount "type=bind,src=$PWD/config/xrslam_monocular_diagnostic.yaml,dst=/opt/leroy_xrslam_diagnostic.yaml,readonly" \
+    --mount "type=bind,src=$PWD/config/xrslam_device_template_UNCALIBRATED.yaml,dst=/opt/leroy_xrslam_device_UNCALIBRATED.yaml,readonly" \
     -e ROS_DOMAIN_ID=170 \
     -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
     -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
@@ -80,8 +80,8 @@ exec podman run "${run_flags[@]}" --pull=never --name "$sidecar" \
       test ! -e /dev/ttyACM0
       test ! -e /dev/video2
       exec ros2 run leroy_localization leroy_xrslam_node --ros-args \
-        -p slam_yaml:=/opt/leroy_stage3_slam.yaml \
-        -p device_template_yaml:=/opt/leroy_stage3_device.yaml \
+        -p slam_yaml:=/opt/leroy_xrslam_diagnostic.yaml \
+        -p device_template_yaml:=/opt/leroy_xrslam_device_UNCALIBRATED.yaml \
         -p image_topic:=/camera/image_rect \
         -p camera_info_topic:=/camera/camera_info \
         -p camera_optical_frame:=camera_optical_frame \

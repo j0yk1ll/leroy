@@ -152,11 +152,11 @@ trap ':' INT
 trap 'exit 143' TERM
 
 echo 'LEROY_RUNTIME=STARTING_UNIFIED_SENSOR_GRAPH'
-LEROY_MOTOR_POWER_DISCONNECTED=1 bash ./src/leroy_bringup/scripts/live_stage3_start.sh
+LEROY_MOTOR_POWER_DISCONNECTED=1 bash ./src/leroy_bringup/scripts/sensor_graph.sh
 camera_graph_started=1
 echo 'LEROY_RUNTIME=CAMERA_DEPTH_XRSLAM_READY'
 # Preserve the proven session-local consent and MCU STOP ACK implementation.
 # Legacy STAGE4 environment names are internal only, not public workflow.
 LEROY_STAGE4_MCU_BY_ID="$mcu" \
 LEROY_STAGE4_MOTOR_ISOLATION_ATTESTED=YES \
-bash ./src/leroy_bringup/scripts/live_boot_session.sh
+bash ./src/leroy_bringup/scripts/sensor_session.sh

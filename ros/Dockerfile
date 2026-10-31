@@ -128,7 +128,7 @@ RUN mkdir -p /leroy_ws/src
 #
 #   ros/
 #   ├── Dockerfile
-#   ├── exec.sh
+#   ├── container_entrypoint.sh
 #   └── src/
 #       ├── leroy_bridge/
 #       ├── leroy_bringup/
@@ -225,7 +225,7 @@ RUN . /opt/ros/jazzy/setup.sh \
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc \
     && echo "source /leroy_ws/install/setup.bash" >> /root/.bashrc
 
-COPY src/leroy_bringup/scripts/exec.sh /usr/local/bin/leroy-entrypoint
+COPY src/leroy_bringup/scripts/container_entrypoint.sh /usr/local/bin/leroy-entrypoint
 RUN chmod +x /usr/local/bin/leroy-entrypoint
 
 CMD ["/usr/local/bin/leroy-entrypoint"]

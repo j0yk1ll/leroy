@@ -190,10 +190,10 @@ The wrapper starts, in order:
 **Actual implementation entry points:** the top-level CLI is
 `ros/leroy.sh`, built by `ros/build_current_images.sh` and checked
 through `ros/check_current_checkout.sh`. The camera graph is started by
-`ros/src/leroy_bringup/scripts/live_stage3_start.sh` and the installed ROS launch file
+`ros/src/leroy_bringup/scripts/sensor_graph.sh` and the installed ROS launch file
 `ros/src/leroy_perception/launch/live_depth_costmap.launch.py`.
-The MCU/yaw graph is started by `ros/src/leroy_bringup/scripts/live_boot_session.sh` and
-`ros/src/leroy_bringup/scripts/live_boot_yaw.sh`, with the serial writer in
+The MCU/yaw graph is started by `ros/src/leroy_bringup/scripts/sensor_session.sh` and
+`ros/src/leroy_bringup/scripts/heading.sh`, with the serial writer in
 `ros/src/leroy_sensors/leroy_sensors/imu_service.py`. This is an implementation map,
 **not** an instruction to run these internal scripts simultaneously.
 Firmware is independently built using `firmware/Makefile`.
@@ -265,8 +265,8 @@ podman exec leroy-live-costmap bash -lc '
 ```
 
 You can also inspect read-only gyro and calibration state using the
-existing internal diagnostics `live_boot_yaw_snapshot.sh` or
-`live_boot_readiness.sh`; these join an **already running**
+existing internal diagnostics `heading_snapshot.sh` or
+`readiness.sh`; these join an **already running**
 sensor graph and are not separate startup procedures.
 
 ## 7. Stop all ROS nodes and verify MCU shutdown

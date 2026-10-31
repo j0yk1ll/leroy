@@ -118,7 +118,7 @@ PY
 
 # XRSLAM reuses existing camera/TF DDS. The sidecar script maps ZERO
 # devices and joins only the already isolated parent network+IPC+PID.
-bash ./src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh --detach >/dev/null
+bash ./src/leroy_bringup/scripts/xrslam_diagnostic.sh --detach >/dev/null
 sidecar_started=1
 
 native_frames=0

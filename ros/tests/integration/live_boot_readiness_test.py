@@ -153,7 +153,7 @@ class LiveBootReadOnlyContract(unittest.TestCase):
         self.assertIn("LIVE_BOOT_MOTION=BLOCKED_UNCOMMISSIONED", source)
 
     def test_launcher_maps_only_source_files_not_hardware(self):
-        source = (ROOT / "src/leroy_bringup/scripts/live_boot_readiness.sh").read_text()
+        source = (ROOT / "src/leroy_bringup/scripts/readiness.sh").read_text()
         self.assertIn('parent=leroy-live-costmap', source)
         self.assertIn('--network "container:$parent"', source)
         self.assertIn('--ipc "container:$parent"', source)

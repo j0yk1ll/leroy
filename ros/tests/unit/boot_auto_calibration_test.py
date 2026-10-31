@@ -141,8 +141,8 @@ class AutomaticInertialCalibrationTests(unittest.TestCase):
         self.assertNotIn("set_wheels", s)
 
     def test_existing_launcher_maps_core_without_devices(self):
-        s = (ROOT/"src/leroy_bringup/scripts/live_boot_yaw.sh").read_text()
-        subprocess.run(["bash", "-n", str(ROOT/"src/leroy_bringup/scripts/live_boot_yaw.sh")], check=True)
+        s = (ROOT/"src/leroy_bringup/scripts/heading.sh").read_text()
+        subprocess.run(["bash", "-n", str(ROOT/"src/leroy_bringup/scripts/heading.sh")], check=True)
         self.assertIn("src/leroy_localization/leroy_localization/auto_calibration_core.py", s)
         self.assertIn("--read-only", s)
         self.assertNotIn("--device=", s)
