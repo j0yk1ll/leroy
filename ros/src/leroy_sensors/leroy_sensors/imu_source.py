@@ -22,8 +22,8 @@ from sensor_msgs.msg import Imu
 import serial
 
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
-from leroy_imu_observer.m16_passive_observer import PassiveSensorObserver
-from leroy_imu_observer.imu_protocol import (
+from leroy_sensors.passive_observer import PassiveSensorObserver
+from leroy_sensors.imu_protocol import (
     START, STOP, PORT, STREAM_HZ, PacketError, parse_packet, sequence_gap,
 )
 

@@ -3,7 +3,7 @@ import ast
 from pathlib import Path
 import unittest
 
-from leroy_imu_observer.imu_protocol import (
+from leroy_sensors.imu_protocol import (
     START, STOP, PORT, STREAM_HZ, PacketError, parse_packet, sequence_gap,
 )
 
@@ -55,7 +55,7 @@ class M18OfflineSafety(unittest.TestCase):
         self.assertEqual(STOP, b"set_imu_stream_hz 0\r\n")
         self.assertEqual(PORT, "/dev/ttyACM0")
         self.assertEqual(STREAM_HZ, 50)
-        source = (Path(__file__).resolve().parents[2] / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
+        source = (Path(__file__).resolve().parents[2] / "src/leroy_sensors/leroy_sensors/imu_source.py").read_text()
         tree = ast.parse(source)
         writes = [node for node in ast.walk(tree)
                   if isinstance(node, ast.Call)

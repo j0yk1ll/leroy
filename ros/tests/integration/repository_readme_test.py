@@ -114,21 +114,23 @@ class SingleRunbookTest(unittest.TestCase):
         active_milestones = sorted(p.name for p in ros.glob("m[0-9]*.py"))
         self.assertEqual(active_milestones, [])
         integration = (
-            ros / "src/leroy_imu_observer/leroy_imu_observer"
+            ros / "src/leroy_sensors/leroy_sensors"
         )
         self.assertEqual(sorted(p.name for p in integration.glob("*.py")), [
-            "__init__.py", "fault_contract.py", "imu_protocol.py", "imu_source.py", "m15_sensor_contract.py",
-            "m16_passive_contract.py", "m16_passive_observer.py",
+            "__init__.py", "delivery_trace.py", "fault_contract.py", "imu_overlap.py",
+            "imu_protocol.py", "imu_service.py", "imu_source.py",
+            "observer_contract.py", "passive_observer.py", "sensor_contract.py",
+            "spin_budget.py",
         ])
         source = (integration / "imu_source.py").read_text()
         self.assertIn(
-            "leroy_imu_observer.m16_passive_observer", source,
+            "leroy_sensors.passive_observer", source,
         )
-        self.assertIn("leroy_imu_observer.imu_protocol", source)
+        self.assertIn("leroy_sensors.imu_protocol", source)
         setup = (
-            ros / "src/leroy_imu_observer/setup.py"
+            ros / "src/leroy_sensors/setup.py"
         ).read_text()
-        self.assertIn("m16_passive_observer:main", setup)
+        self.assertIn("passive_observer:main", setup)
         self.assertNotIn("m14_software_gate", setup)
         self.assertEqual(sorted(p.name for p in ros.glob("Dockerfile*")), [
             "Dockerfile", "Dockerfile.live-costmap",
@@ -138,8 +140,8 @@ class SingleRunbookTest(unittest.TestCase):
         for legacy in ["m23bv_sensor_qos.yaml","m23bv_v3_stage3_smoke_device.yaml","m23bv_v3_stage3_smoke_monocular.yaml","m23bv_v3_stage3_xrslam_vio_diag.yaml","m23g_sensor_qos.yaml"]:
             self.assertFalse((ros / legacy).exists(), legacy)
         self.assertFalse((ros / "m16_sensor_only_run.sh").exists())
-        self.assertFalse((ros / "src/leroy_imu_observer/launch").exists())
-        self.assertFalse((ros / "src/leroy_imu_observer/test").exists())
+        self.assertFalse((ros / "src/leroy_imu_observer").exists())
+        self.assertFalse((ros / "src/leroy_sensors/test").exists())
 
     def test_autonomy_todos_are_in_the_owner_files(self):
         required = (

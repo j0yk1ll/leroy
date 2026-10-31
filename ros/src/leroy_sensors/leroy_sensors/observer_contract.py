@@ -7,7 +7,7 @@ are correct. Input payloads and images are never written to a file.
 import math
 import struct
 
-from .m15_sensor_contract import stamp_seconds
+from .sensor_contract import stamp_seconds
 
 
 INPUTS = {

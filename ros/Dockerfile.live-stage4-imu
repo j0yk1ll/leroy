@@ -5,17 +5,8 @@ FROM localhost/leroy-ros:costmap
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-serial && rm -rf /var/lib/apt/lists/*
 
-# M18 imports the existing read-only M16 observer library at module scope;
-# install its Python package but DO NOT launch its synthetic Nav2 fixtures.
-COPY src/leroy_imu_observer /leroy_ws/src/leroy_imu_observer
-RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; \
-    source /leroy_ws/install/setup.bash; cd /leroy_ws; \
-    colcon build --packages-select leroy_imu_observer; \
-    source /leroy_ws/install/setup.bash; \
-    python3 -c "from leroy_imu_observer.imu_protocol import parse_packet; from leroy_imu_observer.m16_passive_observer import PassiveSensorObserver"'
-
 COPY src/leroy_sensors /leroy_ws/src/leroy_sensors
-RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; source /leroy_ws/install/setup.bash; cd /leroy_ws; colcon build --packages-select leroy_sensors'
+RUN bash -lc 'set -e; source /opt/ros/jazzy/setup.bash; source /leroy_ws/install/setup.bash; cd /leroy_ws; colcon build --packages-select leroy_sensors; source /leroy_ws/install/setup.bash; python3 -c "from leroy_sensors.imu_protocol import parse_packet; from leroy_sensors.passive_observer import PassiveSensorObserver"'
 COPY src/leroy_sensors/leroy_sensors/imu_overlap.py /opt/stage4/live_stage4_imu_overlap.py
 ENV PYTHONPATH=/opt/stage4
 RUN python3 -m py_compile /opt/stage4/live_stage4_imu_overlap.py

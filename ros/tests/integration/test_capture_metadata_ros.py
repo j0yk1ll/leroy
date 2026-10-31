@@ -124,7 +124,7 @@ class RosAdapterSimulation(unittest.TestCase):
 
     def test_metadata_adapter_has_no_serial_ownership(self):
         wrapper = (HERE / "src/leroy_capture/leroy_capture/metadata_ros.py").read_text()
-        m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
+        m18 = (HERE / "src/leroy_sensors/leroy_sensors/imu_source.py").read_text()
         runner = (HERE / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
         for token in ("serial.Serial(", "device.write(", "/cmd_vel", "rclpy.init("):
             self.assertNotIn(token, wrapper)

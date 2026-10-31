@@ -21,10 +21,10 @@ from rclpy.qos import (
 )
 import rclpy
 
-from .m15_sensor_contract import (
+from .sensor_contract import (
     stamp_seconds, validate_odom, validate_tf, validate_base_cloud,
 )
-from .m16_passive_contract import (
+from .observer_contract import (
     INPUTS, StreamStats, check_image, check_camera_info,
     check_imu, depth_sample,
 )

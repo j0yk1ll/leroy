@@ -23,10 +23,10 @@ from sensor_msgs.msg import Image, CameraInfo, Imu
 from std_msgs.msg import Bool
 from tf2_msgs.msg import TFMessage
 
-from leroy_imu_observer.imu_protocol import START, STOP, PORT
+from leroy_sensors.imu_protocol import START, STOP, PORT
 from leroy_sensors.delivery_trace import DeliveryTrace
 from leroy_sensors.spin_budget import service_callbacks
-from leroy_imu_observer.imu_source import (
+from leroy_sensors.imu_source import (
     ImuStreamSource, send_only_whitelisted_serial_command, wait_ack,
 )
 

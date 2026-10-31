@@ -9,7 +9,7 @@ import unittest
 
 HERE = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(HERE))
-from leroy_imu_observer import imu_protocol as m18
+from leroy_sensors import imu_protocol as m18
 
 
 class ImuSourceSafetyContract(unittest.TestCase):
@@ -131,8 +131,8 @@ class ImuSourceSafetyContract(unittest.TestCase):
     def test_no_runtime_permission_from_image(self):
         s = self.dockerfile
         self.assertIn("FROM localhost/leroy-ros:costmap", s)
-        self.assertIn("src/leroy_imu_observer", s)
-        self.assertIn("leroy_imu_observer.imu_protocol", s)
+        self.assertIn("src/leroy_sensors", s)
+        self.assertIn("leroy_sensors.imu_protocol", s)
         self.assertIn('CMD ["/bin/false"]', s)
         self.assertNotIn("ENTRYPOINT", s)
         self.assertNotIn("CMD [\"/usr/local/bin/leroy-entrypoint\"]", s)
