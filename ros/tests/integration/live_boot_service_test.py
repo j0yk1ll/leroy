@@ -46,7 +46,7 @@ class PersistentBootService(unittest.TestCase):
         self.assertIn("BOOT_IMU_SOURCE_STOP_ACK=", s)
 
     def test_persistent_yaw_still_publishes_status_only(self):
-        s = (ROOT / "live_boot_yaw.py").read_text()
+        s = (ROOT / "src/leroy_localization/leroy_localization/heading_node.py").read_text()
         self.assertIn('LEROY_BOOT_YAW_PERSISTENT', s)
         self.assertIn('if node.heading.state == "FAULT_LATCHED"', s)
         self.assertIn('"motor_motion_authorized": False', s)

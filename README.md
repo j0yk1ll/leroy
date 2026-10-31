@@ -395,7 +395,7 @@ or claim that earlier tasks are complete.
 | 002 | MCU sensor ownership | [`ros/live_boot_imu_service.py`](ros/live_boot_imu_service.py) |
 | 003 | Heading quality | [`ros/src/leroy_localization/leroy_localization/yaw_core.py`](ros/src/leroy_localization/leroy_localization/yaw_core.py) |
 | 004 | Repeatable stationary check | [`ros/src/leroy_localization/leroy_localization/auto_calibration_core.py`](ros/src/leroy_localization/leroy_localization/auto_calibration_core.py) |
-| 005 | Heading observation | [`ros/live_boot_yaw.py`](ros/live_boot_yaw.py) |
+| 005 | Heading observation | [`ros/src/leroy_localization/leroy_localization/heading_node.py`](ros/src/leroy_localization/leroy_localization/heading_node.py) |
 | 006 | Heading fusion | [`ros/src/leroy_localization/leroy_localization/yaw_core.py`](ros/src/leroy_localization/leroy_localization/yaw_core.py) |
 | 007 | Survey actual sensor mounts | [`ros/src/leroy_description/config/sensor_mounts.yaml`](ros/src/leroy_description/config/sensor_mounts.yaml) |
 | 008 | TF publisher ownership | [`ros/src/leroy_description/launch/description.launch.py`](ros/src/leroy_description/launch/description.launch.py) |
@@ -420,7 +420,7 @@ or claim that earlier tasks are complete.
 | 027 | Mode-specific motor permits | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
 | 028 | Measured dynamic sensor health | [`ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py`](ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py) |
 | 029 | Unlocalized boot policy | [`ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py`](ros/src/leroy_bridge/leroy_bridge/motor_sensor_health.py) |
-| 030 | Real boot-readiness evidence | [`ros/live_boot_readiness.py`](ros/live_boot_readiness.py) |
+| 030 | Real boot-readiness evidence | [`ros/src/leroy_bringup/leroy_bringup/readiness.py`](ros/src/leroy_bringup/leroy_bringup/readiness.py) |
 | 031 | Actual yaw maneuver dynamics | [`ros/src/leroy_localization/leroy_localization/yaw_tracking_core.py`](ros/src/leroy_localization/leroy_localization/yaw_tracking_core.py) |
 | 032 | Commissioned turn-control dynamics | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
 | 033 | Complete turn-swept clearance | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |

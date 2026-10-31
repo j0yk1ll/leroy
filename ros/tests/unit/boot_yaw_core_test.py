@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 
 from leroy_localization.yaw_core import BootYaw
-import live_boot_yaw as live
+from leroy_localization import heading_node as live
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -231,7 +231,7 @@ class BootYawTests(unittest.TestCase):
                     live.preflight(env, lambda p: p == path)
 
     def test_ros_module_can_only_publish_relative_yaw_status(self):
-        src = (ROOT/"live_boot_yaw.py").read_text()
+        src = (ROOT/"src/leroy_localization/leroy_localization/heading_node.py").read_text()
         tree = ast.parse(src)
         pubs = [node for node in ast.walk(tree)
                 if isinstance(node, ast.Call)
@@ -248,7 +248,7 @@ class BootYawTests(unittest.TestCase):
         self.assertNotIn("set_wheels", src)
 
     def test_live_imu_uses_bounded_sensor_qos(self):
-        source = (ROOT / 'live_boot_yaw.py').read_text()
+        source = (ROOT / 'src/leroy_localization/leroy_localization/heading_node.py').read_text()
         self.assertIn('depth=32', source)
         self.assertIn('ReliabilityPolicy.BEST_EFFORT', source)
         self.assertIn('self.on_imu, imu_qos', source)

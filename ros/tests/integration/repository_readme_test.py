@@ -145,7 +145,7 @@ class SingleRunbookTest(unittest.TestCase):
         required = (
             "ros/leroy.sh",
             "ros/src/leroy_localization/leroy_localization/localization_core.py",
-            "ros/live_boot_readiness.py",
+            "ros/src/leroy_bringup/leroy_bringup/readiness.py",
             "ros/src/leroy_localization/leroy_localization/yaw_core.py",
             "ros/src/leroy_localization/leroy_localization/auto_calibration_core.py",
             "ros/src/leroy_bridge/leroy_bridge/node.py",

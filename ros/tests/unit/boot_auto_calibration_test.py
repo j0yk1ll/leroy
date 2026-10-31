@@ -6,7 +6,7 @@ import subprocess
 import unittest
 
 from leroy_localization.auto_calibration_core import AutoImuCalibration
-import live_boot_yaw
+from leroy_localization import heading_node as live_boot_yaw
 
 ROOT = Path(__file__).resolve().parents[2]
 START = 1_800_000_000_000_000_000
@@ -126,7 +126,7 @@ class AutomaticInertialCalibrationTests(unittest.TestCase):
         self.assertEqual(s.reason, "CALIBRATION_TIMESTAMP_REGRESSION")
 
     def test_live_yaw_publishes_separate_status_not_authority(self):
-        s = (ROOT/"live_boot_yaw.py").read_text()
+        s = (ROOT/"src/leroy_localization/leroy_localization/heading_node.py").read_text()
         tree = ast.parse(s)
         pubs = [n for n in ast.walk(tree)
                 if isinstance(n, ast.Call)

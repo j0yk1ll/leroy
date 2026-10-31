@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import unittest
 
-import live_boot_readiness as live
+from leroy_bringup import readiness as live
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -56,7 +56,7 @@ class LiveBootReadOnlyContract(unittest.TestCase):
         self.assertFalse(live.graph_report(WrongGraph())[live.IMAGE])
 
     def test_live_script_has_no_ros_publisher_or_actuation_import(self):
-        source = (ROOT / "live_boot_readiness.py").read_text()
+        source = (ROOT / "src/leroy_bringup/leroy_bringup/readiness.py").read_text()
         parsed = ast.parse(source)
         attrs = [node.func.attr for node in ast.walk(parsed)
                  if isinstance(node, ast.Call)
@@ -69,7 +69,7 @@ class LiveBootReadOnlyContract(unittest.TestCase):
         self.assertIn("LIVE_BOOT_MOTION=BLOCKED_UNCOMMISSIONED", source)
 
     def test_does_not_override_rclpy_node_subscriptions_property(self):
-        source = (ROOT / "live_boot_readiness.py").read_text()
+        source = (ROOT / "src/leroy_bringup/leroy_bringup/readiness.py").read_text()
         self.assertIn("self._boot_subscriptions = [", source)
         self.assertIn("for sub in self._boot_subscriptions", source)
         tree = ast.parse(source)
@@ -87,7 +87,7 @@ class LiveBootReadOnlyContract(unittest.TestCase):
                     "rclpy.Node.subscriptions is a read-only property")
 
     def test_live_supervisor_consumes_relative_imu_yaw(self):
-        source = (ROOT / "live_boot_readiness.py").read_text()
+        source = (ROOT / "src/leroy_bringup/leroy_bringup/readiness.py").read_text()
         self.assertIn('YAW = "/leroy_boot/relative_yaw_status"', source)
         self.assertIn("String, YAW, self.on_yaw", source)
         self.assertIn("yaw_at=node.boot_yaw_at", source)
@@ -143,7 +143,7 @@ class LiveBootReadOnlyContract(unittest.TestCase):
             "malformed", t))
 
     def test_boot_readiness_observes_auto_calibration_without_arm(self):
-        source = (ROOT / "live_boot_readiness.py").read_text()
+        source = (ROOT / "src/leroy_bringup/leroy_bringup/readiness.py").read_text()
         self.assertIn(
             'AUTO_IMU = "/leroy_boot/auto_imu_calibration_status"',
             source)
