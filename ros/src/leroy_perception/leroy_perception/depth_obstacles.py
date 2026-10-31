@@ -1,4 +1,4 @@
-"""DepthART diagnostic point-cloud adapter: never authorizes robot motion."""
+"""DepthART depth-to-cloud adapter: never authorizes robot motion."""
 
 # TODO(AUTONOMY) #011 [real obstacle layer]: Validate monocular DepthART scale,
 # uncertainty, noise/latency, camera intrinsics, optical-to-base TF,
@@ -51,8 +51,8 @@ class DepthObstacles(Node):
         defaults = {
             'depth_topic': '/depthart/depth',
             'camera_info_topic': '/camera/camera_info',
-            'raw_cloud_topic': '/leroy_nav2/diagnostics/raw_depth_points',
-            'obstacle_cloud_topic': '/leroy_nav2/diagnostics/obstacle_points',
+            'raw_cloud_topic': '/perception/raw_depth_points',
+            'obstacle_cloud_topic': '/perception/obstacle_points',
             'stride': 8,
             'min_depth_m': 0.2,
             'max_depth_m': 3.0,
@@ -120,7 +120,7 @@ class DepthObstacles(Node):
         self._last_age_ms = None
         self.create_timer(5.0, self._report)
         self.get_logger().warning(
-            'DepthART diagnostic adapter: not a safety sensor; '
+            'DepthART depth adapter: uncommissioned for collision safety; '
             f'obstacle_output={self.p["publish_obstacles"]}. '
             'No commands or free-space clearing will be published.'
         )
@@ -208,7 +208,7 @@ class DepthObstacles(Node):
                 obstacles))
             self._stats['obstacle_frames'] += 1
         except Exception as exc:
-            # An unexpected bad message/TF cannot crash the diagnostics node
+            # An unexpected bad message/TF cannot crash the perception node
             # into publishing a replacement empty/clearing observation.
             self._reject(f'{type(exc).__name__}: {exc}')
 

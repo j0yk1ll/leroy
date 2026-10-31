@@ -22,7 +22,7 @@ import time
 
 IMAGE = "/camera/image_rect"
 INFO = "/camera/camera_info"
-CLOUD = "/leroy_nav2/diagnostics/raw_depth_points"
+CLOUD = "/perception/raw_depth_points"
 STATUS = "/xrslam/tracking_status"
 VALID = "/xrslam/localization_valid"
 YAW = "/leroy_boot/relative_yaw_status"
@@ -177,7 +177,7 @@ def run():
                 raise RuntimeError("BOOT_LIVE_SUBSCRIPTION_REMAP_DENIED")
 
         def on_auto_calibration(self, msg):
-            # Same already-verified yaw node, separate diagnostic publisher.
+            # Same already-verified yaw node, separate sensor-status publisher.
             pubs = self.get_publishers_info_by_topic(AUTO_IMU)
             self.auto_imu_calibration = None
             self.auto_imu_calibration_at = None
@@ -316,7 +316,7 @@ def run():
             metric_pose_validated=False,
             navigation_release_validated=False,
         ))
-        if decision.state != "FAULT_LATCHED" or decision.diagnostic_yaw_target_rad is not None:
+        if decision.state != "FAULT_LATCHED" or decision.suggested_heading_rad is not None:
             raise RuntimeError("BOOT_LIVE_UNEXPECTED_MOTION_SETPOINT")
 
         print("LIVE_BOOT_OBSERVATION_JSON=" + json.dumps({

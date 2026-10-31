@@ -58,7 +58,7 @@ class McuClock:
     def __init__(self, node: Node) -> None:
         self._node = node
         self._sync = McuClockSync()
-        self._last_diagnostic_ns: Optional[int] = None
+        self._last_log_ns: Optional[int] = None
 
     def stamp(self, raw_us: int):
         # Sample both clocks together for step detection. One-way USB serial
@@ -68,10 +68,10 @@ class McuClock:
         stamp_ns = self._sync.observe(raw_us, ros_ns, steady_ns)
 
         if self._sync.ready and (
-            self._last_diagnostic_ns is None
-            or steady_ns - self._last_diagnostic_ns >= 60_000_000_000
+            self._last_log_ns is None
+            or steady_ns - self._last_log_ns >= 60_000_000_000
         ):
-            self._last_diagnostic_ns = steady_ns
+            self._last_log_ns = steady_ns
             self._node.get_logger().info(
                 f'MCU clock-rate estimate: {self._sync.rate_ppm:+.1f} ppm '
                 '(host relative to MCU; absolute USB delay not calibrated)'
@@ -184,7 +184,7 @@ class LeroyBridgeNode(Node):
         self._encoder_pub = self.create_publisher(
             EncoderCounts, '/wheel/encoder_counts', sensor_qos
         )
-        # Opt-in diagnostic fallback only. With XRSLAM providing odometry, do
+        # Unqualified odometry fallback is disabled by default. With XRSLAM providing odometry, do
         # not even advertise a competing /odom publisher or TF broadcaster.
         self._odom_pub = (
             self.create_publisher(Odometry, '/odom', 10)

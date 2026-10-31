@@ -39,7 +39,7 @@ class BootLocalizationTests(unittest.TestCase):
     def test_default_is_inhibited_and_no_setpoint(self):
         model = BootLocalizationModel()
         self.assertEqual(model.tick(synthetic()).state, "INHIBITED")
-        self.assertIsNone(model.decision().diagnostic_yaw_target_rad)
+        self.assertIsNone(model.decision().suggested_heading_rad)
 
     def test_unqualified_real_defaults_fail_closed(self):
         m = BootLocalizationModel()
@@ -48,7 +48,7 @@ class BootLocalizationTests(unittest.TestCase):
         self.assertEqual((d.state, d.reason),
                          ("FAULT_LATCHED", "INDEPENDENT_STOP_UNPROVEN"))
         self.assertFalse(m.request_start())
-        self.assertIsNone(d.diagnostic_yaw_target_rad)
+        self.assertIsNone(d.suggested_heading_rad)
 
     def test_preflight_dwell_cannot_skip(self):
         m = BootLocalizationModel()
@@ -62,11 +62,11 @@ class BootLocalizationTests(unittest.TestCase):
         for target, arrive in zip(SWEEP_RELATIVE_YAWS_RAD, (1.7, 2.7, 3.7)):
             d = m.decision()
             self.assertEqual(d.state, "SWEEP")
-            self.assertAlmostEqual(d.diagnostic_yaw_target_rad, target)
+            self.assertAlmostEqual(d.suggested_heading_rad, target)
             self.assertEqual(m.tick(synthetic(arrive, target)).state, "SWEEP")
             m.tick(synthetic(arrive + 0.31, target))
         self.assertEqual(m.state, "NEEDS_PARALLAX")
-        self.assertIsNone(m.decision().diagnostic_yaw_target_rad)
+        self.assertIsNone(m.decision().suggested_heading_rad)
         self.assertEqual(m.tick(synthetic(4.2)).state, "NEEDS_PARALLAX")
 
     def test_turn_target_relative_to_boot_heading(self):
@@ -74,13 +74,13 @@ class BootLocalizationTests(unittest.TestCase):
         m.request_start()
         m.tick(synthetic(0, yaw=1.25))
         d = m.tick(synthetic(1.01, yaw=1.25))
-        self.assertAlmostEqual(d.diagnostic_yaw_target_rad, 1.25 - math.pi/2)
+        self.assertAlmostEqual(d.suggested_heading_rad, 1.25 - math.pi/2)
 
     def test_tracking_alone_not_metric_odom(self):
         m = self.running()
         d = m.tick(synthetic(1.2, localization_status="tracking"))
         self.assertEqual(d.state, "WAIT_NAVIGATION_RELEASE")
-        self.assertIsNone(d.diagnostic_yaw_target_rad)
+        self.assertIsNone(d.suggested_heading_rad)
         d = m.tick(synthetic(1.3, localization_status="tracking",
                              metric_pose_validated=True,
                              navigation_release_validated=True))
@@ -93,14 +93,14 @@ class BootLocalizationTests(unittest.TestCase):
                              metric_pose_validated=True,
                              navigation_release_validated=True))
         self.assertEqual(d.state, "READY")
-        self.assertIsNone(d.diagnostic_yaw_target_rad)
+        self.assertIsNone(d.suggested_heading_rad)
 
     def test_stale_frame_in_sweep_latches(self):
         m = self.running()
         d = m.tick(synthetic(1.45, image_at=1.01))
         self.assertEqual((d.state, d.reason),
                          ("FAULT_LATCHED", "STALE_OR_INVALID_IMAGE"))
-        self.assertIsNone(d.diagnostic_yaw_target_rad)
+        self.assertIsNone(d.suggested_heading_rad)
         self.assertEqual(m.tick(synthetic(1.5)).state, "FAULT_LATCHED")
 
     def test_unknown_space_or_blind_side_latches(self):
@@ -114,7 +114,7 @@ class BootLocalizationTests(unittest.TestCase):
                 m = self.running()
                 d = m.tick(synthetic(1.2, **{key: False}))
                 self.assertEqual((d.state, d.reason), ("FAULT_LATCHED", reason))
-                self.assertIsNone(d.diagnostic_yaw_target_rad)
+                self.assertIsNone(d.suggested_heading_rad)
 
     def test_stop_command_owner_yaw_and_release_all_latch(self):
         for key in (
@@ -145,10 +145,10 @@ class BootLocalizationTests(unittest.TestCase):
         self.assertEqual(m.tick(synthetic(1.5, -0.4)).state, "SWEEP")
         self.assertEqual(m.tick(synthetic(1.65, -math.pi/2)).state, "SWEEP")
         self.assertAlmostEqual(
-            m.tick(synthetic(1.9, -math.pi/2)).diagnostic_yaw_target_rad,
+            m.tick(synthetic(1.9, -math.pi/2)).suggested_heading_rad,
             -math.pi/2)
         self.assertAlmostEqual(
-            m.tick(synthetic(1.96, -math.pi/2)).diagnostic_yaw_target_rad,
+            m.tick(synthetic(1.96, -math.pi/2)).suggested_heading_rad,
             math.pi/2)
 
     def test_angle_overshoot_latches_without_timeout(self):
@@ -156,7 +156,7 @@ class BootLocalizationTests(unittest.TestCase):
         d = m.tick(synthetic(1.2, -math.radians(108)))
         self.assertEqual((d.state, d.reason),
                          ("FAULT_LATCHED", "SWEEP_ANGLE_ENVELOPE_EXCEEDED"))
-        self.assertIsNone(d.diagnostic_yaw_target_rad)
+        self.assertIsNone(d.suggested_heading_rad)
 
     def test_waypoint_timeout_latches(self):
         m = self.running()
@@ -188,7 +188,7 @@ class BootLocalizationTests(unittest.TestCase):
                 d = m.tick(synthetic(0.5, **healthy))
                 self.assertEqual((d.state, d.reason),
                                  ("FAULT_LATCHED", reason))
-                self.assertIsNone(d.diagnostic_yaw_target_rad)
+                self.assertIsNone(d.suggested_heading_rad)
 
     def test_missing_stamps_and_future_stamps_block(self):
         for updates in ({"image_at": None}, {"obstacle_at": 5.0},
