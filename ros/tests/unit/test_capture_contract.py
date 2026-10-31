@@ -204,7 +204,7 @@ class StaticNonActuation(unittest.TestCase):
         ]), 1)
 
     def test_dockerfile_defaults_to_no_action(self):
-        docker = (HERE / "Dockerfile.live-stage4c-capture").read_text()
+        docker = (HERE / "Dockerfile.capture").read_text()
         self.assertIn("FROM localhost/leroy-ros:stage4b-imu", docker)
         self.assertIn('CMD ["/bin/false"]', docker)
         self.assertNotIn("ENTRYPOINT", docker)

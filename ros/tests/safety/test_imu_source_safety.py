@@ -17,7 +17,7 @@ class ImuSourceSafetyContract(unittest.TestCase):
     def setUpClass(cls):
         cls.supervisor = (HERE / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
         cls.sidecar = (HERE / "src/leroy_bringup/scripts/imu_diagnostic.sh").read_text()
-        cls.dockerfile = (HERE / "Dockerfile.live-stage4-imu").read_text()
+        cls.dockerfile = (HERE / "Dockerfile.imu").read_text()
         cls.run_ast = ast.parse(cls.supervisor)
 
     def test_all_observed_streams_have_timestamp_tracker(self):

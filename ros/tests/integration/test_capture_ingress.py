@@ -233,7 +233,7 @@ class IntegrationGuards(unittest.TestCase):
         self.assertIn('STAGE4C=BLOCKED_LIVE_CAPTURE_NOT_COMMISSIONED', recorder)
         self.assertNotIn("serial.Serial(", recorder)
         self.assertNotIn("create_publisher(", recorder)
-        docker = (HERE / "Dockerfile.live-stage4c-capture").read_text()
+        docker = (HERE / "Dockerfile.capture").read_text()
         self.assertIn(
             "COPY src/leroy_capture /leroy_ws/src/leroy_capture", docker)
         self.assertIn(

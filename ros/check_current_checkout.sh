@@ -4,8 +4,8 @@
 set -Eeuo pipefail
 cd "$(dirname "$0")"
 for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
-    Dockerfile.xrslam Dockerfile.live-stage4-imu \
-    Dockerfile.live-stage4c-capture \
+    Dockerfile.xrslam Dockerfile.imu \
+    Dockerfile.capture \
     src/leroy_bringup/scripts/build_diagnostic_images.sh src/leroy_bringup/scripts/sensor_graph.sh \
     leroy.sh \
     src/leroy_bringup/scripts/xrslam_diagnostic.sh \
@@ -63,7 +63,7 @@ if bringup_scripts != required_bringup_scripts:
 dockerfiles = (
     "Dockerfile", "Dockerfile.live-perception",
     "Dockerfile.live-costmap", "Dockerfile.xrslam",
-    "Dockerfile.live-stage4-imu", "Dockerfile.live-stage4c-capture",
+    "Dockerfile.imu", "Dockerfile.capture",
 )
 for name in dockerfiles:
     # These image recipes deliberately use plain local COPY statements,
@@ -119,6 +119,6 @@ PYTHONPATH=".:src/leroy_perception:src/leroy_sensors:src/leroy_bringup:src/leroy
 python3 -m unittest -v tests.integration.test_live_costmap_static_contract \
     tests.integration.test_xrslam_startup_contract
 
-grep -Fqx 'CMD ["/bin/false"]' Dockerfile.live-stage4c-capture
+grep -Fqx 'CMD ["/bin/false"]' Dockerfile.capture
 grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' src/leroy_capture/leroy_capture/recorder.py
 echo 'REPO_PORTABILITY=PASS_OFFLINE_CURRENT_RUNTIME'

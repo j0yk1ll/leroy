@@ -51,7 +51,7 @@ class BoundedSpin(unittest.TestCase):
 
     def test_serial_bounded_multi_spin_integration(self):
         script = (ROOT / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
-        image = (ROOT / "Dockerfile.live-stage4-imu").read_text()
+        image = (ROOT / "Dockerfile.imu").read_text()
         self.assertIn("from leroy_sensors.spin_budget import service_callbacks", script)
         self.assertIn("lambda: rclpy.spin_once(observer, timeout_sec=0.0)", script)
         self.assertIn('spin_stats["spin_attempts"] += attempts', script)
@@ -124,7 +124,7 @@ class StampMatching(unittest.TestCase):
 
     def test_integrated_image_stays_mcu_isolated(self):
         script = (ROOT / "src/leroy_sensors/leroy_sensors/imu_overlap.py").read_text()
-        image = (ROOT / "Dockerfile.live-stage4-imu").read_text()
+        image = (ROOT / "Dockerfile.imu").read_text()
         for token in ("on_imu_published=", "trace.source(stamp, time.monotonic_ns())",
                       "trace.subscriber(", '"stage4b_delivery_trace": trace.report()'):
             self.assertIn(token, script)

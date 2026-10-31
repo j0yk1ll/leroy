@@ -1,4 +1,4 @@
-# Stage 4C candidate: isolated, passive ROS bag recorder only.
+# Isolated, passive ROS bag recorder; opt-in capture only.
 # NEVER launches a ROS graph, opens devices or enables capture by default.
 # Default image is inert; this operator-commissioning branch enables only the
 # guarded passive recorder path after explicit host-wrapper approval.

@@ -1,4 +1,4 @@
-# Stage 4A only: add the existing M18 validated IMU ROS publisher to a
+# Isolated STM32 IMU ROS source image, preserving strict START/STOP commands.
 # device-isolated sidecar. Does not start a bridge or an XRSLAM VIO adapter.
 FROM localhost/leroy-ros:costmap
 
