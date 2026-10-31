@@ -1,11 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(leroy_xrslam LANGUAGES CXX)
+project(leroy_localization LANGUAGES CXX)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+ament_python_install_package(${PROJECT_NAME})
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -45,25 +47,18 @@ target_compile_options(leroy_xrslam_node PRIVATE -Wall -Wextra -Wpedantic)
 install(TARGETS leroy_xrslam_node DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
-  find_package(ament_cmake_pytest REQUIRED)
-
-  # Source-contract checks run as part of standard colcon test / CTest.
-  ament_add_pytest_test(
-    test_startup_queue_contract
-    test/test_startup_queue_contract.py
-  )
-
-  # Exercise the very same ROS-free time predicate compiled into the adapter,
-  # including negative, zero and positive camera-IMU offset cases.
-  add_executable(test_startup_timing test/test_startup_timing.cpp)
-  target_include_directories(test_startup_timing PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include")
-  add_test(NAME test_startup_timing COMMAND test_startup_timing)
-
-  add_executable(test_sensor_modes test/test_sensor_modes.cpp)
-  target_include_directories(test_sensor_modes PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include")
-  add_test(NAME test_sensor_modes COMMAND test_sensor_modes)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/test_xrslam_startup_contract.py")
+    find_package(ament_cmake_pytest REQUIRED)
+    ament_add_pytest_test(test_xrslam_startup_contract
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/test_xrslam_startup_contract.py")
+  endif()
+  foreach(name test_startup_timing test_sensor_modes)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/unit/${name}.cpp")
+      add_executable(${name} "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/unit/${name}.cpp")
+      target_include_directories(${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+      add_test(NAME ${name} COMMAND ${name})
+    endif()
+  endforeach()
 endif()
 
 ament_package()

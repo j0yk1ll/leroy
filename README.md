@@ -183,7 +183,7 @@ The wrapper starts, in order:
 | Container | ROS process / responsibility |
 | --- | --- |
 | `leroy-live-costmap` | `ros2 launch leroy_perception live_depth_costmap.launch.py`: camera, rectifier, DepthART, provisional static TF, diagnostic costmap |
-| `leroy-live-xrslam` | `ros2 run leroy_xrslam leroy_xrslam_node`: camera-only monocular tracking diagnostics |
+| `leroy-live-xrslam` | `ros2 run leroy_localization leroy_xrslam_node`: camera-only monocular tracking diagnostics |
 | `leroy-boot-imu-source` | `live_boot_imu_service.py` / `m18_imu_source`: exclusive serial owner, 50 Hz IMU publish |
 | `leroy-live-boot-yaw-persistent` | `live_boot_yaw.py`: relative heading and independent gyro holdout; **no MCU device** |
 
@@ -399,8 +399,8 @@ or claim that earlier tasks are complete.
 | 006 | Heading fusion | [`ros/src/leroy_localization/leroy_localization/yaw_core.py`](ros/src/leroy_localization/leroy_localization/yaw_core.py) |
 | 007 | Survey actual sensor mounts | [`ros/src/leroy_description/config/sensor_mounts.yaml`](ros/src/leroy_description/config/sensor_mounts.yaml) |
 | 008 | TF publisher ownership | [`ros/src/leroy_description/launch/description.launch.py`](ros/src/leroy_description/launch/description.launch.py) |
-| 009 | Metric visual-inertial localization | [`ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp`](ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp) |
-| 010 | Pose authority and relocalization | [`ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp`](ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp) |
+| 009 | Metric visual-inertial localization | [`ros/src/leroy_localization/src/leroy_xrslam_node.cpp`](ros/src/leroy_localization/src/leroy_xrslam_node.cpp) |
+| 010 | Pose authority and relocalization | [`ros/src/leroy_localization/src/leroy_xrslam_node.cpp`](ros/src/leroy_localization/src/leroy_xrslam_node.cpp) |
 | 011 | Real depth-to-obstacle calibration | [`ros/src/leroy_perception/leroy_perception/depth_obstacles.py`](ros/src/leroy_perception/leroy_perception/depth_obstacles.py) |
 | 012 | All-sided obstacle observability | [`ros/src/leroy_perception/leroy_perception/depth_obstacles.py`](ros/src/leroy_perception/leroy_perception/depth_obstacles.py) |
 | 013 | Navigation costmaps | [`ros/src/leroy_perception/launch/live_depth_costmap.launch.py`](ros/src/leroy_perception/launch/live_depth_costmap.launch.py) |

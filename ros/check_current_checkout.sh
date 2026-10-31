@@ -24,7 +24,7 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     src/leroy_sensors/leroy_sensors/imu_source.py \
     src/leroy_sensors/leroy_sensors/imu_protocol.py \
     src/leroy_bridge/package.xml src/leroy_navigation/package.xml \
-    src/leroy_xrslam/package.xml \
+    src/leroy_localization/package.xml \
     src/leroy_perception/package.xml \
     m23bv_v3_stage3_xrslam_monocular_diag.yaml \
     m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml; do
@@ -115,7 +115,8 @@ PYTHONPATH=".:src/leroy_perception:src/leroy_sensors:src/leroy_bringup:src/leroy
     tests.integration.test_capture_ingress \
     tests.integration.test_capture_audit
 
-python3 -m unittest -v tests.integration.test_live_costmap_static_contract
+python3 -m unittest -v tests.integration.test_live_costmap_static_contract \
+    tests.integration.test_xrslam_startup_contract
 
 grep -Fqx 'CMD ["/bin/false"]' Dockerfile.live-stage4c-capture
 grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' src/leroy_capture/leroy_capture/recorder.py

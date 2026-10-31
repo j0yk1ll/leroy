@@ -7,7 +7,7 @@ from pathlib import Path
 import unittest
 
 
-PACKAGE = Path(__file__).resolve().parents[1]
+PACKAGE = Path(__file__).resolve().parents[2] / 'src' / 'leroy_localization'
 SOURCE = (PACKAGE / "src" / "leroy_xrslam_node.cpp").read_text(encoding="utf-8")
 TIMING_HEADER = (PACKAGE / "include" / "leroy_xrslam" / "startup_timing.hpp"
                  ).read_text(encoding="utf-8")

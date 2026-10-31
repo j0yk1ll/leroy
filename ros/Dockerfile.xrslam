@@ -44,12 +44,15 @@ RUN git clone https://github.com/j0yk1ll/xrslam.git /opt/xrslam \
     && test -s /opt/xrslam/lib/libxrslam.so
 
 # The base Leroy image intentionally excludes this optional ROS package.
-COPY src/leroy_xrslam /leroy_ws/src/leroy_xrslam
+COPY src/leroy_localization /leroy_ws/src/leroy_localization
+COPY tests/integration/test_xrslam_startup_contract.py /leroy_ws/tests/integration/test_xrslam_startup_contract.py
+COPY tests/unit/test_startup_timing.cpp /leroy_ws/tests/unit/test_startup_timing.cpp
+COPY tests/unit/test_sensor_modes.cpp /leroy_ws/tests/unit/test_sensor_modes.cpp
 
 RUN . /opt/ros/jazzy/setup.sh \
     && . /leroy_ws/install/setup.sh \
     && cd /leroy_ws \
-    && colcon build --symlink-install --packages-select leroy_xrslam \
+    && colcon build --symlink-install --packages-select leroy_localization \
        --cmake-args \
        -DXRSLAM_ROOT=/opt/xrslam \
        -DXRSLAM_LIBRARY=/opt/xrslam/lib/libxrslam.so
@@ -59,9 +62,9 @@ RUN printf '/opt/xrslam/lib\n' > /etc/ld.so.conf.d/leroy-xrslam.conf \
     && ldconfig \
     && . /opt/ros/jazzy/setup.sh \
     && . /leroy_ws/install/setup.sh \
-    && test -x /leroy_ws/install/leroy_xrslam/lib/leroy_xrslam/leroy_xrslam_node \
-    && ! ldd /leroy_ws/install/leroy_xrslam/lib/leroy_xrslam/leroy_xrslam_node | grep -q 'not found' \
-    && ros2 pkg executables leroy_xrslam | grep -qx 'leroy_xrslam leroy_xrslam_node'
+    && test -x /leroy_ws/install/leroy_localization/lib/leroy_localization/leroy_xrslam_node \
+    && ! ldd /leroy_ws/install/leroy_localization/lib/leroy_localization/leroy_xrslam_node | grep -q 'not found' \
+    && ros2 pkg executables leroy_localization | grep -qx 'leroy_localization leroy_xrslam_node'
 
 # Inherit the Leroy base image's default command. The integrated bringup
 # still sets use_xrslam:=false unless explicitly configured otherwise.

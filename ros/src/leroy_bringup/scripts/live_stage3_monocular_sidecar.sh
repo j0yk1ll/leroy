@@ -79,7 +79,7 @@ exec podman run "${run_flags[@]}" --pull=never --name "$sidecar" \
       source /leroy_ws/install/setup.bash
       test ! -e /dev/ttyACM0
       test ! -e /dev/video2
-      exec ros2 run leroy_xrslam leroy_xrslam_node --ros-args \
+      exec ros2 run leroy_localization leroy_xrslam_node --ros-args \
         -p slam_yaml:=/opt/leroy_stage3_slam.yaml \
         -p device_template_yaml:=/opt/leroy_stage3_device.yaml \
         -p image_topic:=/camera/image_rect \
