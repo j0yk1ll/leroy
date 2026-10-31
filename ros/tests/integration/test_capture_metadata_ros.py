@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 import unittest
 
-from live_stage4c_capture_contract import CaptureError, METADATA_TOPIC, source_metadata
-from live_stage4c_source_meta_ros import SourceMetadataRosAdapter
+from leroy_capture.contract import CaptureError, METADATA_TOPIC, source_metadata
+from leroy_capture.metadata_ros import SourceMetadataRosAdapter
 
 HERE = Path(__file__).resolve().parents[2]
 
@@ -123,7 +123,7 @@ class RosAdapterSimulation(unittest.TestCase):
         self.assertEqual(len(node.pub.messages), 0)
 
     def test_metadata_adapter_has_no_serial_ownership(self):
-        wrapper = (HERE / "live_stage4c_source_meta_ros.py").read_text()
+        wrapper = (HERE / "src/leroy_capture/leroy_capture/metadata_ros.py").read_text()
         m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
         runner = (HERE / "live_stage4_imu_overlap.py").read_text()
         for token in ("serial.Serial(", "device.write(", "/cmd_vel", "rclpy.init("):
@@ -139,7 +139,7 @@ class RosAdapterSimulation(unittest.TestCase):
 
     def test_guarded_real_capture_is_explicitly_commissioned(self):
         wrapper = (HERE / "live_stage4_imu_sidecar.sh").read_text()
-        recorder = (HERE / "live_stage4c_passive_recorder.py").read_text()
+        recorder = (HERE / "src/leroy_capture/leroy_capture/recorder.py").read_text()
         for token in (
             'record_mode="${LEROY_STAGE4C_RECORD:-0}"',
             "CAPTURE_REVIEW_ATTESTATION_REQUIRED",

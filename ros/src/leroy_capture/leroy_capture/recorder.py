@@ -16,10 +16,10 @@ import signal
 import sys
 import time
 
-from live_stage4c_capture_contract import (
+from leroy_capture.contract import (
     CaptureContract, CaptureError, METADATA_TOPIC, TOPICS,
 )
-from live_stage4d_capture_ingress import CaptureIngress
+from leroy_capture.ingress import CaptureIngress
 
 # Explicit source-code enablement in the operator-commissioning branch ONLY.
 # This is not a runtime flag. Default image command remains /bin/false;
@@ -382,7 +382,7 @@ def _run_live(name):
 
 
 def _contract_smoke():
-    from live_stage4c_capture_contract import CaptureContract
+    from leroy_capture.contract import CaptureContract
     c = CaptureContract()
     writes = []
     c.accept("/imu/data_raw", 1_000_000_000, "imu_link", b"cdr", 2_000_000_000,

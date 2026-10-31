@@ -5,8 +5,8 @@ Importing this module never initializes ROS or a serial port. Future hardware
 integration requires an independently reviewed, explicitly authorized
 launcher and image; the accepted Stage 4B runner remains unchanged.
 """
-from live_stage4c_capture_contract import CaptureError, METADATA_TOPIC
-from live_stage4c_source_meta import SourceMetadataTap
+from leroy_capture.contract import CaptureError, METADATA_TOPIC
+from leroy_capture.source_metadata import SourceMetadataTap
 
 
 class SourceMetadataRosAdapter:

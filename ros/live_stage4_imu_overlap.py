@@ -249,7 +249,7 @@ def run():
         if metadata_enabled:
             # Same physical M18 publisher node; constructed before serial.
             # Any callback failure latches the M18 source and attempts STOP.
-            from live_stage4c_source_meta_ros import SourceMetadataRosAdapter
+            from leroy_capture.metadata_ros import SourceMetadataRosAdapter
             metadata_adapter = SourceMetadataRosAdapter(source)
         observer = PassiveOverlap(trace=trace)
         # Before opening the motor-capable serial port, prove the camera,

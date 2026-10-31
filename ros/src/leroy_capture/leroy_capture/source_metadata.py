@@ -11,7 +11,7 @@ not the M18 clock-mapper observation passed as _mapper_steady_ns.
 import json
 import time
 
-from live_stage4c_capture_contract import CaptureError, source_metadata
+from leroy_capture.contract import CaptureError, source_metadata
 
 UINT32 = 1 << 32
 MAX_TICK_DELTA_US = 1_000_000

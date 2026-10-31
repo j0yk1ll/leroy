@@ -10,7 +10,7 @@ camera exposure and MCU-to-camera absolute phase remain unknown.
 import math
 import time
 
-from live_stage4c_capture_contract import (
+from leroy_capture.contract import (
     CaptureContract, CaptureError, METADATA_TOPIC, TOPICS, source_metadata,
 )
 

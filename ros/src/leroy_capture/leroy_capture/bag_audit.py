@@ -7,7 +7,7 @@ file, network or hardware access occurs here. Closing releases the writer.
 """
 import hashlib
 
-from live_stage4c_capture_contract import CaptureError, TOPICS
+from leroy_capture.contract import CaptureError, TOPICS
 
 
 class ExactWriteBagAudit:

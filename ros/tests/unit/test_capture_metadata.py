@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 import unittest
 
-from live_stage4c_capture_contract import CaptureError, source_metadata
-from live_stage4c_source_meta import SourceMetadataTap
+from leroy_capture.contract import CaptureError, source_metadata
+from leroy_capture.source_metadata import SourceMetadataTap
 
 HERE = Path(__file__).resolve().parents[2]
 
@@ -90,7 +90,7 @@ class MetadataTapContract(unittest.TestCase):
                 {"seq": 2, "t_us": 40_000, "cal": 1}, 200, 42)
 
     def test_metadata_tap_is_opt_in(self):
-        adapter = (HERE / "live_stage4c_source_meta.py").read_text()
+        adapter = (HERE / "src/leroy_capture/leroy_capture/source_metadata.py").read_text()
         runner = (HERE / "live_stage4_imu_overlap.py").read_text()
         m18 = (HERE / "src/leroy_imu_observer/leroy_imu_observer/imu_source.py").read_text()
         self.assertIn("live_stage4c_source_meta_ros", runner)

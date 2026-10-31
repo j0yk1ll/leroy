@@ -9,9 +9,9 @@ from types import SimpleNamespace as NS
 import unittest
 import weakref
 
-from live_stage4c_capture_contract import CaptureContract, CaptureError
-from live_stage4d_bag_audit import ExactWriteBagAudit
-from live_stage4d_capture_ingress import CaptureIngress
+from leroy_capture.contract import CaptureContract, CaptureError
+from leroy_capture.bag_audit import ExactWriteBagAudit
+from leroy_capture.ingress import CaptureIngress
 
 HERE = Path(__file__).resolve().parents[2]
 STAMP = 1_790_000_000_000_000_000

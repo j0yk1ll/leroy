@@ -6,10 +6,10 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 import unittest
 
-from live_stage4c_capture_contract import (
+from leroy_capture.contract import (
     CaptureContract, CaptureError, METADATA_TOPIC, TOPICS,
 )
-from live_stage4d_capture_ingress import CaptureIngress
+from leroy_capture.ingress import CaptureIngress
 
 HERE = Path(__file__).resolve().parents[2]
 T0 = 1_790_000_000_000_000_000
@@ -224,8 +224,8 @@ class IngressNoDevice(unittest.TestCase):
 
 class IntegrationGuards(unittest.TestCase):
     def test_real_candidate_uses_same_ingress(self):
-        recorder = (HERE / "live_stage4c_passive_recorder.py").read_text()
-        self.assertIn("from live_stage4d_capture_ingress import CaptureIngress", recorder)
+        recorder = (HERE / "src/leroy_capture/leroy_capture/recorder.py").read_text()
+        self.assertIn("from leroy_capture.ingress import CaptureIngress", recorder)
         self.assertIn("self.ingress = CaptureIngress(", recorder)
         self.assertIn("self.ingress.accept(topic, msg)", recorder)
         self.assertIn("node.ingress.close()", recorder)
@@ -235,13 +235,12 @@ class IntegrationGuards(unittest.TestCase):
         self.assertNotIn("create_publisher(", recorder)
         docker = (HERE / "Dockerfile.live-stage4c-capture").read_text()
         self.assertIn(
-            "COPY live_stage4d_capture_ingress.py "
-            "/opt/stage4c/live_stage4d_capture_ingress.py", docker)
+            "COPY src/leroy_capture /leroy_ws/src/leroy_capture", docker)
         self.assertIn(
-            "/opt/stage4c/live_stage4d_capture_ingress.py", docker)
+            "/leroy_ws/src/leroy_capture", docker)
 
     def test_ingress_has_no_device_ros_or_filesystem_imports(self):
-        code = (HERE / "live_stage4d_capture_ingress.py").read_text()
+        code = (HERE / "src/leroy_capture/leroy_capture/ingress.py").read_text()
         for forbidden in ("import rclpy", "import serial", "from sensor_msgs",
                           "subprocess", "create_publisher(", "open(",
                           "/dev/ttyACM0", "/cmd_vel"):

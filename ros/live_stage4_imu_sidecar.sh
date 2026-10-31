@@ -92,11 +92,11 @@ if [[ "$image" == localhost/leroy-ros:stage4c-capture-offline ]]; then
         test -s /opt/stage4c/live_stage4c_source_meta.py
         grep -Fq "SourceMetadataRosAdapter(source)" /opt/stage4/live_stage4_imu_overlap.py
         grep -Fq "source_metadata_requires_capture_only_session" /opt/stage4/live_stage4_imu_overlap.py
-        grep -Fq "if not LIVE_CAPTURE_COMMISSIONED:" /opt/stage4c/live_stage4c_passive_recorder.py
+        grep -Fq "if not LIVE_CAPTURE_COMMISSIONED:" /leroy_ws/src/leroy_capture/leroy_capture/recorder.py
         if [ "$LEROY_STAGE4C_RECORD" = 1 ]; then
-          grep -Fqx "LIVE_CAPTURE_COMMISSIONED = True" /opt/stage4c/live_stage4c_passive_recorder.py
+          grep -Fqx "LIVE_CAPTURE_COMMISSIONED = True" /leroy_ws/src/leroy_capture/leroy_capture/recorder.py
         else
-          grep -Fqx "LIVE_CAPTURE_COMMISSIONED = False" /opt/stage4c/live_stage4c_passive_recorder.py
+          grep -Fqx "LIVE_CAPTURE_COMMISSIONED = False" /leroy_ws/src/leroy_capture/leroy_capture/recorder.py
         fi
       ' || fail SOURCE_METADATA_IMAGE_NOT_COMMISSIONED
     echo 'STAGE4C_M18_METADATA_IMAGE=VERIFIED_OFFLINE'
@@ -190,7 +190,7 @@ if [[ "$record_mode" == 1 ]]; then
         test ! -e /dev/ttyACM0
         test ! -e /dev/video2
         test ! -e /dev/gpiochip0
-        exec python3 -u /opt/stage4c/live_stage4c_passive_recorder.py \
+        exec python3 -u /leroy_ws/src/leroy_capture/leroy_capture/recorder.py \
           --output-name "$LEROY_STAGE4C_OUTPUT_NAME"
       ' >/dev/null || fail RECORDER_COULD_NOT_START
     capture_started=1

@@ -84,7 +84,7 @@ assert "motor" not in (root/"live_stage3_build.sh").read_text().split(
     "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY
-PYTHONPATH=".:src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
+PYTHONPATH=".:src/leroy_capture:src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
     tests.unit.boot_localization_core_test \
     tests.unit.boot_yaw_core_test \
     tests.unit.boot_auto_calibration_test \
@@ -110,5 +110,5 @@ python3 -m unittest discover -s src/leroy_nav2_perception/test \
   -p test_live_costmap_static_contract.py -v
 
 grep -Fqx 'CMD ["/bin/false"]' Dockerfile.live-stage4c-capture
-grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' live_stage4c_passive_recorder.py
+grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' src/leroy_capture/leroy_capture/recorder.py
 echo 'REPO_PORTABILITY=PASS_OFFLINE_CURRENT_RUNTIME'

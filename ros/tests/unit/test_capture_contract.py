@@ -4,10 +4,10 @@ import json
 from pathlib import Path
 import unittest
 
-from live_stage4c_capture_contract import (
+from leroy_capture.contract import (
     CaptureContract, CaptureError, METADATA_TOPIC, TOPICS, source_metadata,
 )
-from live_stage4c_passive_recorder import (
+from leroy_capture.recorder import (
     LIVE_CAPTURE_COMMISSIONED, _contract_smoke,
 )
 
@@ -176,7 +176,7 @@ class StaticNonActuation(unittest.TestCase):
     def test_live_capture_is_explicitly_commissioned_but_remains_guarded(self):
         self.assertIs(LIVE_CAPTURE_COMMISSIONED, True)
         _contract_smoke()
-        script = (HERE / "live_stage4c_passive_recorder.py").read_text()
+        script = (HERE / "src/leroy_capture/leroy_capture/recorder.py").read_text()
         self.assertIn("if not LIVE_CAPTURE_COMMISSIONED:", script)
         self.assertIn("STAGE4C=BLOCKED_LIVE_CAPTURE_NOT_COMMISSIONED", script)
         self.assertNotIn("serial.Serial(", script)
@@ -190,7 +190,7 @@ class StaticNonActuation(unittest.TestCase):
     def test_no_return_in_recorder_finally_block(self):
         # Python 3.14 warns because return in finally could swallow a
         # critical capture, cleanup or disk error.
-        tree = ast.parse((HERE / "live_stage4c_passive_recorder.py").read_text())
+        tree = ast.parse((HERE / "src/leroy_capture/leroy_capture/recorder.py").read_text())
         recorder = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
                         and n.name == "_run_live")
         for node in ast.walk(recorder):
@@ -208,7 +208,7 @@ class StaticNonActuation(unittest.TestCase):
         self.assertIn("FROM localhost/leroy-ros:stage4b-imu", docker)
         self.assertIn('CMD ["/bin/false"]', docker)
         self.assertNotIn("ENTRYPOINT", docker)
-        self.assertIn("live_stage4c_passive_recorder.py", docker)
+        self.assertIn("src/leroy_capture", docker)
         # ROS 2 Jazzy Python modules are installed under ROS-managed
         # paths: import checks MUST source Jazzy and the Leroy overlay.
         self.assertIn("source /opt/ros/jazzy/setup.bash", docker)
@@ -219,7 +219,7 @@ class StaticNonActuation(unittest.TestCase):
             docker.index('python3 -c "import rosbag2_py; import rclpy"'))
 
     def test_graph_requires_single_source_provenance_and_no_devices(self):
-        s = (HERE / "live_stage4c_passive_recorder.py").read_text()
+        s = (HERE / "src/leroy_capture/leroy_capture/recorder.py").read_text()
         for token in (
             "get_publishers_info_by_topic(topic)",
             '"m18_imu_source"',
