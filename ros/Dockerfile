@@ -225,7 +225,7 @@ RUN . /opt/ros/jazzy/setup.sh \
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc \
     && echo "source /leroy_ws/install/setup.bash" >> /root/.bashrc
 
-COPY exec.sh /usr/local/bin/leroy-entrypoint
+COPY src/leroy_bringup/scripts/exec.sh /usr/local/bin/leroy-entrypoint
 RUN chmod +x /usr/local/bin/leroy-entrypoint
 
 CMD ["/usr/local/bin/leroy-entrypoint"]
