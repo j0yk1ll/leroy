@@ -407,8 +407,8 @@ or claim that earlier tasks are complete.
 | 014 | Actual wheel calibration | [`firmware/src/platform.c`](firmware/src/platform.c) |
 | 015 | Bridge calibration configuration | [`ros/src/leroy_bridge/config/leroy_bridge.yaml`](ros/src/leroy_bridge/config/leroy_bridge.yaml) |
 | 016 | Motor motion bounds | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |
-| 017 | Measured mecanum odometry | [`ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py`](ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py) |
-| 018 | Odometry and sensor fusion | [`ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py`](ros/src/leroy_nav2_odometry/leroy_nav2_odometry/kinematics.py) |
+| 017 | Measured mecanum odometry | [`ros/src/leroy_localization/leroy_localization/kinematics.py`](ros/src/leroy_localization/leroy_localization/kinematics.py) |
+| 018 | Odometry and sensor fusion | [`ros/src/leroy_localization/leroy_localization/kinematics.py`](ros/src/leroy_localization/leroy_localization/kinematics.py) |
 | 019 | MCU motor transaction protocol | [`firmware/src/command.c`](firmware/src/command.c) |
 | 020 | Durable MCU sequence numbers | [`ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py`](ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py) |
 | 021 | Physical MCU fail-stop | [`firmware/src/command.c`](firmware/src/command.c) |

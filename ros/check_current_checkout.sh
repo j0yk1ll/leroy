@@ -16,6 +16,7 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     src/leroy_sensors/leroy_sensors/spin_budget.py \
     src/leroy_localization/leroy_localization/heading_node.py \
     src/leroy_bringup/leroy_bringup/readiness.py \
+    src/leroy_localization/leroy_localization/kinematics.py \
     src/leroy_localization/leroy_localization/yaw_core.py \
     src/leroy_localization/leroy_localization/auto_calibration_core.py \
     src/leroy_imu_observer/leroy_imu_observer/imu_source.py \

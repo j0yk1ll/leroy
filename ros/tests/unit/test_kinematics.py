@@ -1,10 +1,10 @@
-"""M3 test matrix: ROS-free synthetic mecanum and fail-closed geometry."""
+"""ROS-free synthetic mecanum and fail-closed geometry."""
 
 from math import pi
 
 import pytest
 
-from leroy_nav2_odometry.kinematics import (
+from leroy_localization.kinematics import (
     Geometry, Pose2D, Twist2D, integrate, synthetic_twist,
     twist_from_wheels, wheels_from_twist,
 )
