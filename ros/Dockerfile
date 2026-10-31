@@ -19,12 +19,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-serial \
+    python3-yaml \
     ros-jazzy-usb-cam \
     ros-jazzy-image-proc \
     ros-jazzy-rqt-image-view \
     ros-jazzy-image-transport-plugins \
     ros-jazzy-rclcpp-components \
     ros-jazzy-cv-bridge \
+    ros-jazzy-ament-cmake-python \
+    ros-jazzy-nav2-costmap-2d \
+    ros-jazzy-nav2-util \
+    ros-jazzy-rclcpp-lifecycle \
+    ros-jazzy-sensor-msgs-py \
     ros-jazzy-xacro \
     ros-jazzy-robot-state-publisher \
     ros-jazzy-tf2-ros \
@@ -128,21 +134,21 @@ RUN mkdir -p /leroy_ws/src
 #
 #   ros/
 #   ├── Dockerfile
-#   ├── container_entrypoint.sh
+#   ├── src/leroy_bringup/scripts/container_entrypoint.sh
 #   └── src/
 #       ├── leroy_bridge/
 #       ├── leroy_bringup/
 #       ├── leroy_description/
 #       ├── leroy_msgs/
 #       ├── leroy_perception/
-#       └── leroy_xrslam/
+#       └── leroy_localization/
 #
 COPY src/leroy_bridge /leroy_ws/src/leroy_bridge
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_description /leroy_ws/src/leroy_description
 COPY src/leroy_msgs /leroy_ws/src/leroy_msgs
 COPY src/leroy_perception /leroy_ws/src/leroy_perception
-# leroy_xrslam is source-controlled here but must be built separately after libxrslam.so is available.
+# The XRSLAM localization adapter is built in Dockerfile.xrslam only, after libxrslam.so is available.
 
 COPY config /config
 
