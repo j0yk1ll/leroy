@@ -1,6 +1,6 @@
 """No-device tests: exact stamped real-data transport contract."""
 import unittest
-from leroy_nav2_perception.live_pipeline_contract import LiveChain
+from leroy_perception.live_pipeline_contract import LiveChain
 
 
 P = [100.0, 0.0, 320.0, 0.0, 0.0, 100.0, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0]

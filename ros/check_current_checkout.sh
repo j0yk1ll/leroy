@@ -25,7 +25,7 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     src/leroy_sensors/leroy_sensors/imu_protocol.py \
     src/leroy_bridge/package.xml src/leroy_navigation/package.xml \
     src/leroy_xrslam/package.xml \
-    src/leroy_nav2_perception/package.xml \
+    src/leroy_perception/package.xml \
     m23bv_v3_stage3_xrslam_monocular_diag.yaml \
     m23bv_v3_stage3_xrslam_euroc_template_UNCALIBRATED.yaml; do
     [[ -f "$file" && ! -L "$file" ]] || {
@@ -93,7 +93,7 @@ assert "motor" not in (root/"src/leroy_bringup/scripts/live_stage3_build.sh").re
     "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY
-PYTHONPATH=".:src/leroy_sensors:src/leroy_bringup:src/leroy_localization:src/leroy_capture${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
+PYTHONPATH=".:src/leroy_perception:src/leroy_sensors:src/leroy_bringup:src/leroy_localization:src/leroy_capture${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
     tests.unit.boot_localization_core_test \
     tests.unit.boot_yaw_core_test \
     tests.unit.boot_auto_calibration_test \
@@ -115,8 +115,7 @@ PYTHONPATH=".:src/leroy_sensors:src/leroy_bringup:src/leroy_localization:src/ler
     tests.integration.test_capture_ingress \
     tests.integration.test_capture_audit
 
-python3 -m unittest discover -s src/leroy_nav2_perception/test \
-  -p test_live_costmap_static_contract.py -v
+python3 -m unittest -v tests.integration.test_live_costmap_static_contract
 
 grep -Fqx 'CMD ["/bin/false"]' Dockerfile.live-stage4c-capture
 grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' src/leroy_capture/leroy_capture/recorder.py

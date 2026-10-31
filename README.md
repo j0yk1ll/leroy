@@ -182,7 +182,7 @@ The wrapper starts, in order:
 
 | Container | ROS process / responsibility |
 | --- | --- |
-| `leroy-live-costmap` | `ros2 launch leroy_nav2_perception live_depth_costmap.launch.py`: camera, rectifier, DepthART, provisional static TF, diagnostic costmap |
+| `leroy-live-costmap` | `ros2 launch leroy_perception live_depth_costmap.launch.py`: camera, rectifier, DepthART, provisional static TF, diagnostic costmap |
 | `leroy-live-xrslam` | `ros2 run leroy_xrslam leroy_xrslam_node`: camera-only monocular tracking diagnostics |
 | `leroy-boot-imu-source` | `live_boot_imu_service.py` / `m18_imu_source`: exclusive serial owner, 50 Hz IMU publish |
 | `leroy-live-boot-yaw-persistent` | `live_boot_yaw.py`: relative heading and independent gyro holdout; **no MCU device** |
@@ -191,7 +191,7 @@ The wrapper starts, in order:
 `ros/leroy.sh`, built by `ros/build_current_images.sh` and checked
 through `ros/check_current_checkout.sh`. The camera graph is started by
 `ros/src/leroy_bringup/scripts/live_stage3_start.sh` and the installed ROS launch file
-`ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py`.
+`ros/src/leroy_perception/launch/live_depth_costmap.launch.py`.
 The MCU/yaw graph is started by `ros/src/leroy_bringup/scripts/live_boot_session.sh` and
 `ros/src/leroy_bringup/scripts/live_boot_yaw.sh`, with the serial writer in
 `ros/src/leroy_sensors/leroy_sensors/imu_service.py`. This is an implementation map,
@@ -401,9 +401,9 @@ or claim that earlier tasks are complete.
 | 008 | TF publisher ownership | [`ros/src/leroy_description/launch/description.launch.py`](ros/src/leroy_description/launch/description.launch.py) |
 | 009 | Metric visual-inertial localization | [`ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp`](ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp) |
 | 010 | Pose authority and relocalization | [`ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp`](ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp) |
-| 011 | Real depth-to-obstacle calibration | [`ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py`](ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py) |
-| 012 | All-sided obstacle observability | [`ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py`](ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py) |
-| 013 | Navigation costmaps | [`ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py`](ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py) |
+| 011 | Real depth-to-obstacle calibration | [`ros/src/leroy_perception/leroy_perception/depth_obstacles.py`](ros/src/leroy_perception/leroy_perception/depth_obstacles.py) |
+| 012 | All-sided obstacle observability | [`ros/src/leroy_perception/leroy_perception/depth_obstacles.py`](ros/src/leroy_perception/leroy_perception/depth_obstacles.py) |
+| 013 | Navigation costmaps | [`ros/src/leroy_perception/launch/live_depth_costmap.launch.py`](ros/src/leroy_perception/launch/live_depth_costmap.launch.py) |
 | 014 | Actual wheel calibration | [`firmware/src/platform.c`](firmware/src/platform.c) |
 | 015 | Bridge calibration configuration | [`ros/src/leroy_bridge/config/leroy_bridge.yaml`](ros/src/leroy_bridge/config/leroy_bridge.yaml) |
 | 016 | Motor motion bounds | [`ros/src/leroy_bridge/leroy_bridge/motor_authority.py`](ros/src/leroy_bridge/leroy_bridge/motor_authority.py) |

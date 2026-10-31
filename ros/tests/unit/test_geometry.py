@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from leroy_nav2_perception.geometry import (
+from leroy_perception.geometry import (
     Projection, StampGate, decode_depth_32fc1, depth_to_optical_points,
     select_obstacles, transform_xyz,
 )

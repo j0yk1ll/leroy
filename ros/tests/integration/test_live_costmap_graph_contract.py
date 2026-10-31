@@ -2,7 +2,7 @@
 import unittest
 from types import SimpleNamespace
 
-from leroy_nav2_perception.live_costmap_probe import LiveCostmapProbe
+from leroy_perception.live_costmap_probe import LiveCostmapProbe
 
 
 RAW = "/leroy_nav2/diagnostics/raw_depth_points"

@@ -5,7 +5,7 @@ import unittest
 import yaml
 
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2] / 'src/leroy_perception'
 ROS = ROOT.parents[1]
 
 
@@ -17,7 +17,7 @@ class LiveCostmapStaticTest(unittest.TestCase):
         self.assertIn('"live_depth_pipeline.launch.py"', source)
         self.assertIn('"description.launch.py"', source)
         self.assertIn('"sensor_mounts_file": "/etc/leroy/sensor_mounts.yaml"', source)
-        self.assertIn('package="leroy_nav2_perception"', source)
+        self.assertIn('package="leroy_perception"', source)
         self.assertIn('"costmap_fixture"', source)
         for denied in ('package="leroy_bridge"',
                        'package="nav2_controller"',
@@ -68,14 +68,14 @@ class LiveCostmapStaticTest(unittest.TestCase):
         # Build must fail when the tested source YAML and installed
         # package-share YAML (actually passed to launch) do not match.
         self.assertIn(
-            "cmp -s /leroy_ws/src/leroy_nav2_perception/config/live_diagnostic_costmap.yaml",
+            "cmp -s /leroy_ws/src/leroy_perception/config/live_diagnostic_costmap.yaml",
             recipe)
         self.assertIn(
-            "/leroy_ws/install/leroy_nav2_perception/share/leroy_nav2_perception/config/live_diagnostic_costmap.yaml",
+            "/leroy_ws/install/leroy_perception/share/leroy_perception/config/live_diagnostic_costmap.yaml",
             recipe)
 
     def test_probe_fails_on_motor_topics(self):
-        probe = (ROOT / "leroy_nav2_perception/live_costmap_probe.py").read_text()
+        probe = (ROOT / "leroy_perception/live_costmap_probe.py").read_text()
         self.assertIn('"/cmd_vel"', probe)
         self.assertIn('"/cmd_vel_nav"', probe)
         self.assertIn("LIVE_DEPTH_COSTMAP=PASS", probe)

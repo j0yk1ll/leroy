@@ -113,7 +113,7 @@ from network import tvimblock
 print("DepthART metric imports OK")
 PY
 
-# Verify that the checkpoint expected by leroy_depthart exists.
+# Verify that the checkpoint expected by leroy_perception exists.
 RUN test -f /opt/DepthART/checkpoints/metric/depthart_metric_indoor_s_448.pth
 
 # ------------------------------------------------------------
@@ -134,14 +134,14 @@ RUN mkdir -p /leroy_ws/src
 #       ├── leroy_bringup/
 #       ├── leroy_description/
 #       ├── leroy_msgs/
-#       ├── leroy_depthart/
+#       ├── leroy_perception/
 #       └── leroy_xrslam/
 #
 COPY src/leroy_bridge /leroy_ws/src/leroy_bridge
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_description /leroy_ws/src/leroy_description
 COPY src/leroy_msgs /leroy_ws/src/leroy_msgs
-COPY src/leroy_depthart /leroy_ws/src/leroy_depthart
+COPY src/leroy_perception /leroy_ws/src/leroy_perception
 # leroy_xrslam is source-controlled here but must be built separately after libxrslam.so is available.
 
 COPY config /config
@@ -154,7 +154,7 @@ RUN . /opt/ros/jazzy/setup.sh \
          --symlink-install \
          --packages-up-to \
            leroy_bringup \
-           leroy_depthart
+           leroy_perception
 
 # Basic build-time validation.
 RUN . /opt/ros/jazzy/setup.sh \

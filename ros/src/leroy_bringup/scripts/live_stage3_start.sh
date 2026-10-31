@@ -70,7 +70,7 @@ podman run --rm --detach --pull=never --name leroy-live-costmap \
       source /opt/ros/jazzy/setup.bash
       source /leroy_ws/install/setup.bash
       test ! -e /dev/ttyACM0
-      exec ros2 launch leroy_nav2_perception live_depth_costmap.launch.py
+      exec ros2 launch leroy_perception live_depth_costmap.launch.py
     ' >/dev/null
 parent_started=1
 
@@ -94,7 +94,7 @@ podman exec leroy-live-costmap bash -lc '
     set -e
     source /opt/ros/jazzy/setup.bash
     source /leroy_ws/install/setup.bash
-    installed="$(ros2 pkg prefix leroy_nav2_perception)/share/leroy_nav2_perception/config/live_diagnostic_costmap.yaml"
+    installed="$(ros2 pkg prefix leroy_perception)/share/leroy_perception/config/live_diagnostic_costmap.yaml"
     python3 - "$installed" <<"PY"
 import sys
 import yaml
@@ -113,7 +113,7 @@ PY
     ros2 lifecycle get /costmap | grep -F "active [3]"
     ros2 param get /costmap obstacle_layer.min_obstacle_height | grep -Fx "Double value is: -3.0"
     ros2 param get /costmap obstacle_layer.max_obstacle_height | grep -Fx "Double value is: 3.0"
-    ros2 run leroy_nav2_perception live_costmap_probe
+    ros2 run leroy_perception live_costmap_probe
 '
 
 # XRSLAM reuses existing camera/TF DDS. The sidecar script maps ZERO
@@ -151,7 +151,7 @@ podman exec leroy-live-costmap bash -lc '
         [ "$code" -eq 124 ] || exit "$code"
     fi
     echo "LIVE_STAGE3_ODOM=PASS_NO_MESSAGES_IN_6_SECONDS"
-    ros2 run leroy_nav2_perception live_costmap_probe
+    ros2 run leroy_perception live_costmap_probe
 '
 
 echo "LIVE_STAGE3_START=PASS_CAMERA_ONLY_CONCURRENT_DDS"

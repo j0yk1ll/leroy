@@ -32,8 +32,8 @@ def _guard(_context, *args, **kwargs):
 
 
 def generate_launch_description():
-    depthart_share = get_package_share_directory("leroy_depthart")
-    perception_share = get_package_share_directory("leroy_nav2_perception")
+    depthart_share = get_package_share_directory("leroy_perception")
+    perception_share = get_package_share_directory("leroy_perception")
     return LaunchDescription([
         OpaqueFunction(function=_guard),
         Node(
@@ -56,7 +56,7 @@ def generate_launch_description():
                         ("camera_info", "camera_info")],
         ),
         Node(
-            package="leroy_depthart", executable="depthart_node",
+            package="leroy_perception", executable="depthart_node",
             name="depthart", output="screen",
             parameters=[
                 os.path.join(depthart_share, "config", "depthart.yaml"),
@@ -64,7 +64,7 @@ def generate_launch_description():
             ],
         ),
         Node(
-            package="leroy_nav2_perception", executable="depth_obstacles",
+            package="leroy_perception", executable="depth_obstacles",
             name="depth_obstacles", output="screen",
             parameters=[os.path.join(
                 perception_share, "config", "depth_diagnostics.yaml")],

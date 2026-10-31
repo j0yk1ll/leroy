@@ -43,10 +43,10 @@ def _include(package, launch_file, *, launch_arguments=None):
 
 
 def generate_launch_description():
-    share = get_package_share_directory("leroy_nav2_perception")
+    share = get_package_share_directory("leroy_perception")
     return LaunchDescription([
         OpaqueFunction(function=_guard),
-        _include("leroy_nav2_perception", "live_depth_pipeline.launch.py"),
+        _include("leroy_perception", "live_depth_pipeline.launch.py"),
         # Physical mount figures in sensor_mounts.yaml are PROVISIONAL.
         # Use them ONLY to exercise Nav2 TF routing with real sensor messages.
         # Colcon --symlink-install makes the installed config a symlink,
@@ -58,7 +58,7 @@ def generate_launch_description():
                 "sensor_mounts_file": "/etc/leroy/sensor_mounts.yaml",
             }),
         Node(
-            package="leroy_nav2_perception",
+            package="leroy_perception",
             executable="costmap_fixture",
             name="costmap",
             output="screen",

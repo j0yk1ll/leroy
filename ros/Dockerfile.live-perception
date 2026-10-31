@@ -10,13 +10,13 @@ RUN apt-get update \
       ros-jazzy-rclcpp-lifecycle \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/leroy_nav2_perception /leroy_ws/src/leroy_nav2_perception
+COPY src/leroy_perception /leroy_ws/src/leroy_perception
 
 RUN bash -lc 'set -e; \
     source /opt/ros/jazzy/setup.bash; \
     source /leroy_ws/install/setup.bash; \
     cd /leroy_ws; \
-    colcon build --symlink-install --packages-select leroy_nav2_perception; \
+    colcon build --symlink-install --packages-select leroy_perception; \
     source /leroy_ws/install/setup.bash; \
-    ros2 pkg executables leroy_nav2_perception | grep -F "leroy_nav2_perception depth_obstacles"; \
-    ros2 pkg executables leroy_nav2_perception | grep -F "leroy_nav2_perception live_pipeline_probe"'
+    ros2 pkg executables leroy_perception | grep -F "leroy_perception depth_obstacles"; \
+    ros2 pkg executables leroy_perception | grep -F "leroy_perception live_pipeline_probe"'

@@ -14,7 +14,7 @@ class CameraPerceptionStartupTest(unittest.TestCase):
         cls.start_script = (HERE / "src/leroy_bringup/scripts/live_stage3_start.sh").read_text()
         cls.build = (HERE / "src/leroy_bringup/scripts/live_stage3_build.sh").read_text()
         cls.sidecar = (HERE / "src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh").read_text()
-        cls.costmap = (HERE / "src/leroy_nav2_perception/config/live_diagnostic_costmap.yaml").read_text()
+        cls.costmap = (HERE / "src/leroy_perception/config/live_diagnostic_costmap.yaml").read_text()
 
     def test_isolated_parent_owns_only_camera(self):
         s = self.start_script
@@ -30,7 +30,7 @@ class CameraPerceptionStartupTest(unittest.TestCase):
             "LIVE_STAGE3_INSTALLED_COSTMAP_CONFIG=PASS_BOTH_HEIGHT_WINDOWS",
             'ros2 lifecycle set /costmap configure',
             'ros2 lifecycle set /costmap activate',
-            'ros2 run leroy_nav2_perception live_costmap_probe',
+            'ros2 run leroy_perception live_costmap_probe',
         ):
             self.assertIn(token, s)
         for forbidden in (

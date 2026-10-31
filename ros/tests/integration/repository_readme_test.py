@@ -32,7 +32,7 @@ class SingleRunbookTest(unittest.TestCase):
             "ros/check_current_checkout.sh",
             "ros/src/leroy_bringup/scripts/live_stage3_start.sh", "ros/src/leroy_bringup/scripts/live_boot_session.sh",
             "firmware/Makefile",
-            "ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py",
+            "ros/src/leroy_perception/launch/live_depth_costmap.launch.py",
         ):
             with self.subTest(path=file):
                 self.assertTrue((REPO / file).is_file())
@@ -41,7 +41,7 @@ class SingleRunbookTest(unittest.TestCase):
         self.assertIn("plain `make` or `make all` also flashes", guide)
 
     def test_perception_package_does_not_install_deleted_readme(self):
-        cmake = (REPO / "ros/src/leroy_nav2_perception/CMakeLists.txt").read_text()
+        cmake = (REPO / "ros/src/leroy_perception/CMakeLists.txt").read_text()
         self.assertNotIn("README.md", cmake)
         self.assertIn("ament_python_install_package", cmake)
 
@@ -152,7 +152,7 @@ class SingleRunbookTest(unittest.TestCase):
             "ros/src/leroy_localization/leroy_localization/auto_calibration_core.py",
             "ros/src/leroy_bridge/leroy_bridge/node.py",
             "ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py",
-            "ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py",
+            "ros/src/leroy_perception/leroy_perception/depth_obstacles.py",
             "ros/src/leroy_xrslam/src/leroy_xrslam_node.cpp",
             "ros/src/leroy_navigation/config/hardware.disabled.yaml",
         )

@@ -9,7 +9,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     default_config = os.path.join(
-        get_package_share_directory("leroy_depthart"),
+        get_package_share_directory("leroy_perception"),
         "config",
         "depthart.yaml",
     )
@@ -27,7 +27,7 @@ def generate_launch_description():
             description="DepthART inference device.",
         ),
         Node(
-            package="leroy_depthart",
+            package="leroy_perception",
             executable="depthart_node",
             name="depthart",
             output="screen",

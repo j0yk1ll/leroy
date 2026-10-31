@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>leroy_nav2_perception</name>
+  <name>leroy_perception</name>
   <version>0.1.0</version>
   <description>Fail-closed DepthART point-cloud diagnostic adapter for Jazzy Nav2.</description>
   <maintainer email="maintainer@example.com">Leroy contributors</maintainer>
@@ -13,6 +13,8 @@
   <depend>nav2_util</depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>sensor_msgs_py</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
