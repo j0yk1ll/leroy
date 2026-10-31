@@ -25,9 +25,18 @@ class ProductionInhibit(unittest.TestCase):
 
     def test_no_diagnostic_build_or_launch_entry_points(self):
         self.assertFalse(list(ROS.glob("Dockerfile.*")))
-        self.assertFalse((ROS / "src/leroy_capture").exists())
+        self.assertFalse((ROS / "src/leroy_capture/package.xml").exists())
         self.assertFalse((ROS / "src/leroy_bringup/scripts/build_diagnostic_images.sh").exists())
         self.assertFalse((ROS / "src/leroy_navigation/launch/dry_run.launch.py").exists())
+
+    def test_stale_capture_cache_does_not_count_as_an_installed_package(self):
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "src/leroy_capture/leroy_capture/__pycache__").mkdir(parents=True)
+            with patch(f"{__name__}.ROS", root):
+                self.assertFalse((ROS / "src/leroy_capture/package.xml").exists())
 
     def test_motor_ingress_rejects_nonzero_commands(self):
         from leroy_mcu.command_ingress import CommandRejected, command_to_bytes
