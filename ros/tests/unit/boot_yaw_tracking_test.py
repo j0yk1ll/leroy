@@ -9,7 +9,7 @@ import unittest
 
 from leroy_localization.yaw_tracking_core import (
     Heading, YawTracking, TrackingDecision, WAYPOINTS_RAD,
-    DIAGNOSTIC_RATE_CAP_RAD_S,
+    ADVISORY_RATE_CAP_RAD_S,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,7 +30,7 @@ class LiveYawTrackingTests(unittest.TestCase):
         self.assertEqual((d.state, d.reason),
                          ("INHIBITED", "EXPLICIT_LOCAL_START_REQUIRED"))
         self.assertFalse(d.motor_motion_authorized)
-        self.assertEqual(d.diagnostic_wz_rad_s, 0.0)
+        self.assertEqual(d.suggested_wz_rad_s, 0.0)
 
     def test_initial_target_clockwise_negative(self):
         m = YawTracking()
@@ -38,9 +38,9 @@ class LiveYawTrackingTests(unittest.TestCase):
         d = m.tick(sample(yaw=0.1), BASE)
         self.assertEqual(d.state, "TRACKING")
         self.assertAlmostEqual(d.target_rad, 0.1 - math.pi/2)
-        self.assertLess(d.diagnostic_wz_rad_s, 0)
-        self.assertLessEqual(abs(d.diagnostic_wz_rad_s),
-                             DIAGNOSTIC_RATE_CAP_RAD_S)
+        self.assertLess(d.suggested_wz_rad_s, 0)
+        self.assertLessEqual(abs(d.suggested_wz_rad_s),
+                             ADVISORY_RATE_CAP_RAD_S)
         self.assertFalse(d.motor_motion_authorized)
 
     def test_full_manual_sweep_reaches_done_without_motor_release(self):
@@ -65,7 +65,7 @@ class LiveYawTrackingTests(unittest.TestCase):
             self.assertFalse(d.motor_motion_authorized)
         self.assertEqual(d.reason, "MANUAL_SWEEP_OBSERVED_NO_MOTOR_RELEASE")
         self.assertIsNone(d.target_rad)
-        self.assertEqual(d.diagnostic_wz_rad_s, 0)
+        self.assertEqual(d.suggested_wz_rad_s, 0)
         self.assertEqual(m.tick(sample(BASE+3200_000_000, 0), BASE+3200_000_000).state,
                          "DONE")
 
@@ -86,7 +86,7 @@ class LiveYawTrackingTests(unittest.TestCase):
         d = m.tick(sample(t, -math.radians(105)), t)
         self.assertEqual((d.state,d.reason),
                          ("FAULT_LATCHED","YAW_ENVELOPE_EXCEEDED"))
-        self.assertEqual(d.diagnostic_wz_rad_s, 0)
+        self.assertEqual(d.suggested_wz_rad_s, 0)
         self.assertFalse(m.start())
 
     def test_stale_duplicate_and_regressed_source_fault(self):
@@ -109,7 +109,7 @@ class LiveYawTrackingTests(unittest.TestCase):
                 d = m.tick(bad, now)
                 self.assertEqual((d.state, d.reason),
                                  ("FAULT_LATCHED", expected))
-                self.assertEqual(d.diagnostic_wz_rad_s, 0)
+                self.assertEqual(d.suggested_wz_rad_s, 0)
 
     def test_source_disappearance_latches_without_wheel_output(self):
         m = YawTracking()
@@ -117,7 +117,7 @@ class LiveYawTrackingTests(unittest.TestCase):
         m.tick(sample(), BASE)
         d = m.on_timeout(BASE+400_000_000)
         self.assertEqual((d.state,d.reason), ("FAULT_LATCHED","HEADING_LOST"))
-        self.assertEqual(d.diagnostic_wz_rad_s, 0)
+        self.assertEqual(d.suggested_wz_rad_s, 0)
 
     def test_operator_stop_latches_inhibited_diagnostic(self):
         m = YawTracking()

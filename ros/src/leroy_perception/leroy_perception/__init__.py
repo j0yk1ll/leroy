@@ -1,1 +1,1 @@
-"""Leroy DepthART Nav2 diagnostic perception package."""
+"""Leroy DepthART perception package."""

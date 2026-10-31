@@ -18,7 +18,7 @@ leroy_bridge:
     motor_motion_key_file: ''
     motor_operator_key_file: ''
 
-    # Historical M22 signed-bridge GPIO feedback is NOT an active Leroy
+    # Uncommissioned signed-bridge GPIO feedback is NOT an active Leroy
     # startup configuration. Keep its code-level default (unprovisioned),
     # and keep independent physical stopping verification as a separate
     # deployment requirement. Do not synthesize healthy GPIO flags here.
@@ -44,7 +44,7 @@ leroy_bridge:
     front_left_encoder_sign: -1
     rear_left_encoder_sign: -1
 
-    # Diagnostic fallback only; never enable alongside XRSLAM.
+    # Unqualified odometry fallback is disabled; never enable alongside XRSLAM.
     # With this disabled the bridge does not advertise /odom or dynamic odom TF.
     degraded_odometry_enabled: false
 

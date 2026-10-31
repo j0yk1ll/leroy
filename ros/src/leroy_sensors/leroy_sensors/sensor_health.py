@@ -19,7 +19,7 @@ INPUTS = {
     'xrslam_valid': ('/xrslam/localization_valid', 'std_msgs/msg/Bool'),
     'odom': ('/odom', 'nav_msgs/msg/Odometry'),
     'tf': ('/tf', 'tf2_msgs/msg/TFMessage'),
-    'obstacle_cloud': ('/leroy_nav2/diagnostics/obstacle_points',
+    'obstacle_cloud': ('/perception/obstacle_points',
                        'sensor_msgs/msg/PointCloud2'),
 }
 

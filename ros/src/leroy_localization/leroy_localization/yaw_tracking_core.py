@@ -1,7 +1,7 @@
 """Unpowered closed-loop yaw tracking for Leroy's real IMU heading.
 
 Consumes relative heading from the already verified STM32 IMU source. Builds
-a bounded *diagnostic* rate proposal and checks waypoint convergence, but
+a bounded advisory rate proposal and checks waypoint convergence, but
 NEVER produces a ROS Twist, signs a motion envelope, enables the bridge,
 opens a device, or authorizes any motor output. Physical control requires a
 different, independently validated safety/authority boundary.
@@ -10,7 +10,7 @@ different, independently validated safety/authority boundary.
 # TODO(AUTONOMY) #031 [real yaw maneuver]: Characterize actual wheel-driven yaw
 # rates, braking distance/overshoot, wheel-slip asymmetry, wheel signs and
 # final error at -90, +90, 0 degrees on the physical robot.
-# Keep the diagnostic observer separate from motor authority. Once real
+# Keep the non-actuating observer separate from motor authority. Once real
 # hardware stopping, clearance and exclusive command ownership are validated,
 # use a separately reviewed closed-loop actuator that stops and settles
 # at each waypoint; never auto-advance from this synthetic output alone.
@@ -33,8 +33,8 @@ SETTLE_RATE_RAD_S = 0.05
 
 # These are *illustrative unqualified controller coefficients*, not
 # proven physically safe speed, acceleration, or braking limits.
-DIAGNOSTIC_KP = 0.4
-DIAGNOSTIC_RATE_CAP_RAD_S = 0.12
+ADVISORY_KP = 0.4
+ADVISORY_RATE_CAP_RAD_S = 0.12
 
 
 @dataclass(frozen=True)
@@ -54,8 +54,8 @@ class TrackingDecision:
     target_rad: float | None
     error_rad: float | None
     observed_rate_rad_s: float | None
-    # Non-actuating diagnostic suggestion only. No command or grant token.
-    diagnostic_wz_rad_s: float
+    # Non-actuating advisory suggestion only. No command or grant token.
+    suggested_wz_rad_s: float
     motor_motion_authorized: bool = False
 
 
@@ -95,8 +95,8 @@ class YawTracking:
             target = self.origin + WAYPOINTS_RAD[self.waypoint]
             error = self.last_error
             if self.state == "TRACKING" and error is not None:
-                proposal = max(-DIAGNOSTIC_RATE_CAP_RAD_S, min(
-                    DIAGNOSTIC_RATE_CAP_RAD_S, DIAGNOSTIC_KP * error))
+                proposal = max(-ADVISORY_RATE_CAP_RAD_S, min(
+                    ADVISORY_RATE_CAP_RAD_S, ADVISORY_KP * error))
         return TrackingDecision(
             self.state, self.reason,
             self.waypoint if target is not None else None,

@@ -2,7 +2,7 @@
 
 Inputs are untrusted synthetic evidence. This module does not access ROS,
 serial devices, motors, GPIO, networking, or the filesystem. A Decision only
-contains a desired heading FOR DIAGNOSTICS, never Twist, PWM, or release bits.
+contains a desired heading AS ADVISORY DATA, never Twist, PWM, or release bits.
 Neither a passing simulation nor a checked True flag constitutes a real-world
 safety interlock. Keep hardware Nav2 disabled.
 """
@@ -199,7 +199,7 @@ class BootLocalizationModel:
                 self.origin_yaw = o.yaw_rad
                 self.waypoint = 0
                 self.waypoint_since = now
-                self.reason = "DIAGNOSTIC_HEADING_SETPOINT_ONLY"
+                self.reason = "HEADING_SUGGESTION_UNCOMMISSIONED"
             return self.decision()
 
         if self.state == "SWEEP":

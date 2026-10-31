@@ -7,7 +7,7 @@ already accepted IMU source IMU source in the isolated domain.
 """
 
 # TODO(AUTONOMY) #005 [heading observation]: Replace the current standalone
-# diagnostic result with a typed, fresh estimator status carrying measured
+# sensor-status result with a typed, fresh estimator status carrying measured
 # uncertainty, continuity and calibration provenance for a boot supervisor.
 # Cross-check IMU frame/clock alignment against actual camera and wheel data
 # before allowing other modules to rely on yaw for metric localization.

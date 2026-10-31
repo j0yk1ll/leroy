@@ -5,7 +5,7 @@ becomes active. This independent 8-second holdout checks that correction
 against fresh, physically observed gyro-Z noise, split-window bias agreement,
 and unwrapped yaw drift while the chassis remains stationary.
 
-A passed candidate is diagnostic evidence of stationary consistency, not
+A passed candidate is read-only evidence of stationary consistency, not
 absolute heading, camera/IMU extrinsics, speed, or permission to move.
 """
 
@@ -13,7 +13,7 @@ absolute heading, camera/IMU extrinsics, speed, or permission to move.
 # temperature, vibration, gravity magnitude and drift on multiple real
 # boots; promote empirically measured thresholds rather than test guesses.
 # Export calibration uncertainty and a versioned evidence timestamp to a
-# supervisor. This pass remains diagnostic, not an actuator permission.
+# supervisor. This pass is read-only evidence, not actuator permission.
 # Acceptance: slight chassis motion, delayed samples, temperature swings
 # and repeated aborts cannot be mistaken for a verified stationary holdout.
 

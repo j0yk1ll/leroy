@@ -1,4 +1,4 @@
-"""Offline-only M6 sensor fault schedule and diagnostic freshness policy.
+"""Sensor fault schedule and validity policy; no actuator access.
 
 This is a TEST AUDIT, NOT a command interlock, safety certification, or
 authorization to publish any robot velocity.
@@ -35,7 +35,7 @@ def _recent(now_mono, now_ros, recv_mono, acquisition_ros,
             and -FUTURE_TOLERANCE_S <= stamp_age <= max_age_s)
 
 
-def diagnostic_state(*, now_mono, now_ros, odom_recv, odom_stamp,
+def sensor_state(*, now_mono, now_ros, odom_recv, odom_stamp,
                      depth_recv, depth_stamp, map_recv, map_valid):
     """Ready only if every relevant TEST observation is fresh and consistent.
 
