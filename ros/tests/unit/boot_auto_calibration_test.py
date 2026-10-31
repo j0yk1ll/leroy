@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import unittest
 
-from boot_auto_calibration_core import AutoImuCalibration
+from leroy_localization.auto_calibration_core import AutoImuCalibration
 import live_boot_yaw
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -143,7 +143,7 @@ class AutomaticInertialCalibrationTests(unittest.TestCase):
     def test_existing_launcher_maps_core_without_devices(self):
         s = (ROOT/"live_boot_yaw.sh").read_text()
         subprocess.run(["bash", "-n", str(ROOT/"live_boot_yaw.sh")], check=True)
-        self.assertIn("boot_auto_calibration_core.py", s)
+        self.assertIn("src/leroy_localization/leroy_localization/auto_calibration_core.py", s)
         self.assertIn("--read-only", s)
         self.assertNotIn("--device=", s)
         self.assertNotIn("--privileged", s)

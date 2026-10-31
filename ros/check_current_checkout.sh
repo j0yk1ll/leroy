@@ -11,7 +11,8 @@ for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     live_stage3_monocular_sidecar.sh \
     live_boot_session.sh live_boot_yaw.sh \
     live_boot_imu_service.py live_boot_yaw.py \
-    boot_yaw_core.py boot_auto_calibration_core.py \
+    src/leroy_localization/leroy_localization/yaw_core.py \
+    src/leroy_localization/leroy_localization/auto_calibration_core.py \
     src/leroy_imu_observer/leroy_imu_observer/imu_source.py \
     src/leroy_imu_observer/leroy_imu_observer/imu_protocol.py \
     src/leroy_bridge/package.xml src/leroy_xrslam/package.xml \
@@ -84,7 +85,7 @@ assert "motor" not in (root/"live_stage3_build.sh").read_text().split(
     "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY
-PYTHONPATH=".:src/leroy_capture:src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
+PYTHONPATH=".:src/leroy_localization:src/leroy_capture:src/leroy_imu_observer${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
     tests.unit.boot_localization_core_test \
     tests.unit.boot_yaw_core_test \
     tests.unit.boot_auto_calibration_test \

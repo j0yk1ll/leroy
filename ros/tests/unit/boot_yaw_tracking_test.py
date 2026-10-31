@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 import unittest
 
-from boot_yaw_tracking_core import (
+from leroy_localization.yaw_tracking_core import (
     Heading, YawTracking, TrackingDecision, WAYPOINTS_RAD,
     DIAGNOSTIC_RATE_CAP_RAD_S,
 )

@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 import unittest
 
-from boot_yaw_core import BootYaw
+from leroy_localization.yaw_core import BootYaw
 import live_boot_yaw as live
 
 ROOT = Path(__file__).resolve().parents[2]

@@ -30,7 +30,7 @@ podman exec "$parent" test ! -e /dev/ttyACM0 ||
   fail MCU_VISIBLE_IN_LIVE_PARENT
 podman image exists "$image" || fail COMMISSIONED_ROS_IMAGE_MISSING
 podman container exists "$sidecar" && fail SIDECAR_NAME_ALREADY_USED
-for f in live_boot_readiness.py boot_localization_core.py; do
+for f in live_boot_readiness.py src/leroy_localization/leroy_localization/localization_core.py; do
   [[ -f "$f" && ! -L "$f" ]] || fail SOURCE_MISSING_OR_SYMLINK
 done
 
@@ -42,7 +42,7 @@ exec podman run --rm --pull=never --name "$sidecar" \
   --read-only --cap-drop=all --security-opt=no-new-privileges \
   --tmpfs /tmp:rw,nosuid,nodev,size=128m \
   --mount "type=bind,src=$PWD/live_boot_readiness.py,dst=/opt/stage4/live_boot_readiness.py,readonly" \
-  --mount "type=bind,src=$PWD/boot_localization_core.py,dst=/opt/stage4/boot_localization_core.py,readonly" \
+  --mount "type=bind,src=$PWD/src/leroy_localization/leroy_localization,dst=/opt/stage4/leroy_localization,readonly" \
   -e ROS_DOMAIN_ID=170 \
   -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \

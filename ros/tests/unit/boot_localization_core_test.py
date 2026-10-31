@@ -2,7 +2,7 @@
 from dataclasses import replace
 import math
 import unittest
-from boot_localization_core import (
+from leroy_localization.localization_core import (
     BootLocalizationModel, Observation, SWEEP_RELATIVE_YAWS_RAD,
 )
 
@@ -201,7 +201,7 @@ class BootLocalizationTests(unittest.TestCase):
     def test_no_ros_device_or_actuation_in_pure_core(self):
         from pathlib import Path
         import ast
-        path = Path(__file__).resolve().parents[2] / "boot_localization_core.py"
+        path = Path(__file__).resolve().parents[2] / "src/leroy_localization/leroy_localization/localization_core.py"
         s = path.read_text()
         parsed = ast.parse(s)
         names = set()

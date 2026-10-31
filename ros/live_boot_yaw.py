@@ -19,8 +19,8 @@ import math
 import os
 import time
 
-from boot_yaw_core import BootYaw
-from boot_auto_calibration_core import AutoImuCalibration
+from leroy_localization.yaw_core import BootYaw
+from leroy_localization.auto_calibration_core import AutoImuCalibration
 
 IMU_TOPIC = "/imu/data_raw"
 STATUS_TOPIC = "/leroy_boot/relative_yaw_status"

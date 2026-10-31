@@ -119,7 +119,7 @@ def run():
     )
     from sensor_msgs.msg import CameraInfo, Image, PointCloud2
     from std_msgs.msg import String, Bool
-    from boot_localization_core import BootLocalizationModel, Observation
+    from leroy_localization.localization_core import BootLocalizationModel, Observation
 
     sensor_qos = QoSProfile(
         history=HistoryPolicy.KEEP_LAST, depth=1,
