@@ -7,7 +7,7 @@ python3 - <<'PY'
 from pathlib import Path
 import xml.etree.ElementTree as ET
 r=Path('.')
-expected={'leroy_bridge','leroy_bringup','leroy_sensors','leroy_perception','leroy_localization','leroy_navigation','leroy_description','leroy_msgs'}
+expected={'leroy_mcu','leroy_bringup','leroy_sensors','leroy_perception','leroy_localization','leroy_navigation','leroy_description','leroy_msgs'}
 actual={p.name for p in (r/'src').iterdir() if (p/'package.xml').is_file()}
 assert actual == expected, (actual,expected)
 for name in actual:
@@ -19,11 +19,11 @@ assert not list(r.glob('*.yaml'))
 assert "BLOCKED_PRODUCTION_MOTION_NOT_COMMISSIONED" in (r/'leroy.sh').read_text()
 assert "enabled: false" in (r/'src/leroy_navigation/config/hardware.disabled.yaml').read_text()
 assert "bridge_command_output_enabled: false" in (r/'src/leroy_navigation/config/hardware.disabled.yaml').read_text()
-assert (r/'src/leroy_bridge/leroy_bridge/command_ingress.py').is_file()
-assert (r/'src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py').is_file()
+assert (r/'src/leroy_mcu/leroy_mcu/command_ingress.py').is_file()
+assert (r/'src/leroy_mcu/leroy_mcu/motor_cdc_protocol.py').is_file()
 print('PRODUCTION_SOURCE_LAYOUT=PASS_FAIL_CLOSED')
 PY
-export PYTHONPATH=".:src/leroy_sensors:src/leroy_localization:src/leroy_bringup:src/leroy_perception:src/leroy_bridge${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH=".:src/leroy_sensors:src/leroy_localization:src/leroy_bringup:src/leroy_perception:src/leroy_mcu${PYTHONPATH:+:$PYTHONPATH}"
 python3 -m unittest -v \
   tests.unit.boot_localization_core_test \
   tests.unit.boot_yaw_core_test \

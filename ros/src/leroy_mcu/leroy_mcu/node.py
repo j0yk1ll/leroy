@@ -33,17 +33,17 @@ from std_msgs.msg import String, Bool
 from tf2_ros import TransformBroadcaster
 from tf2_msgs.msg import TFMessage
 from leroy_msgs.msg import EncoderCounts
-from leroy_bridge.odometry import integrate_yaw
-from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
-from leroy_bridge.command_ingress import command_to_bytes, CommandRejected
-from leroy_bridge.authorized_session import (
+from leroy_mcu.odometry import integrate_yaw
+from leroy_mcu.clock_sync import ClockSyncError, McuClockSync
+from leroy_mcu.command_ingress import command_to_bytes, CommandRejected
+from leroy_mcu.authorized_session import (
     MotionEnvelope, RearmEnvelope, SessionVerifier,
 )
-from leroy_bridge.motor_authority import MotorAuthority, HEALTH_KEYS
-from leroy_bridge.motor_cdc_protocol import MotorCdcProtocol
-from leroy_bridge.motor_sensor_health import MotorSensorHealth
-from leroy_bridge.motor_gpio_feedback import PhysicalMotorFeedback
-from leroy_bridge.motor_signed_ingress import (
+from leroy_mcu.motor_authority import MotorAuthority, HEALTH_KEYS
+from leroy_mcu.motor_cdc_protocol import MotorCdcProtocol
+from leroy_mcu.motor_sensor_health import MotorSensorHealth
+from leroy_mcu.motor_gpio_feedback import PhysicalMotorFeedback
+from leroy_mcu.motor_signed_ingress import (
     MotorInputRejected, parse_signed_envelope, read_protected_key,
 )
 
@@ -86,7 +86,7 @@ class McuClock:
 
 class LeroyBridgeNode(Node):
     def __init__(self) -> None:
-        super().__init__('leroy_bridge')
+        super().__init__('leroy_mcu')
 
         self.declare_parameter('serial_port', '/dev/ttyACM0')
         self.declare_parameter('baudrate', 115200)

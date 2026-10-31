@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>leroy_bridge</name>
+  <name>leroy_mcu</name>
   <version>0.2.0</version>
   <description>ROS 2 hardware bridge for the Leroy mobile base MCU.</description>
 

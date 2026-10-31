@@ -1,16 +1,16 @@
 """Focused regression for the motor authority core (no ROS or serial)."""
 import unittest
 
-from leroy_bridge.authorized_session import (
+from leroy_mcu.authorized_session import (
     SessionVerifier, sign_test_motion, sign_test_rearm,
 )
-from leroy_bridge.motor_authority import (
+from leroy_mcu.motor_authority import (
     MotorAuthority, ZERO_WHEELS, HARD_PWM_CEILING,
 )
-from leroy_bridge.motor_signed_ingress import (
+from leroy_mcu.motor_signed_ingress import (
     MotorInputRejected, parse_signed_envelope,
 )
-from leroy_bridge.authorized_session import MotionEnvelope
+from leroy_mcu.authorized_session import MotionEnvelope
 
 GOOD_HEALTH = {
     "odom_fresh": True,

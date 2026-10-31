@@ -34,10 +34,10 @@ key provisioning and MCU-stop implementation at the sole serial writer.
 from dataclasses import dataclass
 import math
 
-from leroy_bridge.authorized_session import (
+from leroy_mcu.authorized_session import (
     MotionEnvelope, RearmEnvelope, SessionVerifier,
 )
-from leroy_bridge.motor_pwm import mecanum_twist_to_pwm
+from leroy_mcu.motor_pwm import mecanum_twist_to_pwm
 
 
 ZERO_WHEELS = "set_wheels 0 0 0 0"

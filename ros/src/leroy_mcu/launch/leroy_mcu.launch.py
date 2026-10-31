@@ -6,16 +6,16 @@ import os
 
 def generate_launch_description():
     config = os.path.join(
-        get_package_share_directory('leroy_bridge'),
+        get_package_share_directory('leroy_mcu'),
         'config',
-        'leroy_bridge.yaml',
+        'leroy_mcu.yaml',
     )
 
     return LaunchDescription([
         Node(
-            package='leroy_bridge',
-            executable='leroy_bridge_node',
-            name='leroy_bridge',
+            package='leroy_mcu',
+            executable='leroy_mcu_node',
+            name='leroy_mcu',
             output='screen',
             parameters=[config],
         ),

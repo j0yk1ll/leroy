@@ -1,7 +1,7 @@
 """ROS-free regression tests for the open-loop mecanum PWM conversion."""
 import math
 
-from leroy_bridge.motor_pwm import mecanum_twist_to_pwm
+from leroy_mcu.motor_pwm import mecanum_twist_to_pwm
 
 
 def convert(vx=0.0, vy=0.0, wz=0.0, gain=12.75, cap=64):

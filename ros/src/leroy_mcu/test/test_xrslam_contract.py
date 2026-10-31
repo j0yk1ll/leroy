@@ -6,8 +6,8 @@ from pathlib import Path
 
 
 BRIDGE = Path(__file__).resolve().parents[1]
-SOURCE = (BRIDGE / 'leroy_bridge' / 'node.py').read_text(encoding='utf-8')
-CONFIG = (BRIDGE / 'config' / 'leroy_bridge.yaml').read_text(encoding='utf-8')
+SOURCE = (BRIDGE / 'leroy_mcu' / 'node.py').read_text(encoding='utf-8')
+CONFIG = (BRIDGE / 'config' / 'leroy_mcu.yaml').read_text(encoding='utf-8')
 
 
 def _default(name):

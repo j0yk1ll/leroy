@@ -2,7 +2,7 @@
 
 import pytest
 
-from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
+from leroy_mcu.clock_sync import ClockSyncError, McuClockSync
 
 
 MASK = (1 << 32) - 1

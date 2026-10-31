@@ -18,10 +18,10 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 
-from leroy_bridge.authorized_session import (
+from leroy_mcu.authorized_session import (
     sign_motion, sign_rearm,
 )
-from leroy_bridge.motor_signed_ingress import read_protected_key
+from leroy_mcu.motor_signed_ingress import read_protected_key
 
 _SESSION_RE = re.compile(r"[a-f0-9]{32}\Z")
 

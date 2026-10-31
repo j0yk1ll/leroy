@@ -1,7 +1,7 @@
 from glob import glob
 from setuptools import find_packages, setup
 
-package_name = 'leroy_bridge'
+package_name = 'leroy_mcu'
 
 setup(
     name=package_name,
@@ -21,10 +21,10 @@ setup(
     license='MIT',
     entry_points={
         'console_scripts': [
-            'leroy_bridge_node = leroy_bridge.node:main',
-            'leroy_motor_controller_signer = leroy_bridge.motor_signer:main_controller',
-            'leroy_motor_operator_grant = leroy_bridge.motor_signer:main_operator',
-            'leroy_motor_provision_keys = leroy_bridge.motor_key_provision:main',
+            'leroy_mcu_node = leroy_mcu.node:main',
+            'leroy_motor_controller_signer = leroy_mcu.motor_signer:main_controller',
+            'leroy_motor_operator_grant = leroy_mcu.motor_signer:main_operator',
+            'leroy_motor_provision_keys = leroy_mcu.motor_key_provision:main',
         ],
     },
 )

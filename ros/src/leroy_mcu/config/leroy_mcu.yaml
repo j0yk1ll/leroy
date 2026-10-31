@@ -2,7 +2,7 @@
 # wheel geometry, velocity-to-PWM conversion, encoder counts/signs and
 # watchdog assumptions with measured robot-specific values, validated on
 # the actual STM32 firmware version and four mecanum wheel directions.
-leroy_bridge:
+leroy_mcu:
   ros__parameters:
     serial_port: /dev/ttyACM0
     baudrate: 115200

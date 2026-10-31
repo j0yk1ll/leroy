@@ -9,7 +9,7 @@ import json
 import os
 import stat
 
-from leroy_bridge.authorized_session import MotionEnvelope, RearmEnvelope
+from leroy_mcu.authorized_session import MotionEnvelope, RearmEnvelope
 
 MAX_JSON_BYTES = 2048
 

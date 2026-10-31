@@ -109,9 +109,9 @@ def generate_launch_description():
     bridge = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('leroy_bridge'),
+                FindPackageShare('leroy_mcu'),
                 'launch',
-                'leroy_bridge.launch.py',
+                'leroy_mcu.launch.py',
             ])
         )
     )

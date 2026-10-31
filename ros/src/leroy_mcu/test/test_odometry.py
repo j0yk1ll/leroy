@@ -1,4 +1,4 @@
-from leroy_bridge.odometry import integrate_yaw
+from leroy_mcu.odometry import integrate_yaw
 
 
 def test_positive_gyro_z_increases_yaw_with_first_sample() -> None:

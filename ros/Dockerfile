@@ -136,14 +136,14 @@ RUN mkdir -p /leroy_ws/src
 #   ├── Dockerfile
 #   ├── src/leroy_bringup/scripts/container_entrypoint.sh
 #   └── src/
-#       ├── leroy_bridge/
+#       ├── leroy_mcu/
 #       ├── leroy_bringup/
 #       ├── leroy_description/
 #       ├── leroy_msgs/
 #       ├── leroy_perception/
 #       └── leroy_localization/
 #
-COPY src/leroy_bridge /leroy_ws/src/leroy_bridge
+COPY src/leroy_mcu /leroy_ws/src/leroy_mcu
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_description /leroy_ws/src/leroy_description
 COPY src/leroy_msgs /leroy_ws/src/leroy_msgs

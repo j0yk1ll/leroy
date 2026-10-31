@@ -30,7 +30,7 @@ class ProductionInhibit(unittest.TestCase):
         self.assertFalse((ROS / "src/leroy_navigation/launch/dry_run.launch.py").exists())
 
     def test_motor_ingress_rejects_nonzero_commands(self):
-        from leroy_bridge.command_ingress import CommandRejected, command_to_bytes
+        from leroy_mcu.command_ingress import CommandRejected, command_to_bytes
         with self.assertRaises(CommandRejected):
             command_to_bytes("set_wheels 1 0 0 0")
         with self.assertRaises(CommandRejected):

@@ -21,7 +21,7 @@ The platform must not be moved under power based solely on offline test results.
 | Package | Responsibility |
 |---|---|
 | `leroy_bringup` | ROS launch composition, startup-readiness model and lifecycle integration points |
-| `leroy_bridge` | STM32 protocol, clock sync, command allowlist, signed session handling, motion authority, motor control and stop/fault handling |
+| `leroy_mcu` | STM32 protocol, clock sync, command allowlist, signed session handling, motion authority, motor control and stop/fault handling |
 | `leroy_sensors` | IMU parsing, acquisition and sensor validity |
 | `leroy_perception` | DepthART inference, depth-to-obstacle conversion and geometry |
 | `leroy_localization` | Relative heading, calibration, kinematics, startup-localization state and XRSLAM adapter |
@@ -35,6 +35,6 @@ Tests live under `ros/tests/` and package-local `test/` directories. The code an
 
 The primary remaining work is: (1) physical sensor extrinsics and timing; (2) validated metric odometry and localization; (3) measured all-around obstacle coverage; (4) single STM32 serial ownership and verified hardware stop/driver-power interlocks; (5) wheel/motor commissioning; (6) a fault-latched lifecycle supervisor; and (7) a separately reviewed, physically accepted navigation deployment. Never change `ros/src/leroy_navigation/config/hardware.disabled.yaml` to enabled just to make a launch succeed.
 
-`ros/src/leroy_bridge/leroy_bridge/command_ingress.py` deliberately rejects nonzero wheel commands. Preserve that boundary until the motor authorization path passes independent hardware acceptance.
+`ros/src/leroy_mcu/leroy_mcu/command_ingress.py` deliberately rejects nonzero wheel commands. Preserve that boundary until the motor authorization path passes independent hardware acceptance.
 
 The current source retains compatibility identifiers used by firmware/ROS protocols; they are not indications of implementation readiness. Schema changes require coordinated migration rather than blind string replacement.
