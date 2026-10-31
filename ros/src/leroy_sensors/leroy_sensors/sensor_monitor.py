@@ -24,7 +24,7 @@ import rclpy
 from .sensor_contract import (
     stamp_seconds, validate_odom, validate_tf, validate_base_cloud,
 )
-from .observer_contract import (
+from .sensor_health import (
     INPUTS, StreamStats, check_image, check_camera_info,
     check_imu, depth_sample,
 )
@@ -55,7 +55,7 @@ def endpoint_evidence(endpoints):
     ], key=lambda p: (p['node'], p['namespace'], p['type']))
 
 
-class PassiveSensorObserver(Node):
+class SensorMonitor(Node):
     def __init__(self):
         if os.environ.get('LEROY_NAV2_DRY_RUN') != '1':
             raise RuntimeError('sensor observer requires LEROY_NAV2_DRY_RUN=1')
@@ -312,14 +312,14 @@ def main(args=None):
     rclpy.init(args=args)
     node = None
     try:
-        node = PassiveSensorObserver()
+        node = SensorMonitor()
         end = time.monotonic() + seconds
         while rclpy.ok() and time.monotonic() < end:
             rclpy.spin_once(node, timeout_sec=0.1)
         summary = node.report(seconds)
-        print('SENSOR_OBSERVER_PASSIVE_REPORT_JSON=' +
+        print('SENSOR_MONITOR_REPORT_JSON=' +
               json.dumps(summary, sort_keys=True), flush=True)
-        print('SENSOR_OBSERVER_VERDICT=' + summary['verdict'], flush=True)
+        print('SENSOR_MONITOR_VERDICT=' + summary['verdict'], flush=True)
     finally:
         if node is not None:
             node.destroy_node()

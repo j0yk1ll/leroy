@@ -22,7 +22,7 @@ from sensor_msgs.msg import Imu
 import serial
 
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
-from leroy_sensors.passive_observer import PassiveSensorObserver
+from leroy_sensors.sensor_monitor import SensorMonitor
 from leroy_sensors.imu_protocol import (
     START, STOP, PORT, STREAM_HZ, PacketError, parse_packet, sequence_gap,
 )
@@ -218,7 +218,7 @@ def node_smoke():
     src = obs = None
     try:
         src = ImuStreamSource()
-        obs = PassiveSensorObserver()
+        obs = SensorMonitor()
         assert len(obs._subscriptions) == 9
         summary = obs.report(5.0)
         assert summary["observation_only"]
@@ -254,7 +254,7 @@ def run():
     result_code = 1
     try:
         src = ImuStreamSource()
-        obs = PassiveSensorObserver()
+        obs = SensorMonitor()
         with serial.Serial(
             port=PORT, baudrate=115200, timeout=0.08,
             write_timeout=0.25, exclusive=True,
@@ -292,9 +292,9 @@ def run():
                       flush=True)
 
         if passive_report is not None:
-            print("SENSOR_OBSERVER_PASSIVE_REPORT_JSON=" +
+            print("SENSOR_MONITOR_REPORT_JSON=" +
                   json.dumps(passive_report, sort_keys=True), flush=True)
-            print("SENSOR_OBSERVER_VERDICT=" + passive_report["verdict"], flush=True)
+            print("SENSOR_MONITOR_VERDICT=" + passive_report["verdict"], flush=True)
 
         if src is not None:
             metrics = src.export()
