@@ -2,7 +2,7 @@
 # Rebuild the sensor-only Stage 3 image family from this exact checkout.
 # Does not run containers or enable any hardware.
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../../.."
 
 if [[ "${1-}" != "--build" || $# -ne 1 ]]; then
     printf 'Usage: %s --build\n' "$0" >&2

@@ -2,7 +2,7 @@
 # One bounded, non-actuating observation of the EXISTING live Stage 3 ROS
 # graph. No camera, MCU, GPIO or motor device is mapped into this sidecar.
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../../.."
 
 fail() { echo "LIVE_BOOT_LAUNCH=BLOCKED_$1" >&2; exit 2; }
 [[ $# -eq 0 ]] || fail UNEXPECTED_ARGUMENTS

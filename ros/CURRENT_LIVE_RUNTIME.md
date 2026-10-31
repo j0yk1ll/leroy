@@ -152,7 +152,7 @@ provisioned. This gap is not resolved by faking a GPIO, and does
 not affect the accepted sensor-only runtime.
 
 Current read-only readiness is available via
-`ros/live_boot_readiness.sh` against the already running camera
+`ros/src/leroy_bringup/scripts/live_boot_readiness.sh` against the already running camera
 graph. The read-only yaw snapshot remains a diagnostic, not an additional startup phase.
 The historical manually rotated yaw witness has been retired; the supported yaw sensor runtime is unchanged.
 

@@ -3,7 +3,7 @@
 # IMU device is accessible ONLY in this disposable sidecar, not the camera,
 # XRSLAM, DepthART or costmap containers. No navigation or VIO mode switch.
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../../.."
 
 fail() { printf 'STAGE4A=BLOCKED_%s\n' "$1" >&2; exit 2; }
 [[ $# -eq 0 ]] || fail UNEXPECTED_ARGUMENTS

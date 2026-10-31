@@ -190,10 +190,10 @@ The wrapper starts, in order:
 **Actual implementation entry points:** the top-level CLI is
 `ros/leroy.sh`, built by `ros/build_current_images.sh` and checked
 through `ros/check_current_checkout.sh`. The camera graph is started by
-`ros/live_stage3_start.sh` and the installed ROS launch file
+`ros/src/leroy_bringup/scripts/live_stage3_start.sh` and the installed ROS launch file
 `ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py`.
-The MCU/yaw graph is started by `ros/live_boot_session.sh` and
-`ros/live_boot_yaw.sh`, with the serial writer in
+The MCU/yaw graph is started by `ros/src/leroy_bringup/scripts/live_boot_session.sh` and
+`ros/src/leroy_bringup/scripts/live_boot_yaw.sh`, with the serial writer in
 `ros/live_boot_imu_service.py`. This is an implementation map,
 **not** an instruction to run these internal scripts simultaneously.
 Firmware is independently built using `firmware/Makefile`.

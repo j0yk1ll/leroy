@@ -4,7 +4,7 @@
 # Fail closed. Only the containers started by this invocation are stopped
 # if startup or verification fails; no existing containers are replaced.
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../../.."
 
 fail() { printf 'LIVE_STAGE3_START=BLOCKED_%s\n' "$1" >&2; exit 2; }
 [[ $# -eq 0 ]] || fail UNEXPECTED_ARGUMENTS
@@ -118,7 +118,7 @@ PY
 
 # XRSLAM reuses existing camera/TF DDS. The sidecar script maps ZERO
 # devices and joins only the already isolated parent network+IPC+PID.
-bash ./live_stage3_monocular_sidecar.sh --detach >/dev/null
+bash ./src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh --detach >/dev/null
 sidecar_started=1
 
 native_frames=0

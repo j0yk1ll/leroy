@@ -138,7 +138,7 @@ class RosAdapterSimulation(unittest.TestCase):
         self.assertIn("metadata_topic_remapped", wrapper)
 
     def test_guarded_real_capture_is_explicitly_commissioned(self):
-        wrapper = (HERE / "live_stage4_imu_sidecar.sh").read_text()
+        wrapper = (HERE / "src/leroy_bringup/scripts/live_stage4_imu_sidecar.sh").read_text()
         recorder = (HERE / "src/leroy_capture/leroy_capture/recorder.py").read_text()
         for token in (
             'record_mode="${LEROY_STAGE4C_RECORD:-0}"',

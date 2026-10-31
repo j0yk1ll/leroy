@@ -101,7 +101,7 @@ class StampMatching(unittest.TestCase):
         self.assertIsNone(r["callback_delivery_delay_ms_p95"])
 
     def test_launcher_selects_verified_imu_image(self):
-        launcher = (ROOT / "live_stage4_imu_sidecar.sh").read_text()
+        launcher = (ROOT / "src/leroy_bringup/scripts/live_stage4_imu_sidecar.sh").read_text()
         for token in (
             "LEROY_STAGE4_IMU_IMAGE",
             "localhost/leroy-ros:stage4-imu",

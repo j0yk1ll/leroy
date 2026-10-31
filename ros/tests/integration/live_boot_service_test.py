@@ -61,7 +61,7 @@ class PersistentBootService(unittest.TestCase):
             {"STATUS_TOPIC", "CALIBRATION_TOPIC"})
 
     def test_single_command_shell_is_syntactically_valid_and_cleans_up(self):
-        script = ROOT / "live_boot_session.sh"
+        script = ROOT / "src/leroy_bringup/scripts/live_boot_session.sh"
         subprocess.run(["bash", "-n", str(script)], check=True)
         s = script.read_text()
         self.assertIn("LEROY_STAGE4_MOTOR_ISOLATION_ATTESTED", s)
@@ -76,7 +76,7 @@ class PersistentBootService(unittest.TestCase):
         self.assertNotIn("--privileged", s)
 
     def test_snapshot_bounded_and_never_publishes(self):
-        script = ROOT / "live_boot_yaw_snapshot.sh"
+        script = ROOT / "src/leroy_bringup/scripts/live_boot_yaw_snapshot.sh"
         subprocess.run(["bash", "-n", str(script)], check=True)
         source_text = script.read_text()
         self.assertIn("time.monotonic() + 6.0", source_text)
@@ -97,8 +97,8 @@ class PersistentBootService(unittest.TestCase):
         self.assertEqual(ros_publishers, [])
 
     def test_accepted_short_live_yaw_mode_not_replaced(self):
-        s = (ROOT / "live_boot_yaw.sh").read_text()
-        subprocess.run(["bash", "-n", str(ROOT/"live_boot_yaw.sh")], check=True)
+        s = (ROOT / "src/leroy_bringup/scripts/live_boot_yaw.sh").read_text()
+        subprocess.run(["bash", "-n", str(ROOT/"src/leroy_bringup/scripts/live_boot_yaw.sh")], check=True)
         self.assertIn("source=leroy-stage4-imu", s)
         self.assertIn("sidecar=leroy-live-boot-yaw", s)
         self.assertIn("source=leroy-boot-imu-source", s)

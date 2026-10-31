@@ -39,10 +39,10 @@ class UnifiedLeroyRuntimeTest(unittest.TestCase):
 
     def test_only_one_verified_camera_and_imu_workflow(self):
         s = self.source
-        self.assertIn("LEROY_MOTOR_POWER_DISCONNECTED=1 bash ./live_stage3_start.sh", s)
-        self.assertIn("bash ./live_boot_session.sh", s)
-        self.assertLess(s.index("bash ./live_stage3_start.sh"),
-                        s.index("bash ./live_boot_session.sh"))
+        self.assertIn("LEROY_MOTOR_POWER_DISCONNECTED=1 bash ./src/leroy_bringup/scripts/live_stage3_start.sh", s)
+        self.assertIn("bash ./src/leroy_bringup/scripts/live_boot_session.sh", s)
+        self.assertLess(s.index("bash ./src/leroy_bringup/scripts/live_stage3_start.sh"),
+                        s.index("bash ./src/leroy_bringup/scripts/live_boot_session.sh"))
         self.assertIn('LEROY_STAGE4_MCU_BY_ID="$mcu"', s)
         self.assertIn("LEROY_STAGE4_MOTOR_ISOLATION_ATTESTED=YES", s)
         self.assertIn("LEROY_RUNTIME=CAMERA_DEPTH_XRSLAM_READY", s)

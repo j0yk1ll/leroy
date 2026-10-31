@@ -30,7 +30,7 @@ class SingleRunbookTest(unittest.TestCase):
         for file in (
             "ros/leroy.sh", "ros/build_current_images.sh",
             "ros/check_current_checkout.sh",
-            "ros/live_stage3_start.sh", "ros/live_boot_session.sh",
+            "ros/src/leroy_bringup/scripts/live_stage3_start.sh", "ros/src/leroy_bringup/scripts/live_boot_session.sh",
             "firmware/Makefile",
             "ros/src/leroy_nav2_perception/launch/live_depth_costmap.launch.py",
         ):

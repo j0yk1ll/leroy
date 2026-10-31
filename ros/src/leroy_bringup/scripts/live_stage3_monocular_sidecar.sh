@@ -3,7 +3,7 @@
 # Join the EXISTING isolated Stage 2 container's DDS graph; no device maps.
 # Never publishes odometry/pose TF, commands motors, or configures a controller.
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../../.."
 
 # Interactive by default; the supervised one-command startup uses --detach.
 run_flags=(--rm -it)

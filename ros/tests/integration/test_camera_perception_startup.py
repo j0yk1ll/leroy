@@ -11,9 +11,9 @@ HERE = Path(__file__).resolve().parents[2]
 class CameraPerceptionStartupTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.start_script = (HERE / "live_stage3_start.sh").read_text()
-        cls.build = (HERE / "live_stage3_build.sh").read_text()
-        cls.sidecar = (HERE / "live_stage3_monocular_sidecar.sh").read_text()
+        cls.start_script = (HERE / "src/leroy_bringup/scripts/live_stage3_start.sh").read_text()
+        cls.build = (HERE / "src/leroy_bringup/scripts/live_stage3_build.sh").read_text()
+        cls.sidecar = (HERE / "src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh").read_text()
         cls.costmap = (HERE / "src/leroy_nav2_perception/config/live_diagnostic_costmap.yaml").read_text()
 
     def test_isolated_parent_owns_only_camera(self):
@@ -66,7 +66,7 @@ class CameraPerceptionStartupTest(unittest.TestCase):
 
     def test_xrslam_stays_monocular_gated(self):
         s = self.start_script
-        self.assertIn('live_stage3_monocular_sidecar.sh --detach', s)
+        self.assertIn('src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh --detach', s)
         self.assertIn("Submitted 1 camera frames to XRSLAM (monocular)", s)
         self.assertIn("/xrslam/localization_valid", s)
         self.assertIn("data: false", s)

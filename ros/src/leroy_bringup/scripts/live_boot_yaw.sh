@@ -2,7 +2,7 @@
 # Live Stage 3 yaw observer. Uses the existing motor-isolated M18 Stage 4A
 # IMU source: no MCU, camera, GPIO or wheel device mapped to this process.
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../../.."
 
 fail() { printf 'BOOT_LIVE_YAW_LAUNCH=BLOCKED_%s\n' "$1" >&2; exit 2; }
 [[ $# -eq 0 ]] || fail UNEXPECTED_ARGUMENTS

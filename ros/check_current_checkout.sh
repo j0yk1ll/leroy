@@ -6,10 +6,10 @@ cd "$(dirname "$0")"
 for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
     Dockerfile.xrslam Dockerfile.live-stage4-imu \
     Dockerfile.live-stage4c-capture \
-    live_stage3_build.sh live_stage3_start.sh \
+    src/leroy_bringup/scripts/live_stage3_build.sh src/leroy_bringup/scripts/live_stage3_start.sh \
     leroy.sh \
-    live_stage3_monocular_sidecar.sh \
-    live_boot_session.sh live_boot_yaw.sh \
+    src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh \
+    src/leroy_bringup/scripts/live_boot_session.sh src/leroy_bringup/scripts/live_boot_yaw.sh \
     live_boot_imu_service.py live_boot_yaw.py \
     src/leroy_localization/leroy_localization/yaw_core.py \
     src/leroy_localization/leroy_localization/auto_calibration_core.py \
@@ -27,7 +27,7 @@ done
 # access in build scripts. No Podman build or ROS graph is started.
 # Syntax-check every retained top-level shell entry point, including
 # the optional signed-controller launcher (but NEVER execute it).
-for script in ./*.sh; do
+for script in ./*.sh src/leroy_bringup/scripts/*.sh; do
     bash -n "$script"
 done
 python3 - <<'PY'
@@ -38,20 +38,19 @@ root = Path(".")
 # The current checked-in runtime has one maintained shell interface.
 # Historical M16-M23 experiments and optional Nav2 fixture Dockerfiles are
 # archived, not additional startup procedures.
-expected_scripts = {
-    "build_current_images.sh", "check_current_checkout.sh", "exec.sh",
-    "leroy.sh",
-    "live_boot_readiness.sh",
-    "live_boot_session.sh", "live_boot_yaw.sh",
-    "live_boot_yaw_snapshot.sh",
+expected_scripts = {"build_current_images.sh", "check_current_checkout.sh", "leroy.sh"}
+found_scripts = {p.name for p in root.glob("*.sh")}
+if found_scripts != expected_scripts:
+    raise SystemExit("Unexpected root shell entry points: " + str(sorted(found_scripts ^ expected_scripts)))
+required_bringup_scripts = {
+    "exec.sh", "live_boot_readiness.sh", "live_boot_session.sh",
+    "live_boot_yaw.sh", "live_boot_yaw_snapshot.sh",
     "live_stage3_build.sh", "live_stage3_monocular_sidecar.sh",
     "live_stage3_start.sh", "live_stage4_imu_sidecar.sh",
 }
-found_scripts = {p.name for p in root.glob("*.sh")}
-if found_scripts != expected_scripts:
-    raise SystemExit("Current shell entry point inventory changed: missing=" +
-                     str(sorted(expected_scripts - found_scripts)) +
-                     " unexpected=" + str(sorted(found_scripts - expected_scripts)))
+bringup_scripts = {p.name for p in (root/"src/leroy_bringup/scripts").glob("*.sh")}
+if bringup_scripts != required_bringup_scripts:
+    raise SystemExit("Bringup script inventory changed: " + str(sorted(bringup_scripts ^ required_bringup_scripts)))
 dockerfiles = (
     "Dockerfile", "Dockerfile.live-perception",
     "Dockerfile.live-costmap", "Dockerfile.xrslam",
@@ -78,10 +77,10 @@ for name in dockerfiles:
 builder = (root/"build_current_images.sh").read_text()
 for tag in ("jazzy", "perception", "costmap", "xrslam",
             "stage4b-imu", "stage4c-capture-offline"):
-    if tag not in builder and tag not in (root/"live_stage3_build.sh").read_text():
+    if tag not in builder and tag not in (root/"src/leroy_bringup/scripts/live_stage3_build.sh").read_text():
         raise SystemExit("Missing canonical image tag " + tag)
-assert "/dev/video8" in (root/"live_stage3_start.sh").read_text()
-assert "motor" not in (root/"live_stage3_build.sh").read_text().split(
+assert "/dev/video8" in (root/"src/leroy_bringup/scripts/live_stage3_start.sh").read_text()
+assert "motor" not in (root/"src/leroy_bringup/scripts/live_stage3_build.sh").read_text().split(
     "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
 print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
 PY

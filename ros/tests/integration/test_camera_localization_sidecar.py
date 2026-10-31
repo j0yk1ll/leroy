@@ -8,7 +8,7 @@ HERE = pathlib.Path(__file__).resolve().parents[2]
 class CameraLocalizationSidecarContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.script = (HERE / "live_stage3_monocular_sidecar.sh").read_text()
+        cls.script = (HERE / "src/leroy_bringup/scripts/live_stage3_monocular_sidecar.sh").read_text()
 
     def test_parent_shareable_ipc_contract(self):
         s = self.script
