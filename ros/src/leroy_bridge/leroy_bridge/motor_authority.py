@@ -1,6 +1,6 @@
 """Single-session bridge motor authority; NO serial I/O and NO ROS subscriber.
 
-This is the actuator-facing control core, not a diagnostic permission flag.
+This is the actuator-facing control core, not an implicit motion permit.
 It constructs bounded, canonical MCU set_wheels packets ONLY after a
 signed operator rearm, a one-second uninterrupted healthy dwell and
 fresh, signed, non-replayed controller commands.

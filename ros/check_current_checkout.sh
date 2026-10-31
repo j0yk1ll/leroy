@@ -23,11 +23,13 @@ assert (r/'src/leroy_bridge/leroy_bridge/command_ingress.py').is_file()
 assert (r/'src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py').is_file()
 print('PRODUCTION_SOURCE_LAYOUT=PASS_FAIL_CLOSED')
 PY
-PYTHONPATH=".:src/leroy_sensors:src/leroy_localization:src/leroy_bringup:src/leroy_perception:src/leroy_bridge${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
+export PYTHONPATH=".:src/leroy_sensors:src/leroy_localization:src/leroy_bringup:src/leroy_perception:src/leroy_bridge${PYTHONPATH:+:$PYTHONPATH}"
+python3 -m unittest -v \
   tests.unit.boot_localization_core_test \
   tests.unit.boot_yaw_core_test \
   tests.unit.boot_auto_calibration_test \
   tests.unit.boot_yaw_tracking_test \
   tests.unit.test_imu_protocol \
   tests.safety.test_production_inhibit
+python3 -m pytest -q tests/unit/test_kinematics.py tests/unit/test_geometry.py
 echo 'LEROY_PRODUCTION_CHECK=PASS_OFFLINE'

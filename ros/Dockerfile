@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Pin upstream DepthART for reproducible builds.
 ARG DEPTHART_REF=0384521b3bcb4c64adf03eeb5d55ebdb1cbdd84c
 
-# CPU-only PyTorch runtime for the development image.
+# CPU-only PyTorch inference runtime.
 # DepthART was validated locally with torch 2.1 / Python 3.9; Jazzy uses
 # Python 3.12, so use the closest PyTorch line with Python 3.12 wheels.
 ARG TORCH_VERSION=2.2.2

@@ -40,7 +40,7 @@ MAX_STAMP_AGE_S = 2.0
 
 class ImuStreamSource(Node):
     def __init__(self, on_imu_published=None):
-        # Optional M21F metadata-only tap. Existing IMU source/M20 callers pass None
+        # Optional acquisition-metadata callback; older callers pass None.
         # and preserve the previously accepted physical publication path.
         if on_imu_published is not None and not callable(on_imu_published):
             raise TypeError("IMU metadata observer must be callable")
