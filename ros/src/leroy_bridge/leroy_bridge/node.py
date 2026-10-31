@@ -36,8 +36,6 @@ from leroy_msgs.msg import EncoderCounts
 from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
 from leroy_bridge.command_ingress import command_to_bytes, CommandRejected
-from leroy_bridge.bridge_signed_audit import BridgeSignedAudit
-from leroy_bridge.bridge_supervisor import BridgeSupervisor
 from leroy_bridge.authorized_session import (
     MotionEnvelope, RearmEnvelope, SessionVerifier,
 )
@@ -563,32 +561,6 @@ class LeroyBridgeNode(Node):
     def _yaw_quaternion(yaw: float):
         half = 0.5 * yaw
         return 0.0, 0.0, math.sin(half), math.cos(half)
-
-    def _inspect_signed_diagnostic(self, audit, *, motion, rearm=None,
-                                   now_ns):
-        # signed audit is not a ROS subscriber or motor ingress. This method
-        # reports HMAC/session verification ONLY and deliberately never
-        # calls _send_command, motor PWM conversion or any serial method.
-        # In production no verifier or audit is constructed by this node.
-        if type(audit) is not BridgeSignedAudit:
-            raise TypeError('signed audit requires an exact bridge diagnostic auditor')
-        return audit.inspect(motion=motion, rearm=rearm, now_ns=now_ns)
-
-    def _supervise_signed_diagnostic(
-            self, supervisor, *, motion, rearm=None, now_ns,
-            health, publishers):
-        # bridge supervisor: diagnostic-only, no ROS command subscriber/serial write.
-        # Real local clock/CDC failures override all synthetic claims.
-        # The caller cannot override these bridge-owned fault flags.
-        if type(supervisor) is not BridgeSupervisor:
-            raise TypeError('bridge supervisor requires exact diagnostic supervisor')
-        return supervisor.evaluate(
-            motion=motion, rearm=rearm, now_ns=now_ns,
-            health=health, publishers=publishers,
-            transport_healthy=not self._transport_fault.is_set(),
-            clock_healthy=not self._clock_fault,
-            bridge_running=not self._stop_event.is_set(),
-        )
 
     def _send_command(self, command: str) -> bool:
         # Raw strings ALWAYS take the unchanged command allowlist zero-only allowlist.
