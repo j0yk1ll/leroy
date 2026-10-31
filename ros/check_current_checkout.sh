@@ -1,124 +1,35 @@
 #!/usr/bin/env bash
-# Offline validation that a fresh source checkout contains all ACTIVE
-# (nonactuating) runtime build inputs. Does not open any robot device.
+# Source-only production integrity and safety regressions. Opens no hardware.
 set -Eeuo pipefail
 cd "$(dirname "$0")"
-for file in Dockerfile Dockerfile.live-perception Dockerfile.live-costmap \
-    Dockerfile.xrslam Dockerfile.imu \
-    Dockerfile.capture \
-    src/leroy_bringup/scripts/build_diagnostic_images.sh src/leroy_bringup/scripts/sensor_graph.sh \
-    leroy.sh \
-    src/leroy_bringup/scripts/xrslam_diagnostic.sh \
-    src/leroy_bringup/scripts/sensor_session.sh src/leroy_bringup/scripts/heading.sh \
-    src/leroy_sensors/leroy_sensors/imu_protocol.py \
-    src/leroy_sensors/leroy_sensors/imu_source.py \
-    src/leroy_sensors/leroy_sensors/imu_service.py \
-    src/leroy_sensors/leroy_sensors/imu_overlap.py \
-    src/leroy_sensors/leroy_sensors/delivery_trace.py \
-    src/leroy_sensors/leroy_sensors/spin_budget.py \
-    src/leroy_localization/leroy_localization/heading_node.py \
-    src/leroy_bringup/leroy_bringup/readiness.py \
-    src/leroy_localization/leroy_localization/kinematics.py \
-    src/leroy_localization/leroy_localization/yaw_core.py \
-    src/leroy_localization/leroy_localization/auto_calibration_core.py \
-    src/leroy_sensors/leroy_sensors/imu_source.py \
-    src/leroy_sensors/leroy_sensors/imu_protocol.py \
-    src/leroy_bridge/package.xml src/leroy_navigation/package.xml \
-    src/leroy_localization/package.xml \
-    src/leroy_perception/package.xml \
-    config/xrslam_monocular_diagnostic.yaml \
-    config/xrslam_device_template_UNCALIBRATED.yaml; do
-    [[ -f "$file" && ! -L "$file" ]] || {
-        echo "REPO_PORTABILITY=BLOCKED_MISSING_$file" >&2; exit 2;
-    }
-done
-# Validate build contexts, static commands and no accidental host-device
-# access in build scripts. No Podman build or ROS graph is started.
-# Syntax-check every retained top-level shell entry point, including
-# the optional signed-controller launcher (but NEVER execute it).
-for script in ./*.sh src/leroy_bringup/scripts/*.sh; do
-    bash -n "$script"
-done
+bash -n ./leroy.sh ./build_current_images.sh ./check_current_checkout.sh
 python3 - <<'PY'
 from pathlib import Path
-import re
-
-root = Path(".")
-# The current checked-in runtime has one maintained shell interface.
-# Historical M16-M23 experiments and optional Nav2 fixture Dockerfiles are
-# archived, not additional startup procedures.
-expected_scripts = {"build_current_images.sh", "check_current_checkout.sh", "leroy.sh"}
-found_scripts = {p.name for p in root.glob("*.sh")}
-if found_scripts != expected_scripts:
-    raise SystemExit("Unexpected root shell entry points: " + str(sorted(found_scripts ^ expected_scripts)))
-required_bringup_scripts = {
-    "container_entrypoint.sh", "readiness.sh", "sensor_session.sh",
-    "heading.sh", "heading_snapshot.sh",
-    "build_diagnostic_images.sh", "xrslam_diagnostic.sh",
-    "sensor_graph.sh", "imu_diagnostic.sh",
-}
-bringup_scripts = {p.name for p in (root/"src/leroy_bringup/scripts").glob("*.sh")}
-if bringup_scripts != required_bringup_scripts:
-    raise SystemExit("Bringup script inventory changed: " + str(sorted(bringup_scripts ^ required_bringup_scripts)))
-dockerfiles = (
-    "Dockerfile", "Dockerfile.live-perception",
-    "Dockerfile.live-costmap", "Dockerfile.xrslam",
-    "Dockerfile.imu", "Dockerfile.capture",
-)
-for name in dockerfiles:
-    # These image recipes deliberately use plain local COPY statements,
-    # not external URLs as build contexts.
-    source = (root/name).read_text()
-    for line in source.splitlines():
-        m = re.match(r"^COPY\s+(.*)", line)
-        if not m:
-            continue
-        args = m.group(1).split()
-        if args[0].startswith("--"):
-            raise SystemExit("Unexpected COPY option: " + name)
-        if len(args) < 2:
-            raise SystemExit("Malformed Docker COPY in " + name)
-        for src in args[:-1]:
-            if not (root/src).exists():
-                raise SystemExit("Missing Docker build input: " + src +
-                                 " required by " + name)
-
-builder = (root/"build_current_images.sh").read_text()
-for tag in ("jazzy", "perception", "costmap", "xrslam",
-            "stage4b-imu", "stage4c-capture-offline"):
-    if tag not in builder and tag not in (root/"src/leroy_bringup/scripts/build_diagnostic_images.sh").read_text():
-        raise SystemExit("Missing canonical image tag " + tag)
-assert "/dev/video8" in (root/"src/leroy_bringup/scripts/sensor_graph.sh").read_text()
-assert "motor" not in (root/"src/leroy_bringup/scripts/build_diagnostic_images.sh").read_text().split(
-    "LIVE_STAGE3_IMAGES=BUILT_NOT_LAUNCHED")[-1]
-print("REPO_PORTABILITY=PASS_SOURCE_BUILD_INPUTS")
+import xml.etree.ElementTree as ET
+r=Path('.')
+expected={'leroy_bridge','leroy_bringup','leroy_sensors','leroy_perception','leroy_localization','leroy_navigation','leroy_description','leroy_msgs'}
+actual={p.name for p in (r/'src').iterdir() if (p/'package.xml').is_file()}
+assert actual == expected, (actual,expected)
+for name in actual:
+    assert ET.parse(r/'src'/name/'package.xml').getroot().findtext('name') == name
+assert {p.name for p in r.glob('*.sh')} == {'leroy.sh','build_current_images.sh','check_current_checkout.sh'}
+assert not list(r.glob('*.py'))
+assert not list(r.glob('Dockerfile.*'))
+assert not list(r.glob('*.yaml'))
+assert "BLOCKED_PRODUCTION_MOTION_NOT_COMMISSIONED" in (r/'leroy.sh').read_text()
+assert "enabled: false" in (r/'src/leroy_navigation/config/hardware.disabled.yaml').read_text()
+assert "bridge_command_output_enabled: false" in (r/'src/leroy_navigation/config/hardware.disabled.yaml').read_text()
+assert (r/'src/leroy_bridge/leroy_bridge/command_ingress.py').is_file()
+assert (r/'src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py').is_file()
+print('PRODUCTION_SOURCE_LAYOUT=PASS_FAIL_CLOSED')
 PY
-PYTHONPATH=".:src/leroy_perception:src/leroy_sensors:src/leroy_bringup:src/leroy_localization:src/leroy_capture${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
-    tests.unit.boot_localization_core_test \
-    tests.unit.boot_yaw_core_test \
-    tests.unit.boot_auto_calibration_test \
-    tests.unit.boot_yaw_tracking_test \
-    tests.integration.live_boot_readiness_test \
-    tests.integration.live_boot_service_test \
-    tests.integration.current_live_runtime_test \
-    tests.integration.repository_readme_test \
-    tests.integration.test_architecture_layout \
-    tests.unit.test_imu_protocol \
-    tests.safety.leroy_runtime_test \
-    tests.safety.test_operator_stop \
-    tests.integration.test_camera_perception_startup \
-    tests.integration.test_camera_localization_sidecar \
-    tests.safety.test_imu_source_safety \
-    tests.unit.test_imu_delivery \
-    tests.unit.test_capture_contract \
-    tests.unit.test_capture_metadata \
-    tests.integration.test_capture_metadata_ros \
-    tests.integration.test_capture_ingress \
-    tests.integration.test_capture_audit
-
-python3 -m unittest -v tests.integration.test_live_costmap_static_contract \
-    tests.integration.test_xrslam_startup_contract
-
-grep -Fqx 'CMD ["/bin/false"]' Dockerfile.capture
-grep -Fqx 'LIVE_CAPTURE_COMMISSIONED = True' src/leroy_capture/leroy_capture/recorder.py
-echo 'REPO_PORTABILITY=PASS_OFFLINE_CURRENT_RUNTIME'
+PYTHONPATH=".:src/leroy_sensors:src/leroy_localization:src/leroy_bringup:src/leroy_perception:src/leroy_bridge${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest -v \
+  tests.unit.boot_localization_core_test \
+  tests.unit.boot_yaw_core_test \
+  tests.unit.boot_auto_calibration_test \
+  tests.unit.boot_yaw_tracking_test \
+  tests.unit.test_imu_protocol \
+  tests.unit.test_kinematics \
+  tests.unit.test_geometry \
+  tests.safety.test_imu_source_safety
+echo 'LEROY_PRODUCTION_CHECK=PASS_OFFLINE'

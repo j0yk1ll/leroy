@@ -119,7 +119,7 @@ from network import tvimblock
 print("DepthART metric imports OK")
 PY
 
-# Verify that the checkpoint expected by leroy_perception exists.
+# Verify the pinned depth model required by perception exists.
 RUN test -f /opt/DepthART/checkpoints/metric/depthart_metric_indoor_s_448.pth
 
 # ------------------------------------------------------------
@@ -148,6 +148,7 @@ COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_description /leroy_ws/src/leroy_description
 COPY src/leroy_msgs /leroy_ws/src/leroy_msgs
 COPY src/leroy_perception /leroy_ws/src/leroy_perception
+COPY src/leroy_navigation /leroy_ws/src/leroy_navigation
 # The XRSLAM localization adapter is built in Dockerfile.xrslam only, after libxrslam.so is available.
 
 COPY config /config
@@ -160,7 +161,8 @@ RUN . /opt/ros/jazzy/setup.sh \
          --symlink-install \
          --packages-up-to \
            leroy_bringup \
-           leroy_perception
+           leroy_perception \
+           leroy_navigation
 
 # Basic build-time validation.
 RUN . /opt/ros/jazzy/setup.sh \

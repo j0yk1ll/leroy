@@ -73,9 +73,9 @@ def _launch_xrslam(context, *args, **kwargs):
         xrslam_params['camera_imu_offset_sec'] = offset
 
     return [Node(
-        package='leroy_xrslam',
+        package='leroy_localization',
         executable='leroy_xrslam_node',
-        name='leroy_xrslam',
+        name='leroy_localization',
         output='screen',
         parameters=[xrslam_params],
     )]
@@ -162,7 +162,7 @@ def generate_launch_description():
     depthart = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('leroy_depthart'),
+                FindPackageShare('leroy_perception'),
                 'launch',
                 'depthart.launch.py',
             ])
