@@ -37,7 +37,7 @@ from leroy_bridge.odometry import integrate_yaw
 from leroy_bridge.clock_sync import ClockSyncError, McuClockSync
 from leroy_bridge.command_ingress import command_to_bytes, CommandRejected
 from leroy_bridge.bridge_signed_audit import BridgeSignedAudit
-from leroy_bridge.bridge_diagnostic_supervisor import BridgeDiagnosticSupervisor
+from leroy_bridge.bridge_supervisor import BridgeSupervisor
 from leroy_bridge.authorized_session import (
     MotionEnvelope, RearmEnvelope, SessionVerifier,
 )
@@ -580,7 +580,7 @@ class LeroyBridgeNode(Node):
         # M22K: diagnostic-only, no ROS command subscriber/serial write.
         # Real local clock/CDC failures override all synthetic claims.
         # The caller cannot override these bridge-owned fault flags.
-        if type(supervisor) is not BridgeDiagnosticSupervisor:
+        if type(supervisor) is not BridgeSupervisor:
             raise TypeError('M22K requires exact diagnostic supervisor')
         return supervisor.evaluate(
             motion=motion, rearm=rearm, now_ns=now_ns,

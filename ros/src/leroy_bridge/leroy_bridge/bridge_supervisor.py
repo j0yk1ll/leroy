@@ -1,6 +1,6 @@
-"""M22K bridge-owned signed DIAGNOSTIC supervisor, NO actuation.
+"""Bridge-owned fail-closed signed command supervisor, NO actuation.
 
-A stateful fail-closed evaluation model composed with M22J signed audits.
+Evaluates signed command provenance without granting motor authority.
 It produces only status booleans and reasons, never Twist, duty or CDC
 commands. The actual bridge may call this ONLY through the separately
 injected _supervise_signed_diagnostic method; production startup does not
@@ -37,7 +37,7 @@ class DiagnosticAssessment:
     diagnostic_only: bool = True
 
 
-class BridgeDiagnosticSupervisor:
+class BridgeSupervisor:
     """One signed proposal per evaluation, never cache any velocity.
 
     An operator grant is an edge that STARTS a 1-second healthy dwell.
