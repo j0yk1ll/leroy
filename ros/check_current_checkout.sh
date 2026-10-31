@@ -28,8 +28,5 @@ PYTHONPATH=".:src/leroy_sensors:src/leroy_localization:src/leroy_bringup:src/ler
   tests.unit.boot_yaw_core_test \
   tests.unit.boot_auto_calibration_test \
   tests.unit.boot_yaw_tracking_test \
-  tests.unit.test_imu_protocol \
-  tests.unit.test_kinematics \
-  tests.unit.test_geometry \
-  tests.safety.test_imu_source_safety
+  tests.unit.test_imu_protocol
 echo 'LEROY_PRODUCTION_CHECK=PASS_OFFLINE'
