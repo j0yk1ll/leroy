@@ -144,10 +144,10 @@ class SingleRunbookTest(unittest.TestCase):
     def test_autonomy_todos_are_in_the_owner_files(self):
         required = (
             "ros/leroy.sh",
-            "ros/boot_localization_core.py",
+            "ros/src/leroy_localization/leroy_localization/localization_core.py",
             "ros/live_boot_readiness.py",
-            "ros/boot_yaw_core.py",
-            "ros/boot_auto_calibration_core.py",
+            "ros/src/leroy_localization/leroy_localization/yaw_core.py",
+            "ros/src/leroy_localization/leroy_localization/auto_calibration_core.py",
             "ros/src/leroy_bridge/leroy_bridge/node.py",
             "ros/src/leroy_bridge/leroy_bridge/motor_cdc_protocol.py",
             "ros/src/leroy_nav2_perception/leroy_nav2_perception/depth_obstacles.py",
