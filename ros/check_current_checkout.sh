@@ -30,6 +30,7 @@ python3 -m unittest -v \
   tests.unit.boot_auto_calibration_test \
   tests.unit.boot_yaw_tracking_test \
   tests.unit.test_imu_protocol \
-  tests.safety.test_production_inhibit
+  tests.safety.test_production_inhibit \
+  tests.unit.test_readiness
 python3 -m pytest -q tests/unit/test_kinematics.py tests/unit/test_geometry.py
 echo 'LEROY_PRODUCTION_CHECK=PASS_OFFLINE'
