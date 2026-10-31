@@ -29,7 +29,7 @@ leroy_bridge:
     half_wheelbase_m: 0.180
     half_track_m: 0.275
 
-    # Stage 3/M22D: raw /cmd_vel and nonzero legacy set_wheels remain
+    # sensor graph/command allowlist: raw /cmd_vel and nonzero legacy set_wheels remain
     # disabled. Signed motor sessions use the separately sequenced MCU
     # command path only after all live interlock/sensor gates are met.
     # This is PROVISIONAL calibration; measure wheel response on the robot

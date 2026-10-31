@@ -1,9 +1,9 @@
-"""M22E: signed, session-bound command envelopes (pure Python, NO motor I/O).
+"""signed session: signed, session-bound command envelopes (pure Python, NO motor I/O).
 
 This is a candidate protocol for offline tests. HMAC only proves possession
 of a secret *if* key custody is independently established. This module
 does not distribute credentials, authenticate an operator, attach to ROS,
-unlock the M22D production CDC allowlist, or authorize physical motion.
+unlock the command allowlist production CDC allowlist, or authorize physical motion.
 A fresh verifier has a new random session ID to reject prior-session replay.
 """
 from dataclasses import dataclass
@@ -43,7 +43,7 @@ class RearmEnvelope:
 
 def _command_fields(item):
     return {
-        "domain": "leroy-m22e-command-v1",
+        "domain": "leroy-command-v1",
         "session_id": item.session_id,
         "owner": item.owner,
         "sequence": item.sequence,
@@ -57,7 +57,7 @@ def _command_fields(item):
 
 def _rearm_fields(item):
     return {
-        "domain": "leroy-m22e-rearm-v1",
+        "domain": "leroy-rearm-v1",
         "session_id": item.session_id,
         "counter": item.counter,
         "generated_ns": item.generated_ns,

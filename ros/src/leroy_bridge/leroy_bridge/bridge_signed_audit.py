@@ -1,7 +1,7 @@
-"""M22J bridge-owned signed-candidate AUDIT, never a motor command path.
+"""signed audit bridge-owned signed-candidate AUDIT, never a motor command path.
 
 This package module parses nothing from ROS and emits NO CDC bytes, duty
-values or actionable motion output. It checks M22E signed command and
+values or actionable motion output. It checks signed session signed command and
 operator-rearm envelopes using an explicitly injected SessionVerifier.
 Verification is diagnostic only and NEVER authorizes physical actuation.
 
@@ -33,7 +33,7 @@ class BridgeSignedAudit:
 
     def __init__(self, verifier):
         if type(verifier) is not SessionVerifier:
-            raise TypeError("M22J audit requires exact SessionVerifier type")
+            raise TypeError("signed audit audit requires exact SessionVerifier type")
         self._verifier = verifier
         self._inspections = 0
 

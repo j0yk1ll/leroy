@@ -1,4 +1,4 @@
-"""M16 pure passive ROS sensor quality metrics; no ROS imports.
+"""sensor observer pure passive ROS sensor quality metrics; no ROS imports.
 
 These checks say whether messages have a usable *shape* and timestamp,
 never whether tracking, camera calibration, metric scale, or obstacles

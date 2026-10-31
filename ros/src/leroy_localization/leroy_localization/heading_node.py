@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Read real M18 IMU on Stage 3 DDS; publish relative yaw status only.
+"""Read real IMU source IMU on sensor graph DDS; publish relative yaw status only.
 
 This process does not own the MCU, create motion interfaces, accept motion
 requests or grant an actuator session. It requires the separately controlled,
-already accepted M18 IMU source in the isolated domain.
+already accepted IMU source IMU source in the isolated domain.
 """
 
 # TODO(AUTONOMY) #005 [heading observation]: Replace the current standalone
@@ -57,7 +57,7 @@ def run():
     from rclpy.qos import (
         DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy,
     )
-    # A deeper BEST_EFFORT subscriber queue absorbs brief Stage 3 CPU
+    # A deeper BEST_EFFORT subscriber queue absorbs brief sensor graph CPU
     # scheduling stalls without claiming any guaranteed DDS delivery.
     # On receipt, sensor age and core stamp continuity are still enforced.
     imu_qos = QoSProfile(

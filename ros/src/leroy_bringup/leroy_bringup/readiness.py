@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single bounded LIVE read-only Stage 3 boot-readiness observation.
+"""Single bounded LIVE read-only sensor graph boot-readiness observation.
 
 Consumes the already isolated physical camera/depth/XRSLAM DDS graph.
 Never publishes ROS topics or controls the MCU, bridge, wheels or navigation.
@@ -75,7 +75,7 @@ def parse_auto_imu_candidate(text, now_ns):
         d = json.loads(text)
         if (type(d) is not dict
                 or d.get("schema") != "leroy_auto_imu_calibration_v1"
-                or d.get("source") != "live_ros_m18_imu"
+                or d.get("source") != "leroy_imu"
                 or d.get("state") != "VERIFIED_STATIONARY_CANDIDATE"
                 or d.get("owner_verified") is not True
                 or d.get("motor_motion_authorized") is not False

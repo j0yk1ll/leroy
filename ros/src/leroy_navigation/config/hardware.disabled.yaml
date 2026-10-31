@@ -6,7 +6,7 @@
 # Document reproducible on-robot acceptance and negative test records
 # before introducing any explicit supported enabled hardware profile.
 # Deployment-policy manifest, NOT a Nav2 ros__parameters file.
-# Milestone 1 has no hardware launch or motor command path.
+# The current uncommissioned deployment has no hardware launch or motor command path.
 # Do not pass this file to a Nav2 node as parameters.
 deployment:
   mode: hardware

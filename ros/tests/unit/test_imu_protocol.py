@@ -1,4 +1,4 @@
-"""M18 ROS-free serial contract/command allowlist tests."""
+"""IMU source ROS-free serial contract/command allowlist tests."""
 import ast
 from pathlib import Path
 import unittest

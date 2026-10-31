@@ -1,4 +1,4 @@
-"""M15 real-message sensor intake validation; ROS-free and fail-closed.
+"""sensor contract real-message sensor intake validation; ROS-free and fail-closed.
 
 For integration with XRSLAM Odometry/status and DepthART base_link
 PointCloud2. The checks verify message shape, timestamps and data

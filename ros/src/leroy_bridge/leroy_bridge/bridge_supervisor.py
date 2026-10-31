@@ -49,7 +49,7 @@ class BridgeSupervisor:
 
     def __init__(self, audit):
         if type(audit) is not BridgeSignedAudit:
-            raise TypeError("M22K requires exact M22J audit type")
+            raise TypeError("bridge supervisor requires exact signed audit audit type")
         self._audit = audit
         self.state = "LATCHED"
         self.last_now_ns = None

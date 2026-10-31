@@ -196,7 +196,7 @@ class LeroyBridgeNode(Node):
             TransformBroadcaster(self)
             if self._degraded_odometry_enabled and self._publish_odom_tf else None
         )
-        # M22D deliberately has NO raw /cmd_vel subscription. The new
+        # command allowlist deliberately has NO raw /cmd_vel subscription. The new
         # signed-only motion/rearm interfaces are provisioned separately;
         # without independent physical readiness they cannot reach CDC.
 
@@ -283,9 +283,9 @@ class LeroyBridgeNode(Node):
             )
 
         # No geometry, PWM gain, ROS remap or runtime parameter can
-        # enable motion under the M22D CDC allowlist.
+        # enable motion under the command allowlist CDC allowlist.
         self.get_logger().warning(
-            'M22D: raw /cmd_vel disabled; arbitrary string commands '
+            'command allowlist: raw /cmd_vel disabled; arbitrary string commands '
             'remain ZERO-wheel only. Signed actuator topics are off '
             'unless protected role keys are provisioned; independent '
             'physical-interlock release is NOT implemented.'
@@ -518,7 +518,7 @@ class LeroyBridgeNode(Node):
         if self._encoder_stream_hz not in allowed_stream_hz:
             raise ValueError('encoder_stream_hz must be one of 0, 10, 20, 50, 100')
         if self._watchdog_ms < 1 or self._watchdog_ms > 60000:
-            raise ValueError('watchdog_ms must be in 1..60000 during M22D')
+            raise ValueError('watchdog_ms must be in 1..60000 during command allowlist')
         if self._keepalive_period_s <= 0.0:
             raise ValueError('keepalive_period_s must be > 0')
         if self._cmd_vel_timeout_s <= 0.0:
@@ -566,22 +566,22 @@ class LeroyBridgeNode(Node):
 
     def _inspect_signed_diagnostic(self, audit, *, motion, rearm=None,
                                    now_ns):
-        # M22J is not a ROS subscriber or motor ingress. This method
+        # signed audit is not a ROS subscriber or motor ingress. This method
         # reports HMAC/session verification ONLY and deliberately never
         # calls _send_command, motor PWM conversion or any serial method.
         # In production no verifier or audit is constructed by this node.
         if type(audit) is not BridgeSignedAudit:
-            raise TypeError('M22J requires an exact bridge diagnostic auditor')
+            raise TypeError('signed audit requires an exact bridge diagnostic auditor')
         return audit.inspect(motion=motion, rearm=rearm, now_ns=now_ns)
 
     def _supervise_signed_diagnostic(
             self, supervisor, *, motion, rearm=None, now_ns,
             health, publishers):
-        # M22K: diagnostic-only, no ROS command subscriber/serial write.
+        # bridge supervisor: diagnostic-only, no ROS command subscriber/serial write.
         # Real local clock/CDC failures override all synthetic claims.
         # The caller cannot override these bridge-owned fault flags.
         if type(supervisor) is not BridgeSupervisor:
-            raise TypeError('M22K requires exact diagnostic supervisor')
+            raise TypeError('bridge supervisor requires exact diagnostic supervisor')
         return supervisor.evaluate(
             motion=motion, rearm=rearm, now_ns=now_ns,
             health=health, publishers=publishers,
@@ -591,7 +591,7 @@ class LeroyBridgeNode(Node):
         )
 
     def _send_command(self, command: str) -> bool:
-        # Raw strings ALWAYS take the unchanged M22D zero-only allowlist.
+        # Raw strings ALWAYS take the unchanged command allowlist zero-only allowlist.
         # A non-string command must be the exact identity-bound one-shot
         # MotorAuthority decision, with independent verified hardware
         # release. No ROS message or arbitrary PWM string can bypass it.
@@ -637,7 +637,7 @@ class LeroyBridgeNode(Node):
         except CommandRejected as exc:
             self.get_logger().error(f'Motor CDC command rejected: {exc}')
             return False
-        # M22G: once a serial write/flush/short-write/read error occurs,
+        # transport fault: once a serial write/flush/short-write/read error occurs,
         # this process cannot resume CDC writes, even for a STOP packet.
         # No physical stopping or MCU acknowledgement is asserted here.
         if self._transport_fault.is_set():
@@ -697,7 +697,7 @@ class LeroyBridgeNode(Node):
     def _send_keepalive(self) -> None:
         # MCU watchdog accepts any keepalive, even when control is stale.
         # Once a motor authority exists, only a fresh signed ARMED session
-        # can extend motion. The keyless M22D telemetry bridge is unchanged.
+        # can extend motion. The keyless command allowlist telemetry bridge is unchanged.
         if (self._clock_fault or self._transport_fault.is_set()
                 or self._stop_event.is_set()):
             return

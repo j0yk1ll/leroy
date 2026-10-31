@@ -5,7 +5,7 @@ It constructs bounded, canonical MCU set_wheels packets ONLY after a
 signed operator rearm, a one-second uninterrupted healthy dwell and
 fresh, signed, non-replayed controller commands.
 
-The production bridge's M22D nonzero serial-command inhibit is intentionally
+The production bridge's command allowlist nonzero serial-command inhibit is intentionally
 NOT removed by this commit. Physical use requires trusted local health,
 key provisioning and MCU-stop implementation at the sole serial writer.
 """

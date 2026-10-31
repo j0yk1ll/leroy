@@ -1,4 +1,4 @@
-"""Automatic stationarity-based gyro calibration verification for real M18 IMU.
+"""Automatic stationarity-based gyro calibration verification for real IMU source IMU.
 
 Leroy's BootYaw already estimates a boot-session gyro Z bias before heading
 becomes active. This independent 8-second holdout checks that correction

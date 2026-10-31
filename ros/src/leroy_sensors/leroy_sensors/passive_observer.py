@@ -1,4 +1,4 @@
-"""M16 bounded PASSIVE monitoring of Leroy's actual ROS sensor topics.
+"""sensor observer bounded PASSIVE monitoring of Leroy's actual ROS sensor topics.
 
 Subscriptions + graph introspection only. No command publisher, Nav2 goal,
 lifecycle transition, parameter client, actuator, USB/serial, or input
@@ -36,11 +36,11 @@ MAX_DURATION_S = 180.0
 
 def requested_duration(env):
     try:
-        seconds = float(env.get('LEROY_M16_DURATION_S', str(DEFAULT_DURATION_S)))
+        seconds = float(env.get('LEROY_SENSOR_OBSERVER_DURATION_S', str(DEFAULT_DURATION_S)))
     except (ValueError, TypeError) as exc:
-        raise ValueError('LEROY_M16_DURATION_S must be numeric') from exc
+        raise ValueError('LEROY_SENSOR_OBSERVER_DURATION_S must be numeric') from exc
     if not MIN_DURATION_S <= seconds <= MAX_DURATION_S:
-        raise ValueError('M16 duration must be 5 through 180 seconds')
+        raise ValueError('sensor observer duration must be 5 through 180 seconds')
     return seconds
 
 
@@ -58,9 +58,9 @@ def endpoint_evidence(endpoints):
 class PassiveSensorObserver(Node):
     def __init__(self):
         if os.environ.get('LEROY_NAV2_DRY_RUN') != '1':
-            raise RuntimeError('M16 requires LEROY_NAV2_DRY_RUN=1')
+            raise RuntimeError('sensor observer requires LEROY_NAV2_DRY_RUN=1')
         super().__init__(
-            'm16_passive_observer', enable_rosout=False,
+            'leroy_sensor_observer', enable_rosout=False,
             start_parameter_services=False)
         self.stats = {key: StreamStats() for key in INPUTS}
         self.status = {'tracking_status': None, 'localization_valid': None}
@@ -79,7 +79,7 @@ class PassiveSensorObserver(Node):
         # rclpy.Node.subscriptions is a read-only property on Jazzy.
         # Hold our handles in a private attribute instead; the Node owns
         # subscriptions and never creates publishers or service clients.
-        self._m16_subscriptions = [
+        self._subscriptions = [
             self.create_subscription(
                 Image, INPUTS['camera_image'][0],
                 lambda m: self._image('camera_image', m),
@@ -110,10 +110,10 @@ class PassiveSensorObserver(Node):
                 PointCloud2, INPUTS['obstacle_cloud'][0],
                 self._cloud, qos_profile_sensor_data),
         ]
-        if any(s.topic_name != INPUTS[k][0] for k,s in zip(INPUTS,self._m16_subscriptions)):
-            raise RuntimeError('M16 refuses ROS subscription remapping')
+        if any(s.topic_name != INPUTS[k][0] for k,s in zip(INPUTS,self._subscriptions)):
+            raise RuntimeError('sensor observer refuses ROS subscription remapping')
         self.get_logger().info(
-            'M16 passive observer: subscriptions only, never commands motors')
+            'sensor observer passive observer: subscriptions only, never commands motors')
 
     def _now(self):
         return time.monotonic(), self.get_clock().now().nanoseconds*1e-9
@@ -276,7 +276,7 @@ class PassiveSensorObserver(Node):
                     'stream': key, 'expected_source': source,
                     'observed_publishers': publishers})
         result = {
-            'milestone': 'M16',
+            'component': 'sensor_observer',
             'observation_only': True,
             'duration_requested_s': duration_s,
             'ros_domain_id': os.environ.get('ROS_DOMAIN_ID'),
@@ -317,9 +317,9 @@ def main(args=None):
         while rclpy.ok() and time.monotonic() < end:
             rclpy.spin_once(node, timeout_sec=0.1)
         summary = node.report(seconds)
-        print('M16_PASSIVE_REPORT_JSON=' +
+        print('SENSOR_OBSERVER_PASSIVE_REPORT_JSON=' +
               json.dumps(summary, sort_keys=True), flush=True)
-        print('M16_VERDICT=' + summary['verdict'], flush=True)
+        print('SENSOR_OBSERVER_VERDICT=' + summary['verdict'], flush=True)
     finally:
         if node is not None:
             node.destroy_node()

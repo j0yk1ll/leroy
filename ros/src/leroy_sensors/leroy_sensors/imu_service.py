@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Persistent sensor-only M18 publisher for the existing isolated live graph.
+"""Persistent sensor-only IMU source publisher for the existing isolated live graph.
 
 Requires a separately verified PHYSICAL motor-power disconnect. Even though
 only IMU stream START/STOP packets are emitted, the MCU CDC is motor-capable.
@@ -65,7 +65,7 @@ def graph_ok(node):
     pubs = node.get_publishers_info_by_topic("/imu/data_raw")
     return (
         len(pubs) == 1
-        and pubs[0].node_name == "m18_imu_source"
+        and pubs[0].node_name == "leroy_imu_source"
         and pubs[0].node_namespace == "/"
         and pubs[0].topic_type == "sensor_msgs/msg/Imu"
         and "leroy_xrslam" in nodes
@@ -156,7 +156,7 @@ def run():
                             "imu_published": c["published_imu_messages"],
                             "sensor_only": True,
                             "motor_commands_sent": 0,
-                            "source": "/m18_imu_source",
+                            "source": "/leroy_imu_source",
                         }, sort_keys=True), flush=True)
                         last_status = now
             finally:

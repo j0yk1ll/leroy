@@ -29,7 +29,7 @@ from leroy_sensors.imu_protocol import (
 
 
 REQUIRED_ENV = {
-    "LEROY_M18_IMU_STREAM": "1",
+    "LEROY_IMU_STREAM_ENABLED": "1",
     "LEROY_NAV2_DRY_RUN": "1",
     "ROS_DOMAIN_ID": "169",
     "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
@@ -40,18 +40,18 @@ MAX_STAMP_AGE_S = 2.0
 
 class ImuStreamSource(Node):
     def __init__(self, on_imu_published=None):
-        # Optional M21F metadata-only tap. Existing M18/M20 callers pass None
+        # Optional M21F metadata-only tap. Existing IMU source/M20 callers pass None
         # and preserve the previously accepted physical publication path.
         if on_imu_published is not None and not callable(on_imu_published):
             raise TypeError("IMU metadata observer must be callable")
         super().__init__(
-            "m18_imu_source", enable_rosout=False,
+            "leroy_imu_source", enable_rosout=False,
             start_parameter_services=False)
         self._on_imu_published = on_imu_published
         self._imu_pub = self.create_publisher(
             Imu, "/imu/data_raw", qos_profile_sensor_data)
         if self._imu_pub.topic_name != "/imu/data_raw":
-            raise RuntimeError("M18 refuses topic remapping")
+            raise RuntimeError("IMU source refuses topic remapping")
         self._mapper = McuClockSync()
         self.last_sequence = None
         self.counts = {
@@ -168,7 +168,7 @@ class ImuStreamSource(Node):
         return {
             "serial_stream_frequency_requested_hz": STREAM_HZ,
             "pub_topic": "/imu/data_raw",
-            "publisher_node": "/m18_imu_source",
+            "publisher_node": "/leroy_imu_source",
             "mcu_sequence_and_t_us_observed": count > 0,
             "absolute_mcu_camera_offset_validated": False,
             "spatial_imu_extrinsics_validated": False,
@@ -191,7 +191,7 @@ class ImuStreamSource(Node):
 
 def send_only_whitelisted_serial_command(device, payload):
     if payload not in (START, STOP):
-        raise ValueError("M18 forbids all unapproved MCU writes")
+        raise ValueError("IMU source forbids all unapproved MCU writes")
     device.write(payload)
     device.flush()
 
@@ -210,7 +210,7 @@ def wait_ack(device, timeout_s=2.0):
 def enforce_environment():
     for key, expected in REQUIRED_ENV.items():
         if os.environ.get(key) != expected:
-            raise RuntimeError(f"M18 requires {key}={expected}")
+            raise RuntimeError(f"IMU source requires {key}={expected}")
 
 
 def node_smoke():
@@ -219,12 +219,12 @@ def node_smoke():
     try:
         src = ImuStreamSource()
         obs = PassiveSensorObserver()
-        assert len(obs._m16_subscriptions) == 9
+        assert len(obs._subscriptions) == 9
         summary = obs.report(5.0)
         assert summary["observation_only"]
         assert summary["verdict"] == "INCOMPLETE_OR_UNVERIFIED_REAL_STREAMS"
         assert src._imu_pub.topic_name == "/imu/data_raw"
-        print("M18_ROS_NODES_SELFTEST=PASS", flush=True)
+        print("IMU_SOURCE_ROS_NODES_SELFTEST=PASS", flush=True)
     finally:
         if obs is not None:
             obs.destroy_node()
@@ -268,7 +268,7 @@ def run():
                 if not wait_ack(device):
                     raise RuntimeError("MCU did not acknowledge IMU stream start")
                 stream_acked = True
-                print("M18_IMU_STREAM_START_ACK=PASS", flush=True)
+                print("IMU_SOURCE_IMU_STREAM_START_ACK=PASS", flush=True)
                 start = time.monotonic()
                 deadline = start + DURATION_S
                 while time.monotonic() < deadline and not requested_stop[0]:
@@ -285,16 +285,16 @@ def run():
                     send_only_whitelisted_serial_command(device, STOP)
                     stream_stop_ack = wait_ack(device, timeout_s=2.0)
                 except (serial.SerialException, OSError, RuntimeError) as exc:
-                    print("M18_IMU_STREAM_STOP_ERROR=" +
+                    print("IMU_SOURCE_IMU_STREAM_STOP_ERROR=" +
                           type(exc).__name__, flush=True)
-                print("M18_IMU_STREAM_STOP_ACK=" +
+                print("IMU_SOURCE_IMU_STREAM_STOP_ACK=" +
                       ("PASS" if stream_stop_ack else "UNVERIFIED"),
                       flush=True)
 
         if passive_report is not None:
-            print("M16_PASSIVE_REPORT_JSON=" +
+            print("SENSOR_OBSERVER_PASSIVE_REPORT_JSON=" +
                   json.dumps(passive_report, sort_keys=True), flush=True)
-            print("M16_VERDICT=" + passive_report["verdict"], flush=True)
+            print("SENSOR_OBSERVER_VERDICT=" + passive_report["verdict"], flush=True)
 
         if src is not None:
             metrics = src.export()
@@ -312,7 +312,7 @@ def run():
                 and imu.get("invalid", 0) == 0
                 and imu.get("fresh_valid_receipt") is True
                 and len(publishers) == 1
-                and publishers[0]["node"] == "m18_imu_source"
+                and publishers[0]["node"] == "leroy_imu_source"
                 and publishers[0]["namespace"] == "/"
                 and publishers[0]["type"] == "sensor_msgs/msg/Imu"
             )
@@ -320,7 +320,7 @@ def run():
                 "OBSERVED_STAMPED_IMU_ROS_MESSAGE_CONTRACT"
                 if acceptable else "INCOMPLETE_OR_UNVERIFIED_STAMPED_IMU")
             metrics.update({
-                "milestone": "M18",
+                "component": "imu_source",
                 "serial_commands_allowlist": [
                     "set_imu_stream_hz 50", "set_imu_stream_hz 0",
                 ],
@@ -329,13 +329,13 @@ def run():
                 "observation_duration_requested_s": DURATION_S,
                 "verdict": verdict,
             })
-            print("M18_IMU_STREAM_REPORT_JSON=" +
+            print("IMU_SOURCE_IMU_STREAM_REPORT_JSON=" +
                   json.dumps(metrics, sort_keys=True), flush=True)
-            print("M18_IMU_STREAM_VERDICT=" + verdict, flush=True)
+            print("IMU_SOURCE_IMU_STREAM_VERDICT=" + verdict, flush=True)
             result_code = 0 if acceptable else 2
     except (serial.SerialException, OSError, RuntimeError,
             ClockSyncError, PacketError, ValueError) as exc:
-        print("M18_IMU_STREAM_ERROR=" + type(exc).__name__ +
+        print("IMU_SOURCE_IMU_STREAM_ERROR=" + type(exc).__name__ +
               ": " + str(exc), flush=True)
         result_code = 1
     finally:

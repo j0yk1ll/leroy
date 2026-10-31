@@ -1,4 +1,4 @@
-"""M22D: ROS-free serial-command allowlist for the existing Leroy bridge.
+"""command allowlist: ROS-free serial-command allowlist for the existing Leroy bridge.
 
 This is an ACTUATION-INHIBITING transition milestone. No nonzero wheel
 command can be produced by this allowlist. There is intentionally NO
@@ -33,7 +33,7 @@ def command_to_bytes(command):
         return (command + "\n").encode("ascii")
     match = _SETTING.fullmatch(command)
     if match is None:
-        raise CommandRejected("CDC command not in M22D allowlist")
+        raise CommandRejected("CDC command not in command allowlist allowlist")
     name = match.group("name")
     value_text = match.group("value")
     if len(value_text) > 5:
