@@ -5,7 +5,7 @@ import types
 import unittest
 from unittest.mock import patch
 
-from leroy_bringup.health_contract import decode, encode, TOPICS, OWNERS
+from leroy_safety.health_contract import decode, encode, TOPICS, OWNERS
 from leroy_bringup.readiness_node import ReadinessNode
 
 

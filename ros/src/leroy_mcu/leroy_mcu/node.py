@@ -36,10 +36,10 @@ from leroy_msgs.msg import EncoderCounts
 from leroy_mcu.odometry import integrate_yaw
 from leroy_mcu.clock_sync import ClockSyncError, McuClockSync
 from leroy_mcu.command_ingress import command_to_bytes, CommandRejected
-from leroy_mcu.authorized_session import (
+from leroy_safety.authorized_session import (
     MotionEnvelope, RearmEnvelope, SessionVerifier,
 )
-from leroy_mcu.motor_authority import MotorAuthority, HEALTH_KEYS
+from leroy_safety.motor_authority import MotorAuthority, HEALTH_KEYS
 from leroy_mcu.motor_cdc_protocol import MotorCdcProtocol
 from leroy_mcu.motor_sensor_health import MotorSensorHealth
 from leroy_mcu.motor_gpio_feedback import PhysicalMotorFeedback
