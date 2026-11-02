@@ -16,6 +16,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -138,6 +140,8 @@ public:
       "/xrslam/map_localization_status",latched);
     odom_pub_=create_publisher<nav_msgs::msg::Odometry>("/odom",rclcpp::QoS(10));
     pose_pub_=create_publisher<geometry_msgs::msg::PoseStamped>("/xrslam/pose",rclcpp::QoS(10));
+    feature_pub_=create_publisher<sensor_msgs::msg::Image>("/xrslam/tracked_features/image",qos);
+    landmarks_pub_=create_publisher<sensor_msgs::msg::PointCloud2>("/xrslam/landmarks",qos);
     if(use_imu_) {
       imu_sub_=create_subscription<sensor_msgs::msg::Imu>(imu_topic_,qos,
         [this](sensor_msgs::msg::Imu::ConstSharedPtr p){ imu(*p); });
@@ -369,6 +373,77 @@ private:
       pending_.pop_front();
     }
   }
+  // Export XRSLAM-owned tracks only. No synthetic corners, poses or TF.
+  void publish_visualization(const sensor_msgs::msg::Image &source) {
+    XRSLAMState state=XRSLAM_STATE_INITIALIZING;
+    XRSLAMGetResult(XRSLAM_RESULT_STATE,&state);
+    if(state!=XRSLAM_STATE_TRACKING_SUCCESS)return;
+
+    if(feature_pub_->get_subscription_count()>0) {
+      XRSLAMFeatures features;
+      XRSLAMGetResult(XRSLAM_RESULT_FEATURES,&features);
+      sensor_msgs::msg::Image output;
+      output.header=source.header;
+      output.height=source.height;output.width=source.width;
+      output.encoding="rgb8";output.is_bigendian=0;
+      output.step=source.width*3;
+      output.data.resize(static_cast<size_t>(output.step)*output.height);
+      const unsigned channels=(source.encoding=="mono8")?1:
+          (source.encoding=="bgr8"||source.encoding=="rgb8")?3:4;
+      const bool bgr=(source.encoding=="bgr8"||source.encoding=="bgra8");
+      for(size_t y=0;y<source.height;++y)
+        for(size_t x=0;x<source.width;++x) {
+          const auto *p=source.data.data()+y*source.step+x*channels;
+          auto *d=output.data.data()+y*output.step+x*3;
+          d[0]=(channels==1)?p[0]:p[bgr?2:0];
+          d[1]=(channels==1)?p[0]:p[1];
+          d[2]=(channels==1)?p[0]:p[bgr?0:2];
+        }
+      for(const auto &point:features.pos) {
+        if(!std::isfinite(point.x)||!std::isfinite(point.y))continue;
+        const int cx=static_cast<int>(std::round(point.x));
+        const int cy=static_cast<int>(std::round(point.y));
+        if(cx<2||cy<2||cx>=static_cast<int>(source.width)-2||
+           cy>=static_cast<int>(source.height)-2)continue;
+        for(int step=-2;step<=2;++step) {
+          for(const auto [x,y] : {std::pair<int,int>{cx+step,cy},
+                                  std::pair<int,int>{cx,cy+step}}) {
+            auto *px=output.data.data()+y*output.step+x*3;
+            px[0]=255;px[1]=210;px[2]=0;
+          }
+        }
+      }
+      feature_pub_->publish(output);
+    }
+
+    // Landmarks are session-local VIO coordinates. Only label them 'odom'
+    // when the existing metric pose-convention gate is explicitly validated.
+    if(!pose_validated_ || landmarks_pub_->get_subscription_count()==0)return;
+    XRSLAMLandmarks landmarks{};
+    XRSLAMGetResult(XRSLAM_RESULT_LANDMARKS,&landmarks);
+    sensor_msgs::msg::PointCloud2 cloud;
+    cloud.header=source.header;cloud.header.frame_id=odom_frame_;
+    sensor_msgs::PointCloud2Modifier modifier(cloud);
+    modifier.setPointCloud2FieldsByString(1,"xyz");
+    const size_t count=(landmarks.num_landmarks>0 && landmarks.landmarks)?
+        static_cast<size_t>(landmarks.num_landmarks):0;
+    size_t finite=0;
+    for(size_t i=0;i<count;++i) {
+      const auto &p=landmarks.landmarks[i];
+      if(std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z))++finite;
+    }
+    modifier.resize(finite);
+    sensor_msgs::PointCloud2Iterator<float> x(cloud,"x"),y(cloud,"y"),z(cloud,"z");
+    for(size_t i=0;i<count;++i) {
+      const auto &p=landmarks.landmarks[i];
+      if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z))continue;
+      *x=static_cast<float>(p.x);*y=static_cast<float>(p.y);
+      *z=static_cast<float>(p.z);++x;++y;++z;
+    }
+    delete[] landmarks.landmarks;
+    landmarks_pub_->publish(cloud);
+  }
+
   void read_pose() {
     if(!initialized_||failed_)return;
     XRSLAMState state=XRSLAM_STATE_INITIALIZING;
@@ -511,6 +586,8 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr info_sub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr feature_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr landmarks_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr valid_pub_;
