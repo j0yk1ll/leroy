@@ -85,12 +85,24 @@ Visualization Manager:
         Reliability Policy: Best Effort
         Durability Policy: Volatile
     - Class: rviz_default_plugins/Image
-      Name: Feature Overlay (OpenCV corners)
+      Name: XRSLAM Tracked Features
       Enabled: true
       Topic:
-        Value: /leroy/visualization/features
+        Value: /xrslam/tracked_features/image
         Reliability Policy: Reliable
         Durability Policy: Volatile
+    - Class: rviz_default_plugins/PointCloud2
+      Name: XRSLAM Sparse Landmarks
+      Enabled: true
+      Topic:
+        Value: /xrslam/landmarks
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+      Style: Points
+      Size (Pixels): 3
+      Color Transformer: FlatColor
+      Color: 255; 214; 85
+      Alpha: 0.9
   Enabled: true
   Global Options:
     Background Color: 24; 29; 37
