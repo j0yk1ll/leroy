@@ -1,6 +1,6 @@
 # Leroy safety middleware — foundation
 
-This package contains non-actuating, deterministic readiness and health-contract policies extracted from `leroy_bringup`. Existing imports in `leroy_bringup` remain compatibility shims. No physical stop, firmware interlock, signed command, motor release, or autonomous command path has been changed.
+This package owns the canonical non-actuating readiness and health-report policies, signed-session verification, motor authorization policy and wheel-command limiting. All callers import it directly; obsolete modules and compatibility shims have been deleted. No physical stop, firmware interlock, serial motor release, or autonomous command path has been changed.
 
 ## Safety invariants
 
@@ -12,7 +12,7 @@ This package contains non-actuating, deterministic readiness and health-contract
 
 ## Validation
 
-Build the workspace and source the overlay, then run the existing `test_readiness.py` and `test_readiness_ros_adapter.py` regression suites. Further mode/command-gateway refactors require explicit trust-boundary review and hardware commissioning. Never turn an observation into a motor authorization by changing a boolean.
+Build the workspace and source the overlay, then run the existing `test_readiness.py` and `test_readiness_ros_adapter.py` regression suites. Mode/command-gateway integration requires explicit trust-boundary review and hardware commissioning. Never turn an observation into a motor authorization by changing a boolean.
 
 ## Actuator policy ownership
 
