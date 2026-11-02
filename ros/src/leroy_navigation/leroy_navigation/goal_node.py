@@ -8,11 +8,13 @@ import time
 
 import rclpy
 from geometry_msgs.msg import PoseStamped, Twist
-from nav_msgs.msg import Odometry, OccupancyGrid
+from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from rclpy.node import Node
+from std_msgs.msg import Empty, String
 
 from leroy_navigation.goal_controller import GoalController, Pose
 from leroy_navigation.grid_planner import Grid, plan
+from leroy_navigation.mission import Mission, Waypoint
 
 
 def yaw_of(q):
@@ -38,6 +40,7 @@ class GoalNode(Node):
         self.odom_received = None
         self.odom_stamp = None
         self.goal = None
+        self.mission = Mission()
         self.grid = None
         self.map_received = None
         self.route = None
@@ -55,6 +58,9 @@ class GoalNode(Node):
         self.create_subscription(Odometry, "/odom", self.on_odom, 10)
         self.create_subscription(OccupancyGrid, "/leroy/navigation/occupancy_grid", self.on_map, 10)
         self.create_subscription(PoseStamped, "/leroy/navigation/goal", self.on_goal, 10)
+        self.create_subscription(Path, "/leroy/navigation/mission", self.on_mission, 10)
+        self.create_subscription(Empty, "/leroy/navigation/cancel", self.on_cancel, 10)
+        self.result_pub = self.create_publisher(String, "/leroy/navigation/mission_result", 10)
         self.create_timer(0.05, self.tick)
 
     def on_odom(self, msg):
@@ -78,20 +84,48 @@ class GoalNode(Node):
             self.odom = None
             self.odom_received = None
 
+    def _set_target(self, waypoint):
+        self.goal = Pose(waypoint.x, waypoint.y, waypoint.yaw)
+        self.route = None
+        self.route_index = 0
+        self.route_planned_at = None
+
+    def _emit_result(self, result):
+        self.result_pub.publish(String(data=result))
+
+    def _replace_mission(self, waypoints):
+        self.mission.cancel()
+        self.goal = None
+        self.route = None
+        self._set_target(self.mission.load(waypoints))
+
+    def _waypoint(self, pose):
+        p = pose.position
+        return Waypoint(p.x, p.y, yaw_of(pose.orientation))
+
     def on_goal(self, msg):
         try:
             if msg.header.frame_id != "odom":
-                raise ValueError("goal must be in odom frame")
-            p = msg.pose.position
-            target = Pose(p.x, p.y, yaw_of(msg.pose.orientation))
-            if not all(math.isfinite(v) for v in (target.x, target.y, target.yaw)):
-                raise ValueError("nonfinite goal")
-            self.goal = target
-            self.route = None
-            self.route_index = 0
+                raise ValueError("goal frame mismatch")
+            self._replace_mission((self._waypoint(msg.pose),))
         except ValueError:
-            self.goal = None
-            self.route = None
+            self.on_cancel()
+
+    def on_mission(self, msg):
+        try:
+            if msg.header.frame_id != "odom":
+                raise ValueError("mission frame mismatch")
+            if any(p.header.frame_id not in ("", "odom") for p in msg.poses):
+                raise ValueError("waypoint frame mismatch")
+            self._replace_mission(tuple(self._waypoint(p.pose) for p in msg.poses))
+        except ValueError:
+            self.on_cancel()
+
+    def on_cancel(self, _msg=None):
+        self.mission.cancel()
+        self.goal = None
+        self.route = None
+        self._emit_result("CANCELLED")
 
     def on_map(self, msg):
         try:
@@ -129,6 +163,9 @@ class GoalNode(Node):
                         (self.goal.x, self.goal.y))
                     self.route_index = 0
                     self.route_planned_at = now
+                    if self.route is None and not self.mission.unreachable():
+                        self.goal = None
+                        self._emit_result("FAILED_UNREACHABLE")
                 if self.route:
                     while (self.route_index < len(self.route) and
                            math.hypot(self.route[self.route_index][0]-self.odom.x,
@@ -144,8 +181,13 @@ class GoalNode(Node):
                     cmd.linear.x, cmd.linear.y, cmd.angular.z = (
                         result.vx, result.vy, result.wz)
                     if target is self.goal and result.arrived:
-                        self.goal = None
-                        self.route = None
+                        next_waypoint = self.mission.arrived()
+                        if next_waypoint is None:
+                            self.goal = None
+                            self.route = None
+                            self._emit_result("SUCCEEDED")
+                        else:
+                            self._set_target(next_waypoint)
             except ValueError:
                 self.route = None
         self.pub.publish(cmd)
