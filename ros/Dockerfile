@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-usb-cam \
     ros-jazzy-image-proc \
     ros-jazzy-rqt-image-view \
+    ros-jazzy-rviz2 \
     ros-jazzy-image-transport-plugins \
     ros-jazzy-rclcpp-components \
     ros-jazzy-cv-bridge \
