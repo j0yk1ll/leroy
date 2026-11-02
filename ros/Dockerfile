@@ -145,6 +145,7 @@ RUN mkdir -p /leroy_ws/src
 #       └── leroy_localization/
 #
 COPY src/leroy_safety /leroy_ws/src/leroy_safety
+COPY src/leroy_navigation /leroy_ws/src/leroy_navigation
 COPY src/leroy_mcu /leroy_ws/src/leroy_mcu
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_sensors /leroy_ws/src/leroy_sensors
