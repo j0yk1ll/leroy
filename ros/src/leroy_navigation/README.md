@@ -14,3 +14,11 @@ Run pure unit tests from `ros/` after sourcing the workspace:
 python3 -m unittest discover -s tests/unit -p 'test_grid_planner.py' -v
 python3 -m unittest discover -s tests/unit -p 'test_goal_controller.py' -v
 ```
+
+## Depth-to-occupancy mapping
+
+`ros2 run leroy_navigation depth_grid` consumes `/perception/raw_depth_points` and publishes the planner's `/leroy/navigation/occupancy_grid` in the `odom` frame. Every frame is rebuilt from transformed depth rays; measured traversals are free (0), obstacle-height endpoints occupied (100), and unobserved cells unknown (-1). This is a **rolling local snapshot**, not SLAM or a persistent global map. Map origin stays unrotated as the planner requires.
+
+Mapping starts disabled until `metric_depth_calibrated`, `extrinsics_calibrated` and `ground_datum_calibrated` are set true by a separately performed calibration procedure. These parameters are configuration assertions, not independent proofs or safety interlocks. Do not enable them for unvalidated DepthART depth estimates. Ground datum assumes odom z=0 at the ground plane. Camera/robot transforms must be available at the point cloud timestamp.
+
+The map only marks sensed rays free and cannot see behind obstacles or outside the camera FOV. The A* planner regards unknown cells as blocked. A forward monocular sensor cannot deliver all-around navigability; additional observation coverage and map persistence or mapping localization will be necessary for broader navigation. No motors are connected to this package.
