@@ -55,3 +55,18 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \\
 ```
 
 **Integration limits:** Lifecycle startup needs a functioning occupancy grid and odometry/TF. A sparse front-camera map will typically block unknown routes. This branch has not been built or driven in simulation yet; do not interpret Nav2 configuration as physical autonomous readiness.
+
+## Live navigation visualization (RViz2)
+
+Start Nav2 and its odometry/map sources, then start the *read-only* visualization:
+
+```bash
+ros2 launch leroy_navigation visualization.launch.py \\
+  image_topic:=/camera/image_raw use_features:=true
+```
+
+The dashboard displays raw camera images, a separately derived OpenCV Shi–Tomasi feature overlay, odom-based robot pose/TF, rolling occupancy grid, optional Nav2 local and global costmaps, the live global planner route (`/plan`) and the selected goal marker (`/goal_pose`). RViz subscribes continuously and refreshes when ROS publishes new data; it has no motor/safety signer connection. The camera image topic is configurable at launch. Map and route require actual publishers, and RViz will show missing-topic warnings rather than fabricated content.
+
+**XRSLAM's own feature tracker and 3D map are not exported by the Leroy ROS adapter.** Its existing PC visualizer remains the accurate source of those internal tracks; the OpenCV overlay is *not* claimed to show XRSLAM features. The map shown here is the Leroy rolling occupancy grid, not XRSLAM's internal sparse visual map. Connecting that sparse map requires an explicit XRSLAM export interface in a future change.
+
+Nav2's `/plan` and `/goal_pose` are standard visualization topics; if a specific Nav2 deployment namespaces these topics, update the RViz display subscriptions accordingly. The `2D Goal Pose` RViz tool publishes to `/goal_pose`, not the motor bridge. This visualization does not modify localization or safety behavior.
