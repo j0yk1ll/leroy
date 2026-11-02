@@ -2,8 +2,8 @@
 import json
 import time
 
-from leroy_bringup.readiness import HealthEvidence, ReadinessAggregator
-from leroy_bringup.health_contract import COMPONENTS, OWNERS, TOPICS, decode
+from leroy_safety.readiness import HealthEvidence, ReadinessAggregator
+from leroy_safety.health_contract import COMPONENTS, OWNERS, TOPICS, decode
 
 READINESS_TOPIC = "/leroy/readiness/status"
 
