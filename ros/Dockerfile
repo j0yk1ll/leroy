@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-rclcpp-components \
     ros-jazzy-cv-bridge \
     ros-jazzy-ament-cmake-python \
+    ros-jazzy-navigation2 \
+    ros-jazzy-nav2-bringup \
     ros-jazzy-nav2-costmap-2d \
     ros-jazzy-nav2-util \
     ros-jazzy-rclcpp-lifecycle \
