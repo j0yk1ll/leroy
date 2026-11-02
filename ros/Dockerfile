@@ -136,6 +136,7 @@ RUN mkdir -p /leroy_ws/src
 #   ├── Dockerfile
 #   ├── src/leroy_bringup/scripts/container_entrypoint.sh
 #   └── src/
+#       ├── leroy_safety/
 #       ├── leroy_mcu/
 #       ├── leroy_bringup/
 #       ├── leroy_description/
@@ -143,6 +144,7 @@ RUN mkdir -p /leroy_ws/src
 #       ├── leroy_perception/
 #       └── leroy_localization/
 #
+COPY src/leroy_safety /leroy_ws/src/leroy_safety
 COPY src/leroy_mcu /leroy_ws/src/leroy_mcu
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_sensors /leroy_ws/src/leroy_sensors
