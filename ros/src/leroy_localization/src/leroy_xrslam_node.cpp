@@ -362,6 +362,7 @@ private:
       camera.channel=channels;camera.stride=static_cast<int>(m->step);
       XRSLAMPushSensorData(XRSLAM_SENSOR_CAMERA,&camera);
       XRSLAMRunOneFrame();
+      publish_visualization(*m);
       ++submitted_camera_frames_;
       // A stationary scene can remain in 'initializing' even when images
       // are arriving. Log actual XRSLAM submissions, not just DDS endpoints.
