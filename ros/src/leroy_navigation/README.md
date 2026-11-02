@@ -26,3 +26,9 @@ The map only marks sensed rays free and cannot see behind obstacles or outside t
 ## Rolling map accumulation
 
 The mapper now accumulates grid-cell observations in a world-aligned odom window. Each observation lasts at most `evidence_lifetime_s` (default 3 seconds); later directly observed freespace can replace an old occupied observation. Moving-window cells retain their world coordinates and observations outside the window are evicted. A timestamp regression resets the map. Frames with no usable cloud are not published, so the planner's own map timeout inhibits navigation. This is short-horizon accumulation, **not** permanent SLAM mapping or loop-closure correction.
+
+## Waypoint missions
+
+Send a `nav_msgs/Path` in the `odom` frame to `/leroy/navigation/mission`; each `PoseStamped` becomes an ordered goal. The controller advances to the next pose after position and final heading tolerances are reached. A new mission replaces the old one. `/leroy/navigation/goal` remains the single-goal interface (also replaces the current mission). Publish `std_msgs/Empty` to `/leroy/navigation/cancel` to discard all remaining goals and request zero velocity on the next controller tick. The functional completion result is published as `std_msgs/String` on `/leroy/navigation/mission_result`: `SUCCEEDED`, `CANCELLED` or `FAILED_UNREACHABLE`.
+
+An unavailable route is retried at the regular planning interval up to three times, then the mission fails and stops. Missing or stale odometry/map continues to hold zero output rather than falsely declaring completion. This is mission orchestration on the existing map-aware controller, not Nav2 Actions or motor authorization.
