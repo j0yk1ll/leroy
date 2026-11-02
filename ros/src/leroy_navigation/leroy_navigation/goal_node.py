@@ -8,10 +8,11 @@ import time
 
 import rclpy
 from geometry_msgs.msg import PoseStamped, Twist
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 from rclpy.node import Node
 
 from leroy_navigation.goal_controller import GoalController, Pose
+from leroy_navigation.grid_planner import Grid, plan
 
 
 def yaw_of(q):
@@ -37,8 +38,22 @@ class GoalNode(Node):
         self.odom_received = None
         self.odom_stamp = None
         self.goal = None
+        self.grid = None
+        self.map_received = None
+        self.route = None
+        self.route_index = 0
+        self.route_planned_at = None
+        self.declare_parameter("map_timeout_s", 2.0)
+        self.declare_parameter("replan_period_s", 0.5)
+        self.declare_parameter("inflation_radius_m", 0.30)
+        self.map_timeout_ns = int(float(self.get_parameter("map_timeout_s").value) * 1e9)
+        self.replan_ns = int(float(self.get_parameter("replan_period_s").value) * 1e9)
+        self.inflation_radius = float(self.get_parameter("inflation_radius_m").value)
+        if self.map_timeout_ns <= 0 or self.replan_ns <= 0:
+            raise ValueError("invalid map timing")
         self.pub = self.create_publisher(Twist, "/leroy/navigation/cmd_vel", 10)
         self.create_subscription(Odometry, "/odom", self.on_odom, 10)
+        self.create_subscription(OccupancyGrid, "/leroy/navigation/occupancy_grid", self.on_map, 10)
         self.create_subscription(PoseStamped, "/leroy/navigation/goal", self.on_goal, 10)
         self.create_timer(0.05, self.tick)
 
@@ -72,18 +87,67 @@ class GoalNode(Node):
             if not all(math.isfinite(v) for v in (target.x, target.y, target.yaw)):
                 raise ValueError("nonfinite goal")
             self.goal = target
+            self.route = None
+            self.route_index = 0
         except ValueError:
             self.goal = None
+            self.route = None
+
+    def on_map(self, msg):
+        try:
+            if msg.header.frame_id != "odom":
+                raise ValueError("map must use odom frame")
+            q = msg.info.origin.orientation
+            if abs(yaw_of(q)) > 1e-5:
+                raise ValueError("rotated map origins not supported")
+            p = msg.info.origin.position
+            self.grid = Grid(
+                int(msg.info.width), int(msg.info.height),
+                float(msg.info.resolution), float(p.x), float(p.y),
+                tuple(int(x) for x in msg.data),
+                inflation_radius_m=self.inflation_radius)
+            self.map_received = time.monotonic_ns()
+            self.route = None
+        except (ValueError, TypeError, OverflowError):
+            self.grid = None
+            self.route = None
+            self.map_received = None
 
     def tick(self):
         cmd = Twist()
+        now = time.monotonic_ns()
         if (self.goal is not None and self.odom is not None
-                and self.odom_received is not None and
-                0 <= time.monotonic_ns()-self.odom_received <= self.timeout_ns):
-            result = self.controller.calculate(self.odom, self.goal)
-            cmd.linear.x, cmd.linear.y, cmd.angular.z = result.vx, result.vy, result.wz
-            if result.arrived:
-                self.goal = None
+                and self.grid is not None
+                and self.odom_received is not None and self.map_received is not None
+                and 0 <= now-self.odom_received <= self.timeout_ns
+                and 0 <= now-self.map_received <= self.map_timeout_ns):
+            try:
+                if (self.route is None or self.route_planned_at is None
+                        or now-self.route_planned_at >= self.replan_ns):
+                    self.route = plan(
+                        self.grid, (self.odom.x, self.odom.y),
+                        (self.goal.x, self.goal.y))
+                    self.route_index = 0
+                    self.route_planned_at = now
+                if self.route:
+                    while (self.route_index < len(self.route) and
+                           math.hypot(self.route[self.route_index][0]-self.odom.x,
+                                      self.route[self.route_index][1]-self.odom.y)
+                           <= self.controller.position_tolerance):
+                        self.route_index += 1
+                    if self.route_index < len(self.route):
+                        x, y = self.route[self.route_index]
+                        target = Pose(x, y, self.odom.yaw)
+                    else:
+                        target = self.goal
+                    result = self.controller.calculate(self.odom, target)
+                    cmd.linear.x, cmd.linear.y, cmd.angular.z = (
+                        result.vx, result.vy, result.wz)
+                    if target is self.goal and result.arrived:
+                        self.goal = None
+                        self.route = None
+            except ValueError:
+                self.route = None
         self.pub.publish(cmd)
 
 
