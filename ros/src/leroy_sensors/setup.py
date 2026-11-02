@@ -1,0 +1,2 @@
+from setuptools import setup
+setup(name="leroy_sensors",version="0.1.0",packages=["leroy_sensors"],data_files=[("share/ament_index/resource_index/packages",["resource/leroy_sensors"]),("share/leroy_sensors",["package.xml"]),("share/leroy_sensors/config",["config/front_camera.yaml"])],install_requires=["setuptools"],zip_safe=True,maintainer="Leroy contributors",maintainer_email="maintainer@example.com",description="Read-only physical sensor supervision",license="Apache-2.0",entry_points={"console_scripts":["leroy_sensors_health = leroy_sensors.health_node:main"]})

@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>leroy_bringup</name>
+  <version>0.2.0</version>
+  <description>Leroy robot system bringup.</description>
+  <maintainer email="maintainer@example.com">Leroy</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>leroy_description</exec_depend>
+  <exec_depend>leroy_mcu</exec_depend>
+  <exec_depend>usb_cam</exec_depend>
+  <exec_depend>image_proc</exec_depend>
+  <exec_depend>rclcpp_components</exec_depend>
+  <exec_depend>leroy_perception</exec_depend>
+  <exec_depend>leroy_sensors</exec_depend>
+  <exec_depend>leroy_localization</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
