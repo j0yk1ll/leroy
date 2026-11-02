@@ -45,7 +45,8 @@ ament_target_dependencies(leroy_xrslam_node
 target_compile_options(leroy_xrslam_node PRIVATE -Wall -Wextra -Wpedantic)
 
 install(TARGETS leroy_xrslam_node DESTINATION lib/${PROJECT_NAME})
-install(PROGRAMS scripts/leroy_localization_health DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/leroy_localization_health scripts/leroy_odometry_quality DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/test_xrslam_startup_contract.py")
