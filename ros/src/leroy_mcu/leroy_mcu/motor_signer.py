@@ -18,7 +18,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 
-from leroy_mcu.authorized_session import (
+from leroy_safety.authorized_session import (
     sign_motion, sign_rearm,
 )
 from leroy_mcu.motor_signed_ingress import read_protected_key
