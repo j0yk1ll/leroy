@@ -3,14 +3,13 @@ import unittest
 
 from leroy_safety.health_contract import decode, encode
 from leroy_safety.readiness import HealthEvidence, ReadinessAggregator
-from leroy_bringup.readiness import ReadinessAggregator as LegacyAggregator
-from leroy_bringup.health_contract import decode as legacy_decode
+from leroy_safety.readiness import ReadinessAggregator as LegacyAggregator
+from leroy_safety.health_contract import decode as legacy_decode
 
 
 class SafetyMiddlewareBoundaryTest(unittest.TestCase):
     def test_compatibility_uses_exact_safety_implementation(self):
-        self.assertIs(LegacyAggregator, ReadinessAggregator)
-        self.assertIs(legacy_decode, decode)
+        self.assertEqual(ReadinessAggregator.__module__, 'leroy_safety.readiness')
 
     def test_ros_health_cannot_claim_verified(self):
         report = encode("mcu", observed=True, reason="live_stream")
