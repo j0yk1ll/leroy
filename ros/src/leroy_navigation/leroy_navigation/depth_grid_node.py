@@ -16,6 +16,7 @@ from sensor_msgs_py import point_cloud2
 from tf2_ros import Buffer, TransformListener
 
 from leroy_navigation.depth_grid import MapSettings, rasterize
+from leroy_navigation.evidence_map import EvidenceMap
 
 
 def apply_transform(point, transform):
@@ -43,6 +44,7 @@ class DepthGridNode(Node):
         self.declare_parameter("min_obstacle_height_m", 0.08)
         self.declare_parameter("max_obstacle_height_m", 1.20)
         self.declare_parameter("max_cloud_age_s", 0.25)
+        self.declare_parameter("evidence_lifetime_s", 3.0)
         self.settings = MapSettings(
             resolution=float(self.get_parameter("resolution_m").value),
             width=int(self.get_parameter("width_cells").value),
@@ -53,6 +55,11 @@ class DepthGridNode(Node):
         self.max_age_ns = int(float(self.get_parameter("max_cloud_age_s").value)*1e9)
         if not 0 < self.max_age_ns <= 1_000_000_000:
             raise ValueError("invalid cloud freshness limit")
+        lifetime_s = float(self.get_parameter("evidence_lifetime_s").value)
+        if not math.isfinite(lifetime_s) or not 0 < lifetime_s <= 60:
+            raise ValueError("invalid evidence lifetime")
+        self.map = EvidenceMap(
+            self.settings, evidence_ttl_ns=int(lifetime_s * 1e9))
         self.enabled = all(self.get_parameter(k).value is True for k in (
             "metric_depth_calibrated", "extrinsics_calibrated",
             "ground_datum_calibrated"))
@@ -87,7 +94,10 @@ class DepthGridNode(Node):
                           msg, field_names=("x", "y", "z"), skip_nans=True)]
             if not points:
                 return
-            ox, oy, data = rasterize(points, origin, robot[:2], self.settings)
+            ox, oy, observed = rasterize(points, origin, robot[:2], self.settings)
+            ox, oy, data = self.map.update(
+                origin_x=ox, origin_y=oy, observed=observed,
+                now_ns=time.monotonic_ns())
             out = OccupancyGrid()
             out.header.stamp = msg.header.stamp
             out.header.frame_id = "odom"
