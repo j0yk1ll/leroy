@@ -1,7 +1,7 @@
 """No-device tests for readiness evidence and fail-closed transitions."""
 import unittest
 
-from leroy_bringup.readiness import HealthEvidence, ReadinessAggregator, COMPONENTS
+from leroy_safety.readiness import HealthEvidence, ReadinessAggregator, COMPONENTS
 
 
 class ReadinessTest(unittest.TestCase):
