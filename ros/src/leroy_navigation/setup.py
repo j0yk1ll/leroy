@@ -15,5 +15,4 @@ setup(name=package_name, version="0.1.0", packages=find_packages(),
       license="MIT", entry_points={"console_scripts": [
           "goal_controller = leroy_navigation.goal_node:main",
           "depth_grid = leroy_navigation.depth_grid_node:main",
-          "feature_overlay = leroy_navigation.feature_overlay_node:main",
       ]})
