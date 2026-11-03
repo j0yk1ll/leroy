@@ -532,9 +532,7 @@ private:
       visual_path_.header.stamp=visual_pose.header.stamp;
       visual_path_.poses.push_back(visual_pose);
       if(visual_path_.poses.size()>1000)
-        visual_path_.poses.erase(visual_path_.poses.begin(),
-                                 visual_path_.poses.begin()+static_cast<std::ptrdiff_t>(
-                                   visual_path_.poses.size()-1000));
+        visual_path_.poses.erase(visual_path_.poses.begin());
       if(visual_path_pub_->get_subscription_count()>0)
         visual_path_pub_->publish(visual_path_);
       last_visual_pose_time_=p.timestamp;
