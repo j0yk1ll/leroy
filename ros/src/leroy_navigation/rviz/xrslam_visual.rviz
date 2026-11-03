@@ -1,0 +1,91 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Visual Reconstruction Grid (arbitrary units)
+      Enabled: true
+      Cell Size: 1
+      Plane: XY
+      Alpha: 0.25
+    - Class: rviz_default_plugins/TF
+      Name: XRSLAM Visual TF
+      Enabled: true
+      Show Names: false
+      Show Axes: true
+      Show Arrows: false
+    - Class: rviz_default_plugins/Image
+      Name: Raw Camera
+      Enabled: true
+      Topic:
+        Value: /camera/image_raw
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+    - Class: rviz_default_plugins/Image
+      Name: XRSLAM Tracked Features
+      Enabled: true
+      Topic:
+        Value: /xrslam/tracked_features/image
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+    - Class: rviz_default_plugins/PointCloud2
+      Name: XRSLAM Visual Landmarks (unscaled)
+      Enabled: true
+      Topic:
+        Value: /xrslam/visual_landmarks
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+      Style: Points
+      Size (Pixels): 3
+      Color Transformer: FlatColor
+      Color: 255; 214; 85
+      Alpha: 0.9
+    - Class: rviz_default_plugins/Path
+      Name: XRSLAM Visual Trajectory (unscaled)
+      Enabled: true
+      Topic:
+        Value: /xrslam/visual_trajectory
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+      Line Style: Lines
+      Line Width: 0.04
+      Color: 55; 190; 245
+      Alpha: 1
+    - Class: rviz_default_plugins/Pose
+      Name: XRSLAM Visual Body Pose (unverified convention)
+      Enabled: true
+      Topic:
+        Value: /xrslam/visual_pose
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+      Shape: Arrow
+      Color: 245; 150; 75
+      Alpha: 1
+  Enabled: true
+  Global Options:
+    Background Color: 24; 29; 37
+    Fixed Frame: xrslam_visual_world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Visual Reconstruction
+      Target Frame: xrslam_visual_world
+      Distance: 8
+      Pitch: 0.7
+      Yaw: 0.8
+    Saved: ~
+Window Geometry:
+  Width: 1500
+  Height: 950
