@@ -206,6 +206,14 @@ private:
     visual_sparse_map_.clear();
     visual_sparse_map_seq_=0;
     last_visual_sparse_map_publish_=rclcpp::Time(0,0,RCL_ROS_TIME);
+    // Explicitly clear RViz's previous snapshot on tracking-session loss.
+    sensor_msgs::msg::PointCloud2 empty_cloud;
+    empty_cloud.header.stamp=get_clock()->now();
+    empty_cloud.header.frame_id=visual_world_frame_;
+    sensor_msgs::PointCloud2Modifier modifier(empty_cloud);
+    modifier.setPointCloud2FieldsByString(1,"xyz");
+    modifier.resize(0);
+    visual_sparse_map_pub_->publish(empty_cloud);
     RCLCPP_WARN(get_logger(),"Visual sparse map cleared: %s",reason);
   }
   void publish_landmark_diagnostics() {
