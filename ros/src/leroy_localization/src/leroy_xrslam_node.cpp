@@ -33,6 +33,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <chrono>
 #include <cstdint>
@@ -45,6 +46,7 @@
 #include <deque>
 #include <filesystem>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -89,6 +91,9 @@ public:
     odom_frame_=declare_parameter<std::string>("odom_frame","odom");
     visual_world_frame_=declare_parameter<std::string>("visual_world_frame","xrslam_visual_world");
     visual_body_frame_=declare_parameter<std::string>("visual_body_frame","xrslam_visual_body");
+    visual_sparse_map_limit_=declare_parameter<int>("visual_sparse_map_max_points",5000);
+    if(visual_sparse_map_limit_<1 || visual_sparse_map_limit_>50000)
+      throw std::runtime_error("visual_sparse_map_max_points must be between 1 and 50000");
     if(visual_world_frame_.empty() || visual_body_frame_.empty() ||
        visual_world_frame_==visual_body_frame_ ||
        visual_world_frame_==odom_frame_ || visual_world_frame_==base_frame_ ||
@@ -154,6 +159,8 @@ public:
     feature_pub_=create_publisher<sensor_msgs::msg::Image>("/xrslam/tracked_features/image",qos);
     landmarks_pub_=create_publisher<sensor_msgs::msg::PointCloud2>("/xrslam/landmarks",qos);
     visual_landmarks_pub_=create_publisher<sensor_msgs::msg::PointCloud2>("/xrslam/visual_landmarks",qos);
+    visual_sparse_map_pub_=create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/xrslam/visual_sparse_map",qos);
     visual_landmarks_status_pub_=create_publisher<std_msgs::msg::String>(
       "/xrslam/visual_landmarks_status",latched);
     visual_landmarks_diagnostics_pub_=create_publisher<std_msgs::msg::String>(
@@ -195,6 +202,12 @@ private:
     visual_landmarks_status_pub_->publish(msg);
     RCLCPP_INFO(get_logger(),"XRSLAM visual landmarks: %s",status.c_str());
   }
+  void reset_visual_sparse_map(const char * reason) {
+    visual_sparse_map_.clear();
+    visual_sparse_map_seq_=0;
+    last_visual_sparse_map_publish_=rclcpp::Time(0,0,RCL_ROS_TIME);
+    RCLCPP_WARN(get_logger(),"Visual sparse map cleared: %s",reason);
+  }
   void publish_landmark_diagnostics() {
     const double age_s=(last_cloud_publish_wall_.nanoseconds()>0)?
       (get_clock()->now()-last_cloud_publish_wall_).seconds():-1.0;
@@ -204,7 +217,8 @@ private:
       " last_native_points="+std::to_string(last_native_landmark_count_)+
       " last_finite_points="+std::to_string(last_finite_landmark_count_)+
       " publish_age_s="+std::to_string(age_s)+
-      " subscribers="+std::to_string(visual_landmarks_pub_->get_subscription_count());
+      " subscribers="+std::to_string(visual_landmarks_pub_->get_subscription_count())+
+      " sparse_map_points="+std::to_string(visual_sparse_map_.size());
     visual_landmarks_diagnostics_pub_->publish(msg);
   }
   void map_announce(const std::string &status,bool valid) {
@@ -467,11 +481,17 @@ private:
     const bool publish_visual = visual_landmarks_pub_->get_subscription_count()>0;
     const bool publish_metric = pose_validated_ && landmarks_pub_->get_subscription_count()>0;
     if(state!=XRSLAM_STATE_TRACKING_SUCCESS) {
+      if(visual_map_was_tracking_) {
+        reset_visual_sparse_map("native tracking exited TRACKING_SUCCESS");
+        visual_map_was_tracking_=false;
+      }
       landmark_announce(state==XRSLAM_STATE_INITIALIZING?
         "waiting_for_native_tracking":"native_tracking_failed");
       return;
     }
-    if(!publish_visual && !publish_metric) {
+    visual_map_was_tracking_=true;
+    const bool publish_sparse=visual_sparse_map_pub_->get_subscription_count()>0;
+    if(!publish_visual && !publish_metric && !publish_sparse) {
       landmark_announce("no_pointcloud_subscribers");
       return;
     }
@@ -480,46 +500,78 @@ private:
     const size_t count=(landmarks.num_landmarks>0 && landmarks.landmarks)?
         static_cast<size_t>(landmarks.num_landmarks):0;
     last_native_landmark_count_=count;
-    last_finite_landmark_count_=0;
-    if(count==0) {
-      delete[] landmarks.landmarks;
-      landmark_announce("native_snapshot_empty");
-      return;
-    }
-    sensor_msgs::msg::PointCloud2 cloud;
-    cloud.header=source.header;
-    cloud.header.frame_id=visual_world_frame_;
-    sensor_msgs::PointCloud2Modifier modifier(cloud);
-    modifier.setPointCloud2FieldsByString(1,"xyz");
     size_t finite=0;
+    std::vector<std::array<float,3>> current_points;
+    current_points.reserve(count);
     for(size_t i=0;i<count;++i) {
       const auto &p=landmarks.landmarks[i];
-      if(std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z))++finite;
-    }
-    last_finite_landmark_count_=finite;
-    if(finite==0) {
-      delete[] landmarks.landmarks;
-      landmark_announce("native_snapshot_all_nonfinite");
-      return;
-    }
-    modifier.resize(finite);
-    sensor_msgs::PointCloud2Iterator<float> x(cloud,"x"),y(cloud,"y"),z(cloud,"z");
-    for(size_t i=0;i<count;++i) {
-      const auto &p=landmarks.landmarks[i];
-      if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z))continue;
-      *x=static_cast<float>(p.x);*y=static_cast<float>(p.y);
-      *z=static_cast<float>(p.z);++x;++y;++z;
+      if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z))
+        continue;
+      ++finite;
+      current_points.push_back({static_cast<float>(p.x),
+                                static_cast<float>(p.y),
+                                static_cast<float>(p.z)});
+      // Reuse the native identity and only retain triangulated geometry.
+      if(p.triangulated && p.track_id!=0) {
+        auto &entry=visual_sparse_map_[p.track_id];
+        entry.x=static_cast<float>(p.x);
+        entry.y=static_cast<float>(p.y);
+        entry.z=static_cast<float>(p.z);
+        entry.seq=++visual_sparse_map_seq_;
+      }
     }
     delete[] landmarks.landmarks;
-    landmark_announce("publishing_finite_points");
-    if(publish_visual) {
-      visual_landmarks_pub_->publish(cloud);
-      ++visual_cloud_publish_count_;
-      last_cloud_publish_wall_=get_clock()->now();
+    last_finite_landmark_count_=finite;
+    // Bound memory deterministically by evicting least recently observed
+    // track IDs; this is a session cache, not a globally corrected map.
+    while(visual_sparse_map_.size()>static_cast<size_t>(visual_sparse_map_limit_)) {
+      auto oldest=std::min_element(visual_sparse_map_.begin(),
+        visual_sparse_map_.end(),[](const auto &a,const auto &b){
+          return a.second.seq<b.second.seq;
+        });
+      visual_sparse_map_.erase(oldest);
     }
-    if(publish_metric) {
-      cloud.header.frame_id=odom_frame_;
-      landmarks_pub_->publish(cloud);
+    if(count==0)landmark_announce("native_snapshot_empty");
+    else if(finite==0)landmark_announce("native_snapshot_all_nonfinite");
+    else landmark_announce("publishing_finite_points");
+
+    auto make_cloud=[&](size_t n) {
+      sensor_msgs::msg::PointCloud2 cloud;
+      cloud.header=source.header;
+      cloud.header.frame_id=visual_world_frame_;
+      sensor_msgs::PointCloud2Modifier modifier(cloud);
+      modifier.setPointCloud2FieldsByString(1,"xyz");
+      modifier.resize(n);
+      return cloud;
+    };
+    if(finite>0 && (publish_visual || publish_metric)) {
+      auto cloud=make_cloud(current_points.size());
+      sensor_msgs::PointCloud2Iterator<float> x(cloud,"x"),y(cloud,"y"),z(cloud,"z");
+      for(const auto &p:current_points) {
+        *x=p[0];*y=p[1];*z=p[2];++x;++y;++z;
+      }
+      if(publish_visual) {
+        visual_landmarks_pub_->publish(cloud);
+        ++visual_cloud_publish_count_;
+        last_cloud_publish_wall_=get_clock()->now();
+      }
+      if(publish_metric) {
+        cloud.header.frame_id=odom_frame_;
+        landmarks_pub_->publish(cloud);
+      }
+    }
+    // Publish cached landmarks at a bounded cadence, including while the
+    // latest sliding window has zero tracks. Never publish synthetic points.
+    if(publish_sparse && !visual_sparse_map_.empty() &&
+       (get_clock()->now()-last_visual_sparse_map_publish_).seconds()>=0.5) {
+      auto cloud=make_cloud(visual_sparse_map_.size());
+      sensor_msgs::PointCloud2Iterator<float> x(cloud,"x"),y(cloud,"y"),z(cloud,"z");
+      for(const auto &[id,p]:visual_sparse_map_) {
+        (void)id;
+        *x=p.x;*y=p.y;*z=p.z;++x;++y;++z;
+      }
+      visual_sparse_map_pub_->publish(cloud);
+      last_visual_sparse_map_publish_=get_clock()->now();
     }
   }
 
@@ -689,6 +741,8 @@ private:
   void fail(const std::string & reason) {
     if(failed_)return;
     failed_=true;pending_.clear();
+    reset_visual_sparse_map(reason.c_str());
+    visual_map_was_tracking_=false;
     announce(reason,false);
     map_announce(reason,false);
     RCLCPP_ERROR(get_logger(),"Odometry inhibited: %s (restart requires supervised validation)",reason.c_str());
@@ -705,11 +759,18 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr feature_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr landmarks_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr visual_landmarks_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr visual_sparse_map_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr visual_landmarks_status_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr visual_landmarks_diagnostics_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr visual_pose_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr visual_path_pub_;
   nav_msgs::msg::Path visual_path_;
+  struct VisualMapPoint {float x=0,y=0,z=0; std::uint64_t seq=0;};
+  std::map<std::uint64_t,VisualMapPoint> visual_sparse_map_;
+  std::uint64_t visual_sparse_map_seq_=0;
+  rclcpp::Time last_visual_sparse_map_publish_{0,0,RCL_ROS_TIME};
+  int visual_sparse_map_limit_=5000;
+  bool visual_map_was_tracking_=false;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr valid_pub_;
