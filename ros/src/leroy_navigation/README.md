@@ -90,3 +90,22 @@ Verification: `ros2 topic hz /xrslam/visual_landmarks`, `ros2 topic echo /xrslam
 The XRSLAM fork now includes the native `track_id` and `triangulated` flag in `XRSLAMLandmark` (an **ABI change**, requiring matching installed headers and `libxrslam.so`). The ROS adapter retains up to `visual_sparse_map_max_points` (default 5,000) *triangulated, finite* landmarks indexed by native track ID. Reobservation updates coordinates for the same ID, rather than appending duplicates; least-recently observed IDs are evicted at the capacity limit. It publishes the cached snapshot to `/xrslam/visual_sparse_map` as best-effort `PointCloud2` in `xrslam_visual_world` at most twice per second while tracking, including when the live window is empty. It clears its cache and emits an empty cloud on tracking loss or reset. Restarting the ROS process also begins an empty session.
 
 This is a **bounded local visualization cache**, not an authoritative global map: marginalized points may become stale because XRSLAM does not send explicit deleted-landmark IDs or global corrections through this interface. Use `/xrslam/visual_landmarks` for the live-window snapshot instead. The dedicated RViz profile displays the cached session cloud by default and leaves the current-window display disabled but available. No metric pose or motor control changes are implied.
+
+
+### Experimental DepthART-backed native XRSLAM RGB-D (visualization-only)
+
+Leroy already vendors a DepthART ROS inference node in `leroy_perception`; a separate `depthart_ros` installation is not required. An **opt-in** launch `ros2 launch leroy_localization xrslam_depthart.launch.py` starts it alongside the XRSLAM adapter in `sensor.mode=rgbd`. First start the existing camera, rectifier and sensor-transform publishers. **Stop the old monocular `leroy_xrslam_node` before starting this launch**: native XRSLAM is a singleton and two adapters must not claim the same `/xrslam/*` topics.
+
+The default DepthART configuration reads rectified `/camera/image_rect` and calibrated `/camera/camera_info`, publishes `/depthart/depth` (`32FC1`, meters, original image timestamp). Its source checkout must exist at `/opt/DepthART`, with the configured metric checkpoint at `/opt/DepthART/checkpoints/metric/depthart_metric_indoor_s_448.pth`; `torch`, `cv_bridge` and the upstream DepthART Python dependencies must be present in the Python interpreter used by ROS. Set `device:=cuda` only when that environment has working CUDA support; the default is CPU. DepthART may infer much more slowly than the camera rate.
+
+The adapter buffers up to 64 RGB images, pairs by **exact ROS stamp**, validates registered `32FC1` dimensions and finite depth availability, then passes `XRSLAM_DEPTH_MONOCULAR_METRIC` to native XRSLAM **before** passing the corresponding RGB frame. An RGB frame without matching depth waits at most `depth_wait_ms` (default 3000) before being dropped; it is not silently processed as metric RGB-D. It exports `/xrslam/depth_sync_status` with `paired`, `dropped_rgb`, `late_depth`, `invalid_depth` and pending counts. The existing monocular configuration remains unchanged. The current buffer is a bounded engineering baseline, not a latency guarantee under slow CPU inference.
+
+Check:
+```bash
+ros2 topic info /depthart/depth -v
+ros2 topic echo /depthart/depth --once --field encoding
+ros2 topic echo /xrslam/depth_sync_status std_msgs/msg/String --field data
+ros2 topic echo /xrslam/visual_landmarks_diagnostics std_msgs/msg/String --once --field data
+```
+
+RGB-D is **not yet authorized as metric robot odometry**: `pose_convention_validated:=false` and `enable_map_tf:=false` remain mandatory. Predicted monocular depth, even in meters, still requires measured-distance validation and lost-tracking/timestamp fault tests before any `odom` or Nav2 authority. The existing isolated `xrslam_visual_world` RViz profile remains the visualization target. Motor control is unchanged.
