@@ -20,6 +20,7 @@
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -86,9 +87,15 @@ public:
     imu_frame_=declare_parameter<std::string>("imu_frame","imu_link");
     base_frame_=declare_parameter<std::string>("base_frame","base_link");
     odom_frame_=declare_parameter<std::string>("odom_frame","odom");
+    visual_world_frame_=declare_parameter<std::string>("visual_world_frame","xrslam_visual_world");
+    if(visual_world_frame_.empty() || visual_world_frame_==odom_frame_ ||
+       visual_world_frame_==base_frame_ || visual_world_frame_==camera_frame_ )
+      throw std::runtime_error("visual_world_frame must be a distinct, nonempty non-navigation frame");
     pose_validated_=declare_parameter<bool>("pose_convention_validated",false);
     enable_map_tf_=declare_parameter<bool>("enable_map_tf",false);
     map_frame_=declare_parameter<std::string>("map_frame","map");
+    if(visual_world_frame_==map_frame_)
+      throw std::runtime_error("visual_world_frame cannot be the map frame");
     map_id_=declare_parameter<std::string>("map_id","");
     if(enable_map_tf_ && (map_id_.empty() || map_frame_.empty() ||
        map_frame_==odom_frame_ || map_frame_==base_frame_))
@@ -142,6 +149,9 @@ public:
     pose_pub_=create_publisher<geometry_msgs::msg::PoseStamped>("/xrslam/pose",rclcpp::QoS(10));
     feature_pub_=create_publisher<sensor_msgs::msg::Image>("/xrslam/tracked_features/image",qos);
     landmarks_pub_=create_publisher<sensor_msgs::msg::PointCloud2>("/xrslam/landmarks",qos);
+    visual_landmarks_pub_=create_publisher<sensor_msgs::msg::PointCloud2>("/xrslam/visual_landmarks",qos);
+    visual_pose_pub_=create_publisher<geometry_msgs::msg::PoseStamped>("/xrslam/visual_pose",rclcpp::QoS(10));
+    visual_path_pub_=create_publisher<nav_msgs::msg::Path>("/xrslam/visual_trajectory",rclcpp::QoS(10));
     if(use_imu_) {
       imu_sub_=create_subscription<sensor_msgs::msg::Imu>(imu_topic_,qos,
         [this](sensor_msgs::msg::Imu::ConstSharedPtr p){ imu(*p); });
@@ -422,18 +432,25 @@ private:
       }
     }
 
-    // Landmarks are session-local VIO coordinates. Only label them 'odom'
-    // when the existing metric pose-convention gate is explicitly validated.
-    if(state!=XRSLAM_STATE_TRACKING_SUCCESS || !pose_validated_ ||
-       landmarks_pub_->get_subscription_count()==0)return;
+    // Visual-only reconstruction is unscaled and must never be advertised
+    // as metric odom. Keep the previously validated odom cloud unchanged.
+    const bool publish_visual = visual_landmarks_pub_->get_subscription_count()>0;
+    const bool publish_metric = pose_validated_ && landmarks_pub_->get_subscription_count()>0;
+    if(state!=XRSLAM_STATE_TRACKING_SUCCESS || (!publish_visual && !publish_metric))
+      return;
     XRSLAMLandmarks landmarks{};
     XRSLAMGetResult(XRSLAM_RESULT_LANDMARKS,&landmarks);
-    sensor_msgs::msg::PointCloud2 cloud;
-    cloud.header=source.header;cloud.header.frame_id=odom_frame_;
-    sensor_msgs::PointCloud2Modifier modifier(cloud);
-    modifier.setPointCloud2FieldsByString(1,"xyz");
     const size_t count=(landmarks.num_landmarks>0 && landmarks.landmarks)?
         static_cast<size_t>(landmarks.num_landmarks):0;
+    if(count==0) {
+      delete[] landmarks.landmarks;
+      return;
+    }
+    sensor_msgs::msg::PointCloud2 cloud;
+    cloud.header=source.header;
+    cloud.header.frame_id=visual_world_frame_;
+    sensor_msgs::PointCloud2Modifier modifier(cloud);
+    modifier.setPointCloud2FieldsByString(1,"xyz");
     size_t finite=0;
     for(size_t i=0;i<count;++i) {
       const auto &p=landmarks.landmarks[i];
@@ -448,7 +465,11 @@ private:
       *z=static_cast<float>(p.z);++x;++y;++z;
     }
     delete[] landmarks.landmarks;
-    landmarks_pub_->publish(cloud);
+    if(publish_visual)visual_landmarks_pub_->publish(cloud);
+    if(publish_metric) {
+      cloud.header.frame_id=odom_frame_;
+      landmarks_pub_->publish(cloud);
+    }
   }
 
   void read_pose() {
@@ -475,6 +496,36 @@ private:
     if(p.timestamp<=0||!is_finite_value(p.timestamp)||qnorm<0.99||qnorm>1.01||
        !is_finite_value(p.translation[0])||!is_finite_value(p.translation[1])||!is_finite_value(p.translation[2]))return;
     if(p.timestamp<=last_pose_time_)return;
+    // Publish a separate session-local *unscaled* visual reconstruction.
+    // No TF is added between xrslam_visual_world and the robot/nav graph.
+    // XRSLAM body pose convention remains unverified for metric authority.
+    if(p.timestamp>last_visual_pose_time_) {
+      geometry_msgs::msg::PoseStamped visual_pose;
+      visual_pose.header.stamp=rclcpp::Time(
+        static_cast<int64_t>(std::llround(p.timestamp*1e9)),RCL_ROS_TIME);
+      visual_pose.header.frame_id=visual_world_frame_;
+      visual_pose.pose.position.x=p.translation[0];
+      visual_pose.pose.position.y=p.translation[1];
+      visual_pose.pose.position.z=p.translation[2];
+      visual_pose.pose.orientation.x=p.quaternion[0];
+      visual_pose.pose.orientation.y=p.quaternion[1];
+      visual_pose.pose.orientation.z=p.quaternion[2];
+      visual_pose.pose.orientation.w=p.quaternion[3];
+      visual_pose_pub_->publish(visual_pose);
+      if(visual_path_.header.frame_id!=visual_world_frame_) {
+        visual_path_.header.frame_id=visual_world_frame_;
+        visual_path_.poses.clear();
+      }
+      visual_path_.header.stamp=visual_pose.header.stamp;
+      visual_path_.poses.push_back(visual_pose);
+      if(visual_path_.poses.size()>1000)
+        visual_path_.poses.erase(visual_path_.poses.begin(),
+                                 visual_path_.poses.begin()+static_cast<std::ptrdiff_t>(
+                                   visual_path_.poses.size()-1000));
+      if(visual_path_pub_->get_subscription_count()>0)
+        visual_path_pub_->publish(visual_path_);
+      last_visual_pose_time_=p.timestamp;
+    }
     if(!pose_validated_) {
       announce("pose_convention_unverified",false);
       map_announce("pose_convention_unverified",false);
@@ -595,6 +646,10 @@ private:
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr feature_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr landmarks_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr visual_landmarks_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr visual_pose_pub_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr visual_path_pub_;
+  nav_msgs::msg::Path visual_path_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr valid_pub_;
@@ -605,13 +660,14 @@ private:
   std::deque<sensor_msgs::msg::Image::ConstSharedPtr> pending_;
   std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_;
   std::string camera_frame_,imu_frame_,base_frame_,odom_frame_,generated_yaml_;
-  std::string map_frame_,map_id_,map_status_;
+  std::string map_frame_,map_id_,map_status_,visual_world_frame_;
   std::string last_status_;
   bool last_valid_=false,initialized_=false,failed_=false,pose_validated_=false;
   bool enable_map_tf_=false,map_valid_=false,use_imu_=true;
   std::uint64_t prior_map_epoch_=0;
   double offset_=0,max_jump_=1,max_angular_jump_=1;
   double last_imu_time_=-1,last_image_time_=-1,last_pose_time_=-1;
+  double last_visual_pose_time_=-1;
   double first_forwarded_imu_time_=-1;
   std::uint64_t submitted_camera_frames_=0;
   geometry_msgs::msg::Pose last_pose_;
