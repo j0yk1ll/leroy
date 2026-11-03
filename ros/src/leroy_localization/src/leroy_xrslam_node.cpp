@@ -154,6 +154,8 @@ public:
     feature_pub_=create_publisher<sensor_msgs::msg::Image>("/xrslam/tracked_features/image",qos);
     landmarks_pub_=create_publisher<sensor_msgs::msg::PointCloud2>("/xrslam/landmarks",qos);
     visual_landmarks_pub_=create_publisher<sensor_msgs::msg::PointCloud2>("/xrslam/visual_landmarks",qos);
+    visual_landmarks_status_pub_=create_publisher<std_msgs::msg::String>(
+      "/xrslam/visual_landmarks_status",latched);
     visual_pose_pub_=create_publisher<geometry_msgs::msg::PoseStamped>("/xrslam/visual_pose",rclcpp::QoS(10));
     visual_path_pub_=create_publisher<nav_msgs::msg::Path>("/xrslam/visual_trajectory",rclcpp::QoS(10));
     if(use_imu_) {
@@ -181,6 +183,13 @@ private:
     last_status_=status;last_valid_=valid;
     std_msgs::msg::String s;s.data=status;status_pub_->publish(s);
     std_msgs::msg::Bool b;b.data=valid;valid_pub_->publish(b);
+  }
+  void landmark_announce(const std::string &status) {
+    if(status==last_landmark_status_)return;
+    last_landmark_status_=status;
+    std_msgs::msg::String msg;msg.data=status;
+    visual_landmarks_status_pub_->publish(msg);
+    RCLCPP_INFO(get_logger(),"XRSLAM visual landmarks: %s",status.c_str());
   }
   void map_announce(const std::string &status,bool valid) {
     if(map_status_==status && map_valid_==valid)return;
@@ -441,14 +450,22 @@ private:
     // as metric odom. Keep the previously validated odom cloud unchanged.
     const bool publish_visual = visual_landmarks_pub_->get_subscription_count()>0;
     const bool publish_metric = pose_validated_ && landmarks_pub_->get_subscription_count()>0;
-    if(state!=XRSLAM_STATE_TRACKING_SUCCESS || (!publish_visual && !publish_metric))
+    if(state!=XRSLAM_STATE_TRACKING_SUCCESS) {
+      landmark_announce(state==XRSLAM_STATE_INITIALIZING?
+        "waiting_for_native_tracking":"native_tracking_failed");
       return;
+    }
+    if(!publish_visual && !publish_metric) {
+      landmark_announce("no_pointcloud_subscribers");
+      return;
+    }
     XRSLAMLandmarks landmarks{};
     XRSLAMGetResult(XRSLAM_RESULT_LANDMARKS,&landmarks);
     const size_t count=(landmarks.num_landmarks>0 && landmarks.landmarks)?
         static_cast<size_t>(landmarks.num_landmarks):0;
     if(count==0) {
       delete[] landmarks.landmarks;
+      landmark_announce("native_snapshot_empty");
       return;
     }
     sensor_msgs::msg::PointCloud2 cloud;
@@ -461,6 +478,11 @@ private:
       const auto &p=landmarks.landmarks[i];
       if(std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z))++finite;
     }
+    if(finite==0) {
+      delete[] landmarks.landmarks;
+      landmark_announce("native_snapshot_all_nonfinite");
+      return;
+    }
     modifier.resize(finite);
     sensor_msgs::PointCloud2Iterator<float> x(cloud,"x"),y(cloud,"y"),z(cloud,"z");
     for(size_t i=0;i<count;++i) {
@@ -470,6 +492,7 @@ private:
       *z=static_cast<float>(p.z);++x;++y;++z;
     }
     delete[] landmarks.landmarks;
+    landmark_announce("publishing_finite_points");
     if(publish_visual)visual_landmarks_pub_->publish(cloud);
     if(publish_metric) {
       cloud.header.frame_id=odom_frame_;
@@ -659,6 +682,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr feature_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr landmarks_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr visual_landmarks_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr visual_landmarks_status_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr visual_pose_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr visual_path_pub_;
   nav_msgs::msg::Path visual_path_;
@@ -673,7 +697,7 @@ private:
   std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_;
   std::string camera_frame_,imu_frame_,base_frame_,odom_frame_,generated_yaml_;
   std::string map_frame_,map_id_,map_status_,visual_world_frame_,visual_body_frame_;
-  std::string last_status_;
+  std::string last_status_,last_landmark_status_;
   bool last_valid_=false,initialized_=false,failed_=false,pose_validated_=false;
   bool enable_map_tf_=false,map_valid_=false,use_imu_=true;
   std::uint64_t prior_map_epoch_=0;
