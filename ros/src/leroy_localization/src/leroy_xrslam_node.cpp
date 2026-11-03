@@ -34,6 +34,7 @@
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <cstdlib>
 #include <chrono>
 #include <cstdint>
@@ -85,6 +86,12 @@ public:
     image_topic_=declare_parameter<std::string>("image_topic","");
     info_topic_=declare_parameter<std::string>("camera_info_topic","");
     imu_topic_=declare_parameter<std::string>("imu_topic","/imu/data_raw");
+    depth_topic_=declare_parameter<std::string>("depth_topic","/depthart/depth");
+    depth_wait_ms_=declare_parameter<int>("depth_wait_ms",1000);
+    min_depth_valid_fraction_=declare_parameter<double>("min_depth_valid_fraction",0.01);
+    if(depth_wait_ms_<50 || depth_wait_ms_>10000 ||
+       min_depth_valid_fraction_<0.0 || min_depth_valid_fraction_>1.0)
+      throw std::runtime_error("Invalid RGB-D synchronization parameters");
     camera_frame_=declare_parameter<std::string>("camera_optical_frame","");
     imu_frame_=declare_parameter<std::string>("imu_frame","imu_link");
     base_frame_=declare_parameter<std::string>("base_frame","base_link");
@@ -127,8 +134,9 @@ public:
         slam["sensor"]["mode"].as<std::string>() : "";
     if(!leroy_xrslam::supported_sensor_mode(mode))
       throw std::runtime_error(
-        "XRSLAM adapter supports sensor.mode=monocular or monocular_imu only");
+        "XRSLAM adapter supports sensor.mode=monocular, monocular_imu or rgbd only");
     use_imu_=leroy_xrslam::sensor_mode_requires_imu(mode);
+    use_depth_=leroy_xrslam::sensor_mode_requires_depth(mode);
     if(use_imu_ && !is_finite_value(offset_))
       throw std::runtime_error(
         "monocular_imu requires a measured camera_imu_offset_sec");
@@ -144,6 +152,8 @@ public:
           "monocular mode is scale-ambiguous: metric pose/odom and map TF must remain disabled");
       offset_=0.0; // Device YAML requires a numeric field; unused in monocular.
     }
+    if(use_depth_ && depth_topic_.empty())
+      throw std::runtime_error("RGB-D mode requires depth_topic");
     RCLCPP_INFO(get_logger(),"XRSLAM mode=%s; IMU=%s; pose output gated=%s",
       mode.c_str(),use_imu_?"enabled":"disabled",pose_validated_?"no":"yes");
     auto qos=rclcpp::SensorDataQoS();
@@ -175,9 +185,17 @@ public:
       [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr p){ info(*p); });
     image_sub_=create_subscription<sensor_msgs::msg::Image>(image_topic_,qos,
       [this](sensor_msgs::msg::Image::ConstSharedPtr p){ image(p); });
+    if(use_depth_) {
+      depth_sub_=create_subscription<sensor_msgs::msg::Image>(depth_topic_,qos,
+        [this](sensor_msgs::msg::Image::ConstSharedPtr p){ depth(p); });
+      depth_diagnostics_pub_=create_publisher<std_msgs::msg::String>(
+        "/xrslam/depth_sync_status",rclcpp::QoS(10).reliable());
+    }
     timer_=create_wall_timer(std::chrono::milliseconds(20),[this]{ poll(); });
     landmark_diagnostics_timer_=create_wall_timer(
       std::chrono::seconds(2),[this]{ publish_landmark_diagnostics(); });
+    if(use_depth_)depth_diagnostics_timer_=create_wall_timer(
+      std::chrono::seconds(2),[this]{ publish_depth_diagnostics(); });
     announce("waiting_calibration",false);
     map_announce(enable_map_tf_ ? "waiting_calibration" : "disabled",false);
   }
@@ -358,6 +376,43 @@ private:
     if(first_forwarded_imu_time_<0)first_forwarded_imu_time_=t;
     drain();
   }
+  void publish_depth_diagnostics() {
+    std_msgs::msg::String out;
+    out.data="paired="+std::to_string(depth_pairs_)+
+      " dropped_rgb="+std::to_string(depth_dropped_rgb_)+
+      " late_depth="+std::to_string(depth_late_)+
+      " invalid_depth="+std::to_string(depth_invalid_)+
+      " pending_rgb="+std::to_string(pending_.size())+
+      " pending_depth="+std::to_string(pending_depth_.size());
+    depth_diagnostics_pub_->publish(out);
+  }
+  bool valid_depth(const sensor_msgs::msg::Image &m) const {
+    if(m.header.frame_id!=camera_frame_ || m.encoding!="32FC1" ||
+       m.is_bigendian!=0 || m.width==0 || m.height==0 ||
+       m.step<m.width*sizeof(float) ||
+       m.data.size()<static_cast<size_t>(m.step)*m.height ||
+       !info_ || m.width!=info_->width || m.height!=info_->height)return false;
+    size_t sampled=0,valid=0;
+    for(size_t y=0;y<m.height;y+=8)for(size_t x=0;x<m.width;x+=8) {
+      float z;
+      std::memcpy(&z,m.data.data()+static_cast<size_t>(y)*m.step+x*sizeof(float),sizeof(z));
+      ++sampled;
+      if(std::isfinite(z)&&z>0.05f&&z<50.0f)++valid;
+    }
+    return sampled>0 && static_cast<double>(valid)/sampled>=min_depth_valid_fraction_;
+  }
+  void depth(sensor_msgs::msg::Image::ConstSharedPtr m) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(failed_ || !initialized_ || !use_depth_)return;
+    const auto stamp=rclcpp::Time(m->header.stamp).nanoseconds();
+    if(stamp<=0 || !valid_depth(*m)) {++depth_invalid_;return;}
+    if(stamp<=last_image_time_ns_) {++depth_late_;return;}
+    for(const auto &d:pending_depth_)
+      if(rclcpp::Time(d->header.stamp).nanoseconds()==stamp)return;
+    pending_depth_.push_back(m);
+    while(pending_depth_.size()>8)pending_depth_.pop_front();
+    drain();
+  }
   void image(sensor_msgs::msg::Image::ConstSharedPtr m) {
     std::lock_guard<std::mutex> lock(mutex_);
     if(failed_)return;
@@ -371,8 +426,13 @@ private:
          initialized_, use_imu_, t, offset_, first_forwarded_imu_time_))return;
     if(!pending_.empty() && t<=seconds(pending_.back()->header.stamp))return;
     if(t<=last_image_time_)return;
-    if(pending_.size()>=8){ fail("camera_queue_overflow");return; }
+    if(pending_.size()>=8){
+      if(!use_depth_){fail("camera_queue_overflow");return;}
+      pending_.pop_front();++depth_dropped_rgb_;
+    }
     pending_.push_back(m);
+    if(use_depth_)pending_arrivals_.push_back(std::chrono::steady_clock::now());
+    while(pending_arrivals_.size()>pending_.size())pending_arrivals_.pop_front();
     drain();
   }
   void poll() {
@@ -392,6 +452,26 @@ private:
     while(!pending_.empty()) {
       const auto m=pending_.front();
       const double t=seconds(m->header.stamp);
+      sensor_msgs::msg::Image::ConstSharedPtr matched_depth;
+      if(use_depth_) {
+        const auto stamp=rclcpp::Time(m->header.stamp).nanoseconds();
+        while(!pending_depth_.empty() &&
+          rclcpp::Time(pending_depth_.front()->header.stamp).nanoseconds()<stamp)
+          {pending_depth_.pop_front();++depth_late_;}
+        auto match=std::find_if(pending_depth_.begin(),pending_depth_.end(),
+          [stamp](const auto &d){return rclcpp::Time(d->header.stamp).nanoseconds()==stamp;});
+        if(match==pending_depth_.end()) {
+          if(!pending_arrivals_.empty() &&
+             std::chrono::steady_clock::now()-pending_arrivals_.front()>
+               std::chrono::milliseconds(depth_wait_ms_)) {
+            pending_.pop_front();pending_arrivals_.pop_front();++depth_dropped_rgb_;
+            continue;
+          }
+          break;
+        }
+        matched_depth=*match;
+        pending_depth_.erase(match);
+      }
       if(leroy_xrslam::await_imu_for_camera(
            use_imu_, last_imu_time_, t, offset_))break;
       if(t<=last_image_time_){pending_.pop_front();continue;}
@@ -421,6 +501,18 @@ private:
       camera.data=const_cast<unsigned char*>(data);
       camera.timeStamp=t;camera.camera_id=0;
       camera.channel=channels;camera.stride=static_cast<int>(m->step);
+      if(use_depth_) {
+        XRSLAMDepthImage dep{};
+        dep.data_f32=reinterpret_cast<float*>(const_cast<unsigned char*>(matched_depth->data.data()));
+        dep.timeStamp=t;
+        dep.width=static_cast<int>(matched_depth->width);
+        dep.height=static_cast<int>(matched_depth->height);
+        dep.stride=static_cast<int>(matched_depth->step);
+        dep.format=XRSLAM_DEPTH_FLOAT32;
+        dep.source=XRSLAM_DEPTH_MONOCULAR_METRIC;
+        XRSLAMPushSensorData(XRSLAM_SENSOR_DEPTH_CAMERA,&dep);
+        ++depth_pairs_;
+      }
       XRSLAMPushSensorData(XRSLAM_SENSOR_CAMERA,&camera);
       XRSLAMRunOneFrame();
       publish_visualization(*m);
@@ -433,6 +525,8 @@ private:
           use_imu_?"monocular_imu":"monocular");
       last_image_time_=t;
       pending_.pop_front();
+      if(use_depth_ && !pending_arrivals_.empty())pending_arrivals_.pop_front();
+      last_image_time_ns_=rclcpp::Time(m->header.stamp).nanoseconds();
     }
   }
   // Export XRSLAM-owned observations only; any visual-world pose/TF stays
@@ -762,6 +856,7 @@ private:
   tf2_ros::TransformBroadcaster tf_broadcaster_;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr info_sub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr feature_pub_;
@@ -770,6 +865,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr visual_sparse_map_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr visual_landmarks_status_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr visual_landmarks_diagnostics_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr depth_diagnostics_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr visual_pose_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr visual_path_pub_;
   nav_msgs::msg::Path visual_path_;
@@ -786,14 +882,21 @@ private:
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr map_status_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::TimerBase::SharedPtr landmark_diagnostics_timer_;
+  rclcpp::TimerBase::SharedPtr depth_diagnostics_timer_;
   std::optional<sensor_msgs::msg::CameraInfo> info_;
   std::deque<sensor_msgs::msg::Image::ConstSharedPtr> pending_;
-  std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_;
+  std::deque<sensor_msgs::msg::Image::ConstSharedPtr> pending_depth_;
+  std::deque<std::chrono::steady_clock::time_point> pending_arrivals_;
+  std::uint64_t depth_pairs_=0,depth_dropped_rgb_=0,depth_late_=0,depth_invalid_=0;
+  std::int64_t last_image_time_ns_=0;
+  int depth_wait_ms_=1000;
+  double min_depth_valid_fraction_=0.01;
+  std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_,depth_topic_;
   std::string camera_frame_,imu_frame_,base_frame_,odom_frame_,generated_yaml_;
   std::string map_frame_,map_id_,map_status_,visual_world_frame_,visual_body_frame_;
   std::string last_status_,last_landmark_status_;
   bool last_valid_=false,initialized_=false,failed_=false,pose_validated_=false;
-  bool enable_map_tf_=false,map_valid_=false,use_imu_=true;
+  bool enable_map_tf_=false,map_valid_=false,use_imu_=true,use_depth_=false;
   std::uint64_t prior_map_epoch_=0;
   double offset_=0,max_jump_=1,max_angular_jump_=1;
   double last_imu_time_=-1,last_image_time_=-1,last_pose_time_=-1;
