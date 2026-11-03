@@ -89,7 +89,7 @@ Visualization Manager:
       Enabled: true
       Topic:
         Value: /xrslam/tracked_features/image
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Durability Policy: Volatile
     - Class: rviz_default_plugins/PointCloud2
       Name: XRSLAM Sparse Landmarks
