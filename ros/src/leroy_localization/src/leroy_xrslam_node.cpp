@@ -474,7 +474,11 @@ private:
       }
       if(leroy_xrslam::await_imu_for_camera(
            use_imu_, last_imu_time_, t, offset_))break;
-      if(t<=last_image_time_){pending_.pop_front();continue;}
+      if(t<=last_image_time_){
+        pending_.pop_front();
+        if(use_depth_ && !pending_arrivals_.empty())pending_arrivals_.pop_front();
+        continue;
+      }
       if(m->width!=info_->width||m->height!=info_->height) {fail("image_geometry_changed");return;}
       // Preserve RGB/BGR conventions expected by XRSLAMManager::PushImage.
       int channels=0;
@@ -522,7 +526,7 @@ private:
       if(submitted_camera_frames_==1 || submitted_camera_frames_%300==0)
         RCLCPP_INFO(get_logger(),"Submitted %llu camera frames to XRSLAM (%s)",
           static_cast<unsigned long long>(submitted_camera_frames_),
-          use_imu_?"monocular_imu":"monocular");
+          use_imu_?"monocular_imu":(use_depth_?"rgbd":"monocular"));
       last_image_time_=t;
       pending_.pop_front();
       if(use_depth_ && !pending_arrivals_.empty())pending_arrivals_.pop_front();
