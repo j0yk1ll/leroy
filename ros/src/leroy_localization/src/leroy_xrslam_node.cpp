@@ -87,9 +87,9 @@ public:
     info_topic_=declare_parameter<std::string>("camera_info_topic","");
     imu_topic_=declare_parameter<std::string>("imu_topic","/imu/data_raw");
     depth_topic_=declare_parameter<std::string>("depth_topic","/depthart/depth");
-    depth_wait_ms_=declare_parameter<int>("depth_wait_ms",1000);
+    depth_wait_ms_=declare_parameter<int>("depth_wait_ms",3000);
     min_depth_valid_fraction_=declare_parameter<double>("min_depth_valid_fraction",0.01);
-    if(depth_wait_ms_<50 || depth_wait_ms_>10000 ||
+    if(depth_wait_ms_<50 || depth_wait_ms_>30000 ||
        min_depth_valid_fraction_<0.0 || min_depth_valid_fraction_>1.0)
       throw std::runtime_error("Invalid RGB-D synchronization parameters");
     camera_frame_=declare_parameter<std::string>("camera_optical_frame","");
@@ -410,7 +410,7 @@ private:
     for(const auto &d:pending_depth_)
       if(rclcpp::Time(d->header.stamp).nanoseconds()==stamp)return;
     pending_depth_.push_back(m);
-    while(pending_depth_.size()>8)pending_depth_.pop_front();
+    while(pending_depth_.size()>16)pending_depth_.pop_front();
     drain();
   }
   void image(sensor_msgs::msg::Image::ConstSharedPtr m) {
@@ -426,7 +426,7 @@ private:
          initialized_, use_imu_, t, offset_, first_forwarded_imu_time_))return;
     if(!pending_.empty() && t<=seconds(pending_.back()->header.stamp))return;
     if(t<=last_image_time_)return;
-    if(pending_.size()>=8){
+    if(pending_.size()>=(use_depth_?64u:8u)){
       if(!use_depth_){fail("camera_queue_overflow");return;}
       pending_.pop_front();++depth_dropped_rgb_;
     }
@@ -889,7 +889,7 @@ private:
   std::deque<std::chrono::steady_clock::time_point> pending_arrivals_;
   std::uint64_t depth_pairs_=0,depth_dropped_rgb_=0,depth_late_=0,depth_invalid_=0;
   std::int64_t last_image_time_ns_=0;
-  int depth_wait_ms_=1000;
+  int depth_wait_ms_=3000;
   double min_depth_valid_fraction_=0.01;
   std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_,depth_topic_;
   std::string camera_frame_,imu_frame_,base_frame_,odom_frame_,generated_yaml_;
