@@ -388,7 +388,8 @@ private:
       pending_.pop_front();
     }
   }
-  // Export XRSLAM-owned tracks only. No synthetic corners, poses or TF.
+  // Export XRSLAM-owned observations only; any visual-world pose/TF stays
+  // isolated from the metric navigation frame tree.
   void publish_visualization(const sensor_msgs::msg::Image &source) {
     XRSLAMState state=XRSLAM_STATE_INITIALIZING;
     XRSLAMGetResult(XRSLAM_RESULT_STATE,&state);
