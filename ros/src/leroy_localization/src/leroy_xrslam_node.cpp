@@ -378,11 +378,15 @@ private:
   void publish_visualization(const sensor_msgs::msg::Image &source) {
     XRSLAMState state=XRSLAM_STATE_INITIALIZING;
     XRSLAMGetResult(XRSLAM_RESULT_STATE,&state);
-    if(state!=XRSLAM_STATE_TRACKING_SUCCESS)return;
+    if(state==XRSLAM_STATE_TRACKING_FAIL)return;
 
+    // Feature tracking precedes successful monocular map initialization.
+    // Expose XRSLAM's real front-end tracks while initializing, without
+    // implying valid 3D pose or changing the metric-pose authorization gate.
     if(feature_pub_->get_subscription_count()>0) {
       XRSLAMFeatures features;
       XRSLAMGetResult(XRSLAM_RESULT_FEATURES,&features);
+      if(!features.pos.empty()) {
       sensor_msgs::msg::Image output;
       output.header=source.header;
       output.height=source.height;output.width=source.width;
@@ -415,11 +419,13 @@ private:
         }
       }
       feature_pub_->publish(output);
+      }
     }
 
     // Landmarks are session-local VIO coordinates. Only label them 'odom'
     // when the existing metric pose-convention gate is explicitly validated.
-    if(!pose_validated_ || landmarks_pub_->get_subscription_count()==0)return;
+    if(state!=XRSLAM_STATE_TRACKING_SUCCESS || !pose_validated_ ||
+       landmarks_pub_->get_subscription_count()==0)return;
     XRSLAMLandmarks landmarks{};
     XRSLAMGetResult(XRSLAM_RESULT_LANDMARKS,&landmarks);
     sensor_msgs::msg::PointCloud2 cloud;
