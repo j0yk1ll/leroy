@@ -88,14 +88,18 @@ public:
     base_frame_=declare_parameter<std::string>("base_frame","base_link");
     odom_frame_=declare_parameter<std::string>("odom_frame","odom");
     visual_world_frame_=declare_parameter<std::string>("visual_world_frame","xrslam_visual_world");
-    if(visual_world_frame_.empty() || visual_world_frame_==odom_frame_ ||
-       visual_world_frame_==base_frame_ || visual_world_frame_==camera_frame_ )
-      throw std::runtime_error("visual_world_frame must be a distinct, nonempty non-navigation frame");
+    visual_body_frame_=declare_parameter<std::string>("visual_body_frame","xrslam_visual_body");
+    if(visual_world_frame_.empty() || visual_body_frame_.empty() ||
+       visual_world_frame_==visual_body_frame_ ||
+       visual_world_frame_==odom_frame_ || visual_world_frame_==base_frame_ ||
+       visual_body_frame_==odom_frame_ || visual_body_frame_==base_frame_ ||
+       visual_body_frame_==camera_frame_)
+      throw std::runtime_error("visual TF frames must be distinct from robot navigation frames");
     pose_validated_=declare_parameter<bool>("pose_convention_validated",false);
     enable_map_tf_=declare_parameter<bool>("enable_map_tf",false);
     map_frame_=declare_parameter<std::string>("map_frame","map");
-    if(visual_world_frame_==map_frame_)
-      throw std::runtime_error("visual_world_frame cannot be the map frame");
+    if(visual_world_frame_==map_frame_ || visual_body_frame_==map_frame_)
+      throw std::runtime_error("visual TF frames cannot be the map frame");
     map_id_=declare_parameter<std::string>("map_id","");
     if(enable_map_tf_ && (map_id_.empty() || map_frame_.empty() ||
        map_frame_==odom_frame_ || map_frame_==base_frame_))
@@ -512,6 +516,15 @@ private:
       visual_pose.pose.orientation.z=p.quaternion[2];
       visual_pose.pose.orientation.w=p.quaternion[3];
       visual_pose_pub_->publish(visual_pose);
+      // Standalone TF tree: never attach the unscaled body to base_link or odom.
+      geometry_msgs::msg::TransformStamped visual_tf;
+      visual_tf.header=visual_pose.header;
+      visual_tf.child_frame_id=visual_body_frame_;
+      visual_tf.transform.translation.x=visual_pose.pose.position.x;
+      visual_tf.transform.translation.y=visual_pose.pose.position.y;
+      visual_tf.transform.translation.z=visual_pose.pose.position.z;
+      visual_tf.transform.rotation=visual_pose.pose.orientation;
+      tf_broadcaster_.sendTransform(visual_tf);
       if(visual_path_.header.frame_id!=visual_world_frame_) {
         visual_path_.header.frame_id=visual_world_frame_;
         visual_path_.poses.clear();
@@ -660,7 +673,7 @@ private:
   std::deque<sensor_msgs::msg::Image::ConstSharedPtr> pending_;
   std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_;
   std::string camera_frame_,imu_frame_,base_frame_,odom_frame_,generated_yaml_;
-  std::string map_frame_,map_id_,map_status_,visual_world_frame_;
+  std::string map_frame_,map_id_,map_status_,visual_world_frame_,visual_body_frame_;
   std::string last_status_;
   bool last_valid_=false,initialized_=false,failed_=false,pose_validated_=false;
   bool enable_map_tf_=false,map_valid_=false,use_imu_=true;
