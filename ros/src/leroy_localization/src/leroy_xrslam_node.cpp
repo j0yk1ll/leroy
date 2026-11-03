@@ -156,6 +156,8 @@ public:
     visual_landmarks_pub_=create_publisher<sensor_msgs::msg::PointCloud2>("/xrslam/visual_landmarks",qos);
     visual_landmarks_status_pub_=create_publisher<std_msgs::msg::String>(
       "/xrslam/visual_landmarks_status",latched);
+    visual_landmarks_diagnostics_pub_=create_publisher<std_msgs::msg::String>(
+      "/xrslam/visual_landmarks_diagnostics",rclcpp::QoS(10).reliable());
     visual_pose_pub_=create_publisher<geometry_msgs::msg::PoseStamped>("/xrslam/visual_pose",rclcpp::QoS(10));
     visual_path_pub_=create_publisher<nav_msgs::msg::Path>("/xrslam/visual_trajectory",rclcpp::QoS(10));
     if(use_imu_) {
@@ -167,6 +169,8 @@ public:
     image_sub_=create_subscription<sensor_msgs::msg::Image>(image_topic_,qos,
       [this](sensor_msgs::msg::Image::ConstSharedPtr p){ image(p); });
     timer_=create_wall_timer(std::chrono::milliseconds(20),[this]{ poll(); });
+    landmark_diagnostics_timer_=create_wall_timer(
+      std::chrono::seconds(2),[this]{ publish_landmark_diagnostics(); });
     announce("waiting_calibration",false);
     map_announce(enable_map_tf_ ? "waiting_calibration" : "disabled",false);
   }
@@ -190,6 +194,18 @@ private:
     std_msgs::msg::String msg;msg.data=status;
     visual_landmarks_status_pub_->publish(msg);
     RCLCPP_INFO(get_logger(),"XRSLAM visual landmarks: %s",status.c_str());
+  }
+  void publish_landmark_diagnostics() {
+    const double age_s=(last_cloud_publish_wall_.nanoseconds()>0)?
+      (get_clock()->now()-last_cloud_publish_wall_).seconds():-1.0;
+    std_msgs::msg::String msg;
+    msg.data="state="+(last_landmark_status_.empty()?std::string("unknown"):last_landmark_status_)+
+      " cloud_publishes="+std::to_string(visual_cloud_publish_count_)+
+      " last_native_points="+std::to_string(last_native_landmark_count_)+
+      " last_finite_points="+std::to_string(last_finite_landmark_count_)+
+      " publish_age_s="+std::to_string(age_s)+
+      " subscribers="+std::to_string(visual_landmarks_pub_->get_subscription_count());
+    visual_landmarks_diagnostics_pub_->publish(msg);
   }
   void map_announce(const std::string &status,bool valid) {
     if(map_status_==status && map_valid_==valid)return;
@@ -463,6 +479,8 @@ private:
     XRSLAMGetResult(XRSLAM_RESULT_LANDMARKS,&landmarks);
     const size_t count=(landmarks.num_landmarks>0 && landmarks.landmarks)?
         static_cast<size_t>(landmarks.num_landmarks):0;
+    last_native_landmark_count_=count;
+    last_finite_landmark_count_=0;
     if(count==0) {
       delete[] landmarks.landmarks;
       landmark_announce("native_snapshot_empty");
@@ -478,6 +496,7 @@ private:
       const auto &p=landmarks.landmarks[i];
       if(std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z))++finite;
     }
+    last_finite_landmark_count_=finite;
     if(finite==0) {
       delete[] landmarks.landmarks;
       landmark_announce("native_snapshot_all_nonfinite");
@@ -493,7 +512,11 @@ private:
     }
     delete[] landmarks.landmarks;
     landmark_announce("publishing_finite_points");
-    if(publish_visual)visual_landmarks_pub_->publish(cloud);
+    if(publish_visual) {
+      visual_landmarks_pub_->publish(cloud);
+      ++visual_cloud_publish_count_;
+      last_cloud_publish_wall_=get_clock()->now();
+    }
     if(publish_metric) {
       cloud.header.frame_id=odom_frame_;
       landmarks_pub_->publish(cloud);
@@ -683,6 +706,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr landmarks_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr visual_landmarks_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr visual_landmarks_status_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr visual_landmarks_diagnostics_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr visual_pose_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr visual_path_pub_;
   nav_msgs::msg::Path visual_path_;
@@ -692,6 +716,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr map_valid_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr map_status_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr landmark_diagnostics_timer_;
   std::optional<sensor_msgs::msg::CameraInfo> info_;
   std::deque<sensor_msgs::msg::Image::ConstSharedPtr> pending_;
   std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_;
@@ -706,6 +731,9 @@ private:
   double last_visual_pose_time_=-1;
   double first_forwarded_imu_time_=-1;
   std::uint64_t submitted_camera_frames_=0;
+  std::uint64_t visual_cloud_publish_count_=0;
+  size_t last_native_landmark_count_=0,last_finite_landmark_count_=0;
+  rclcpp::Time last_cloud_publish_wall_{0,0,RCL_ROS_TIME};
   geometry_msgs::msg::Pose last_pose_;
 };
 
