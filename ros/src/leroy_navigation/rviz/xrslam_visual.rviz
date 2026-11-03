@@ -33,8 +33,20 @@ Visualization Manager:
         Reliability Policy: Best Effort
         Durability Policy: Volatile
     - Class: rviz_default_plugins/PointCloud2
-      Name: XRSLAM Visual Landmarks (unscaled)
+      Name: XRSLAM Session Sparse Map (unscaled)
       Enabled: true
+      Topic:
+        Value: /xrslam/visual_sparse_map
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+      Style: Points
+      Size (Pixels): 3
+      Color Transformer: FlatColor
+      Color: 255; 214; 85
+      Alpha: 0.9
+    - Class: rviz_default_plugins/PointCloud2
+      Name: XRSLAM Current Window (unscaled)
+      Enabled: false
       Topic:
         Value: /xrslam/visual_landmarks
         Reliability Policy: Best Effort
@@ -42,7 +54,7 @@ Visualization Manager:
       Style: Points
       Size (Pixels): 3
       Color Transformer: FlatColor
-      Color: 255; 214; 85
+      Color: 90; 220; 140
       Alpha: 0.9
     - Class: rviz_default_plugins/Path
       Name: XRSLAM Visual Trajectory (unscaled)
