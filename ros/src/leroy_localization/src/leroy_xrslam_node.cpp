@@ -406,6 +406,11 @@ private:
       " geometry_frames_matched="+std::to_string(native_ok?native.geometry_frames_matched:0)+
       " geometry_frames_expired="+std::to_string(native_ok?native.geometry_frames_expired:0)+
       " geometry_pending="+std::to_string(native_ok?native.geometry_pending:0)+
+      " geometry_frames_unselected="+std::to_string(native_ok?native.geometry_frames_unselected:0)+
+      " scale_window_frames="+std::to_string(native_ok?native.scale_window_frames:0)+
+      " scale_window_median="+std::to_string(native_ok?native.scale_window_median:0.0)+
+      " scale_window_mad="+std::to_string(native_ok?native.scale_window_mad:0.0)+
+      " scale_window_relative_mad="+std::to_string(native_ok?native.scale_window_relative_mad:0.0)+
       " depth_min_m="+std::to_string(native_ok?native.depth_min_m:0.0)+
       " depth_max_m="+std::to_string(native_ok?native.depth_max_m:0.0)+
       " latest_depth_median_m="+std::to_string(native_ok?native.latest_depth_median_m:0.0)+
