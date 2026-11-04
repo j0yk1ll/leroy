@@ -110,9 +110,6 @@ public:
     pose_validated_=declare_parameter<bool>("pose_convention_validated",false);
     experimental_metric_preview_=declare_parameter<bool>(
       "experimental_metric_preview",false);
-    if(experimental_metric_preview_ && !async_depth_stage_a1_)
-      throw std::runtime_error(
-        "Experimental metric preview requires Stage A1 asynchronous RGB-D");
     metric_preview_world_frame_=declare_parameter<std::string>(
       "experimental_metric_world_frame","xrslam_experimental_metric_world");
     if(experimental_metric_preview_ &&
@@ -158,6 +155,9 @@ public:
     use_imu_=leroy_xrslam::sensor_mode_requires_imu(mode);
     use_depth_=leroy_xrslam::sensor_mode_requires_depth(mode);
     async_depth_stage_a1_=declare_parameter<bool>("async_depth_stage_a1",false);
+    if(experimental_metric_preview_ && !async_depth_stage_a1_)
+      throw std::runtime_error(
+        "Experimental metric preview requires Stage A1 asynchronous RGB-D");
     if(async_depth_stage_a1_ && (!use_depth_ || use_imu_ ||
        pose_validated_ || enable_map_tf_))
       throw std::runtime_error(
