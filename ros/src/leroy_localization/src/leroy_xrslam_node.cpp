@@ -441,6 +441,17 @@ private:
       " scale_window_median="+std::to_string(native_ok?native.scale_window_median:0.0)+
       " scale_window_mad="+std::to_string(native_ok?native.scale_window_mad:0.0)+
       " scale_window_relative_mad="+std::to_string(native_ok?native.scale_window_relative_mad:0.0)+
+      " geometry_frames_zero_ratios="+std::to_string(native_ok?native.geometry_frames_zero_ratios:0)+
+      " geometry_frames_1_to_3_ratios="+std::to_string(native_ok?native.geometry_frames_1_to_3_ratios:0)+
+      " geometry_frames_4_to_9_ratios="+std::to_string(native_ok?native.geometry_frames_4_to_9_ratios:0)+
+      " geometry_frames_10_plus_ratios="+std::to_string(native_ok?native.geometry_frames_10_plus_ratios:0)+
+      " candidate_frames_accepted="+std::to_string(native_ok?native.candidate_frames_accepted:0)+
+      " candidate_frames_rejected_noisy="+std::to_string(native_ok?native.candidate_frames_rejected_noisy:0)+
+      " candidate_scale_resets="+std::to_string(native_ok?native.candidate_scale_resets:0)+
+      " candidate_window_frames="+std::to_string(native_ok?native.candidate_window_frames:0)+
+      " candidate_window_median="+std::to_string(native_ok?native.candidate_window_median:0.0)+
+      " candidate_window_mad="+std::to_string(native_ok?native.candidate_window_mad:0.0)+
+      " candidate_window_relative_mad="+std::to_string(native_ok?native.candidate_window_relative_mad:0.0)+
       " depth_min_m="+std::to_string(native_ok?native.depth_min_m:0.0)+
       " depth_max_m="+std::to_string(native_ok?native.depth_max_m:0.0)+
       " latest_depth_median_m="+std::to_string(native_ok?native.latest_depth_median_m:0.0)+
@@ -470,6 +481,7 @@ private:
     metric_anchor_set_=false;
     metric_scale_=0.0;
     metric_last_ratio_frames_=0;
+    metric_last_candidate_resets_=0;
     metric_path_.poses.clear();
     metric_preview_evidence_time_={};
     sensor_msgs::msg::PointCloud2 cloud;
@@ -497,33 +509,39 @@ private:
       return;
     }
     const auto now=std::chrono::steady_clock::now();
-    if(native.ratio_frames>metric_last_ratio_frames_) {
-      metric_last_ratio_frames_=native.ratio_frames;
-      metric_preview_evidence_time_=now;
-    } else if(native.ratio_frames<metric_last_ratio_frames_) {
+    if(native.candidate_frames_accepted<metric_last_ratio_frames_ ||
+       native.candidate_scale_resets<metric_last_candidate_resets_) {
       clear_metric_preview("native_session_restarted");
       return;
+    }
+    if(native.candidate_scale_resets>metric_last_candidate_resets_) {
+      clear_metric_preview("scale_gauge_jump");
+      metric_last_candidate_resets_=native.candidate_scale_resets;
+    }
+    if(native.candidate_frames_accepted>metric_last_ratio_frames_) {
+      metric_last_ratio_frames_=native.candidate_frames_accepted;
+      metric_preview_evidence_time_=now;
     }
     if(!metric_scale_frozen_) {
       // Deliberately lenient prototype-grade confidence threshold, applied
       // to a median of per-frame medians, not to any one depth pixel.
-      if(native.scale_window_frames>=8 &&
-         native.scale_window_frames<=32 &&
-         std::isfinite(native.scale_window_median) &&
-         native.scale_window_median>=0.001 &&
-         native.scale_window_median<=100.0 &&
-         std::isfinite(native.scale_window_relative_mad) &&
-         native.scale_window_relative_mad<=0.25 &&
+      if(native.candidate_window_frames>=8 &&
+         native.candidate_window_frames<=16 &&
+         std::isfinite(native.candidate_window_median) &&
+         native.candidate_window_median>=0.001 &&
+         native.candidate_window_median<=100.0 &&
+         std::isfinite(native.candidate_window_relative_mad) &&
+         native.candidate_window_relative_mad<=0.25 &&
          metric_preview_evidence_time_.time_since_epoch().count()!=0 &&
          now-metric_preview_evidence_time_<std::chrono::seconds(12)) {
-        metric_scale_=native.scale_window_median;
+        metric_scale_=native.candidate_window_median;
         metric_scale_frozen_=true;
         metric_anchor_set_=false;
         metric_path_.poses.clear();
         announce_metric_preview("prototype_scale_frozen scale="+
           std::to_string(metric_scale_)+
-          " frames="+std::to_string(native.scale_window_frames)+
-          " relative_mad="+std::to_string(native.scale_window_relative_mad)+
+          " frames="+std::to_string(native.candidate_window_frames)+
+          " relative_mad="+std::to_string(native.candidate_window_relative_mad)+
           " navigation_authority=0 tf=0");
       } else {
         announce_metric_preview("waiting_robust_scale_window");
@@ -1095,6 +1113,7 @@ private:
   std::chrono::steady_clock::time_point metric_preview_evidence_time_{};
   double metric_scale_=0.0;
   std::uint64_t metric_last_ratio_frames_=0;
+  std::uint64_t metric_last_candidate_resets_=0;
   bool experimental_metric_preview_=false,metric_scale_frozen_=false;
   bool metric_anchor_set_=false;
   nav_msgs::msg::Path visual_path_;
