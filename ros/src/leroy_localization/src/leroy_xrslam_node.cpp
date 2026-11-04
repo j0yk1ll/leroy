@@ -399,6 +399,14 @@ private:
       " depth_frames_rejected="+std::to_string(native_ok?native.rejected:0)+
       " depth_tracked_features="+std::to_string(native_ok?native.tracked_feature_samples:0)+
       " depth_valid_feature_samples="+std::to_string(native_ok?native.valid_feature_samples:0)+
+      " depth_geometry_samples="+std::to_string(native_ok?native.geometry_samples:0)+
+      " depth_ratio_samples="+std::to_string(native_ok?native.ratio_samples:0)+
+      " depth_ratio_frames="+std::to_string(native_ok?native.ratio_frames:0)+
+      " depth_min_m="+std::to_string(native_ok?native.depth_min_m:0.0)+
+      " depth_max_m="+std::to_string(native_ok?native.depth_max_m:0.0)+
+      " latest_depth_median_m="+std::to_string(native_ok?native.latest_depth_median_m:0.0)+
+      " latest_ratio_median="+std::to_string(native_ok?native.latest_ratio_median:0.0)+
+      " latest_ratio_mad="+std::to_string(native_ok?native.latest_ratio_mad:0.0)+
       " depth_constraints_added="+std::to_string(native_ok?native.constraints_added:0)+
       " native_pending="+std::to_string(native_ok?native.pending:0)+
       " paired="+std::to_string(depth_pairs_)+
