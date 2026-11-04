@@ -534,6 +534,8 @@ private:
       // longer comparable. This is a true segment boundary.
       ++metric_segment_id_;
       reset_metric_preview("native_session_restarted");
+      metric_last_ratio_frames_=0;
+      metric_last_candidate_resets_=0;
     } else if(native.candidate_scale_resets>metric_last_candidate_resets_) {
       // A native candidate gauge reset is not a momentary depth gap.
       // Never silently continue publishing the old scaled trajectory.
