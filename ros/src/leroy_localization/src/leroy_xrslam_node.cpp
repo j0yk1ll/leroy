@@ -137,6 +137,15 @@ public:
         "XRSLAM adapter supports sensor.mode=monocular, monocular_imu or rgbd only");
     use_imu_=leroy_xrslam::sensor_mode_requires_imu(mode);
     use_depth_=leroy_xrslam::sensor_mode_requires_depth(mode);
+    async_depth_stage_a1_=declare_parameter<bool>("async_depth_stage_a1",false);
+    if(async_depth_stage_a1_ && (!use_depth_ || use_imu_ ||
+       pose_validated_ || enable_map_tf_))
+      throw std::runtime_error(
+        "Stage A1 requires RGB-D without IMU, metric pose authority or map TF");
+    // The native experimental mode is activated only for this process,
+    // before XRSLAMCreate. Never enable it in conventional RGB-D mode.
+    if(async_depth_stage_a1_)
+      setenv("XRSLAM_ASYNC_DEPTH_STAGE_A1","1",1);
     if(use_imu_ && !is_finite_value(offset_))
       throw std::runtime_error(
         "monocular_imu requires a measured camera_imu_offset_sec");
@@ -378,7 +387,10 @@ private:
   }
   void publish_depth_diagnostics() {
     std_msgs::msg::String out;
-    out.data="paired="+std::to_string(depth_pairs_)+
+    out.data="stage_a1_visual_only="+std::to_string(async_depth_stage_a1_?1:0)+
+      " depth_received="+std::to_string(depth_received_)+
+      " depth_constraints_added=0"+
+      " paired="+std::to_string(depth_pairs_)+
       " dropped_rgb="+std::to_string(depth_dropped_rgb_)+
       " late_depth="+std::to_string(depth_late_)+
       " invalid_depth="+std::to_string(depth_invalid_)+
@@ -406,6 +418,13 @@ private:
     if(failed_ || !initialized_ || !use_depth_)return;
     const auto stamp=rclcpp::Time(m->header.stamp).nanoseconds();
     if(stamp<=0 || !valid_depth(*m)) {++depth_invalid_;return;}
+    if(async_depth_stage_a1_) {
+      // Diagnostic-only ingestion. No depth is passed to the estimator until
+      // the delayed association/constraint path is implemented in Stage A2.
+      ++depth_received_;
+      return;
+    }
+    ++depth_received_;
     if(stamp<=last_image_time_ns_) {++depth_late_;return;}
     for(const auto &d:pending_depth_)
       if(rclcpp::Time(d->header.stamp).nanoseconds()==stamp)return;
@@ -426,12 +445,13 @@ private:
          initialized_, use_imu_, t, offset_, first_forwarded_imu_time_))return;
     if(!pending_.empty() && t<=seconds(pending_.back()->header.stamp))return;
     if(t<=last_image_time_)return;
-    if(pending_.size()>=(use_depth_?64u:8u)){
-      if(!use_depth_){fail("camera_queue_overflow");return;}
+    if(pending_.size()>=(use_depth_ && !async_depth_stage_a1_?64u:8u)){
+      if(!use_depth_ || async_depth_stage_a1_){fail("camera_queue_overflow");return;}
       pending_.pop_front();++depth_dropped_rgb_;
     }
     pending_.push_back(m);
-    if(use_depth_)pending_arrivals_.push_back(std::chrono::steady_clock::now());
+    if(use_depth_ && !async_depth_stage_a1_)
+      pending_arrivals_.push_back(std::chrono::steady_clock::now());
     while(pending_arrivals_.size()>pending_.size())pending_arrivals_.pop_front();
     drain();
   }
@@ -453,7 +473,7 @@ private:
       const auto m=pending_.front();
       const double t=seconds(m->header.stamp);
       sensor_msgs::msg::Image::ConstSharedPtr matched_depth;
-      if(use_depth_) {
+      if(use_depth_ && !async_depth_stage_a1_) {
         const auto stamp=rclcpp::Time(m->header.stamp).nanoseconds();
         while(!pending_depth_.empty() &&
           rclcpp::Time(pending_depth_.front()->header.stamp).nanoseconds()<stamp)
@@ -505,7 +525,7 @@ private:
       camera.data=const_cast<unsigned char*>(data);
       camera.timeStamp=t;camera.camera_id=0;
       camera.channel=channels;camera.stride=static_cast<int>(m->step);
-      if(use_depth_) {
+      if(use_depth_ && !async_depth_stage_a1_) {
         XRSLAMDepthImage dep{};
         dep.data_f32=reinterpret_cast<float*>(const_cast<unsigned char*>(matched_depth->data.data()));
         dep.timeStamp=t;
@@ -892,6 +912,7 @@ private:
   std::deque<sensor_msgs::msg::Image::ConstSharedPtr> pending_depth_;
   std::deque<std::chrono::steady_clock::time_point> pending_arrivals_;
   std::uint64_t depth_pairs_=0,depth_dropped_rgb_=0,depth_late_=0,depth_invalid_=0;
+  std::uint64_t depth_received_=0;
   std::int64_t last_image_time_ns_=0;
   int depth_wait_ms_=3000;
   double min_depth_valid_fraction_=0.01;
@@ -901,6 +922,7 @@ private:
   std::string last_status_,last_landmark_status_;
   bool last_valid_=false,initialized_=false,failed_=false,pose_validated_=false;
   bool enable_map_tf_=false,map_valid_=false,use_imu_=true,use_depth_=false;
+  bool async_depth_stage_a1_=false;
   std::uint64_t prior_map_epoch_=0;
   double offset_=0,max_jump_=1,max_angular_jump_=1;
   double last_imu_time_=-1,last_image_time_=-1,last_pose_time_=-1;
