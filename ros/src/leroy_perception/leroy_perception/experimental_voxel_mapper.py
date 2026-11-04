@@ -317,7 +317,10 @@ class ExperimentalVoxelMapper(Node):
 
     def tick(self):
         self.try_match_pending()
-        if self.voxels and self.active:
+        # A suspended metric preview must stop accumulation, but previously
+        # accepted voxels remain visible for inspection. A scale-segment
+        # boundary still clears the map in clear_map().
+        if self.voxels:
             xyz = np.stack(tuple(self.voxels.values()), axis=0)
             cloud = point_cloud2.create_cloud_xyz32(
                 Header(stamp=self.get_clock().now().to_msg(),
