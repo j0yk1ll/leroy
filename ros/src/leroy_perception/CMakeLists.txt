@@ -6,7 +6,7 @@ find_package(ament_cmake_python REQUIRED)
 
 ament_python_install_package(${PROJECT_NAME})
 
-foreach(command depth_obstacles depthart_node metric_video_depth_node leroy_perception_health)
+foreach(command depth_obstacles depthart_node metric_video_depth_node experimental_voxel_mapper leroy_perception_health)
   install(PROGRAMS scripts/${command} DESTINATION lib/${PROJECT_NAME})
 endforeach()
 
