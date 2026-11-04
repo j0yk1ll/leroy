@@ -571,7 +571,10 @@ private:
       }
       return;
     }
-    if(!metric_preview_fresh()) {
+    const bool recent_evidence =
+      metric_preview_evidence_time_.time_since_epoch().count()!=0 &&
+      now-metric_preview_evidence_time_<std::chrono::seconds(12);
+    if(!recent_evidence) {
       // Keep the old frozen scale, anchor, path and segment identity. No
       // new metric pose/cloud publication is allowed while suspended.
       metric_preview_suspended_=true;
