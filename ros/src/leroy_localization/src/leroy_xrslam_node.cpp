@@ -469,21 +469,21 @@ private:
     if(experimental_metric_preview_) update_metric_preview(native_ok,native);
   }
   void announce_metric_preview(const std::string &state) {
-    if(!experimental_metric_preview_ || state==metric_preview_last_status_)return;
-    metric_preview_last_status_=state;
+    if(!experimental_metric_preview_)return;
+    // Always include session/segment identity and the currently frozen scale,
+    // including while the preview is suspended.
+    const std::string full="segment_id="+std::to_string(metric_segment_id_)+
+      " frozen_scale="+std::to_string(metric_scale_)+
+      " previous_scale="+std::to_string(metric_previous_scale_)+
+      " last_reset_reason="+metric_last_reset_reason_+
+      " state="+state+" navigation_authority=0 tf=0";
+    if(full==metric_preview_last_status_)return;
+    metric_preview_last_status_=full;
     std_msgs::msg::String msg;
-    msg.data=state;
+    msg.data=full;
     metric_status_pub_->publish(msg);
   }
-  void clear_metric_preview(const std::string &reason) {
-    if(!experimental_metric_preview_)return;
-    metric_scale_frozen_=false;
-    metric_anchor_set_=false;
-    metric_scale_=0.0;
-    metric_last_ratio_frames_=0;
-    metric_last_candidate_resets_=0;
-    metric_path_.poses.clear();
-    metric_preview_evidence_time_={};
+  void clear_metric_visualization() {
     sensor_msgs::msg::PointCloud2 cloud;
     cloud.header.stamp=get_clock()->now();
     cloud.header.frame_id=metric_preview_world_frame_;
@@ -494,10 +494,24 @@ private:
     nav_msgs::msg::Path empty_path;
     empty_path.header=cloud.header;
     metric_path_pub_->publish(empty_path);
-    announce_metric_preview("inactive:"+reason);
+  }
+  void reset_metric_preview(const std::string &reason) {
+    if(!experimental_metric_preview_)return;
+    // A reset means old metric coordinates must not be mixed with the next
+    // preview. It is NOT called for temporary stale depth evidence.
+    if(metric_scale_frozen_)metric_previous_scale_=metric_scale_;
+    metric_scale_frozen_=false;
+    metric_preview_suspended_=false;
+    metric_anchor_set_=false;
+    metric_scale_=0.0;
+    metric_path_.poses.clear();
+    metric_preview_evidence_time_={};
+    metric_last_reset_reason_=reason;
+    clear_metric_visualization();
+    announce_metric_preview("waiting_robust_scale_window");
   }
   bool metric_preview_fresh() const {
-    return metric_scale_frozen_ &&
+    return metric_scale_frozen_ && !metric_preview_suspended_ &&
       metric_preview_evidence_time_.time_since_epoch().count()!=0 &&
       std::chrono::steady_clock::now()-metric_preview_evidence_time_<
         std::chrono::seconds(12);
@@ -505,50 +519,76 @@ private:
   void update_metric_preview(bool native_ok,
                              const XRSLAMAsyncDepthStats &native) {
     if(!native_ok || failed_) {
-      announce_metric_preview("waiting_native_depth_stats");
+      if(metric_scale_frozen_) {
+        metric_preview_suspended_=true;
+        announce_metric_preview("suspended_native_depth_stats");
+      } else {
+        announce_metric_preview("waiting_native_depth_stats");
+      }
       return;
     }
     const auto now=std::chrono::steady_clock::now();
     if(native.candidate_frames_accepted<metric_last_ratio_frames_ ||
        native.candidate_scale_resets<metric_last_candidate_resets_) {
-      clear_metric_preview("native_session_restarted");
-      return;
+      // Native statistics restarted: the previous visual gauge is no
+      // longer comparable. This is a true segment boundary.
+      ++metric_segment_id_;
+      reset_metric_preview("native_session_restarted");
+    } else if(native.candidate_scale_resets>metric_last_candidate_resets_) {
+      // A native candidate gauge reset is not a momentary depth gap.
+      // Never silently continue publishing the old scaled trajectory.
+      ++metric_segment_id_;
+      reset_metric_preview("scale_gauge_jump");
     }
-    if(native.candidate_scale_resets>metric_last_candidate_resets_) {
-      clear_metric_preview("scale_gauge_jump");
-      metric_last_candidate_resets_=native.candidate_scale_resets;
-    }
+    metric_last_candidate_resets_=native.candidate_scale_resets;
     if(native.candidate_frames_accepted>metric_last_ratio_frames_) {
       metric_last_ratio_frames_=native.candidate_frames_accepted;
       metric_preview_evidence_time_=now;
     }
+    const bool candidate_ok =
+      native.candidate_window_frames>=8 &&
+      native.candidate_window_frames<=16 &&
+      std::isfinite(native.candidate_window_median) &&
+      native.candidate_window_median>=0.001 &&
+      native.candidate_window_median<=100.0 &&
+      std::isfinite(native.candidate_window_relative_mad) &&
+      native.candidate_window_relative_mad<=0.25 &&
+      metric_preview_evidence_time_.time_since_epoch().count()!=0 &&
+      now-metric_preview_evidence_time_<std::chrono::seconds(12);
+
     if(!metric_scale_frozen_) {
-      // Deliberately lenient prototype-grade confidence threshold, applied
-      // to a median of per-frame medians, not to any one depth pixel.
-      if(native.candidate_window_frames>=8 &&
-         native.candidate_window_frames<=16 &&
-         std::isfinite(native.candidate_window_median) &&
-         native.candidate_window_median>=0.001 &&
-         native.candidate_window_median<=100.0 &&
-         std::isfinite(native.candidate_window_relative_mad) &&
-         native.candidate_window_relative_mad<=0.25 &&
-         metric_preview_evidence_time_.time_since_epoch().count()!=0 &&
-         now-metric_preview_evidence_time_<std::chrono::seconds(12)) {
+      if(candidate_ok) {
         metric_scale_=native.candidate_window_median;
         metric_scale_frozen_=true;
+        metric_preview_suspended_=false;
         metric_anchor_set_=false;
         metric_path_.poses.clear();
-        announce_metric_preview("prototype_scale_frozen scale="+
-          std::to_string(metric_scale_)+
-          " frames="+std::to_string(native.candidate_window_frames)+
-          " relative_mad="+std::to_string(native.candidate_window_relative_mad)+
-          " navigation_authority=0 tf=0");
+        announce_metric_preview("prototype_scale_frozen frames="+
+          std::to_string(native.candidate_window_frames)+
+          " relative_mad="+std::to_string(native.candidate_window_relative_mad));
       } else {
         announce_metric_preview("waiting_robust_scale_window");
       }
-    } else if(!metric_preview_fresh()) {
-      // Stale metric evidence must not keep experimental pose current.
-      clear_metric_preview("stale_depth_evidence");
+      return;
+    }
+    if(!metric_preview_fresh()) {
+      // Keep the old frozen scale, anchor, path and segment identity. No
+      // new metric pose/cloud publication is allowed while suspended.
+      metric_preview_suspended_=true;
+      announce_metric_preview("suspended_stale_depth_evidence");
+      return;
+    }
+    if(metric_preview_suspended_) {
+      // Resume the SAME segment only if fresh, internally consistent depth
+      // evidence corroborates its frozen scale. Otherwise remain paused
+      // rather than silently rebasing the old path.
+      const double ratio=native.candidate_window_median/metric_scale_;
+      if(candidate_ok && ratio>=0.8 && ratio<=1.25) {
+        metric_preview_suspended_=false;
+        announce_metric_preview("resumed_same_segment");
+      } else {
+        announce_metric_preview("suspended_waiting_scale_reconfirmation");
+      }
     }
   }
   bool valid_depth(const sensor_msgs::msg::Image &m) const {
@@ -771,8 +811,10 @@ private:
     const bool publish_visual = visual_landmarks_pub_->get_subscription_count()>0;
     const bool publish_metric = pose_validated_ && landmarks_pub_->get_subscription_count()>0;
     if(state!=XRSLAM_STATE_TRACKING_SUCCESS) {
-      if(experimental_metric_preview_ && metric_scale_frozen_)
-        clear_metric_preview("native_tracking_not_successful");
+      if(experimental_metric_preview_ && metric_scale_frozen_) {
+        ++metric_segment_id_;
+        reset_metric_preview("native_tracking_not_successful");
+      }
       if(visual_map_was_tracking_) {
         reset_visual_sparse_map("native tracking exited TRACKING_SUCCESS");
         visual_map_was_tracking_=false;
@@ -1077,7 +1119,10 @@ private:
   void fail(const std::string & reason) {
     if(failed_)return;
     failed_=true;pending_.clear();
-    clear_metric_preview(reason);
+    if(experimental_metric_preview_) {
+      ++metric_segment_id_;
+      reset_metric_preview(reason);
+    }
     reset_visual_sparse_map(reason.c_str());
     visual_map_was_tracking_=false;
     announce(reason,false);
@@ -1114,6 +1159,10 @@ private:
   double metric_scale_=0.0;
   std::uint64_t metric_last_ratio_frames_=0;
   std::uint64_t metric_last_candidate_resets_=0;
+  std::uint64_t metric_segment_id_=1;
+  double metric_previous_scale_=0.0;
+  std::string metric_last_reset_reason_="none";
+  bool metric_preview_suspended_=false;
   bool experimental_metric_preview_=false,metric_scale_frozen_=false;
   bool metric_anchor_set_=false;
   nav_msgs::msg::Path visual_path_;
