@@ -108,6 +108,23 @@ public:
        visual_body_frame_==camera_frame_)
       throw std::runtime_error("visual TF frames must be distinct from robot navigation frames");
     pose_validated_=declare_parameter<bool>("pose_convention_validated",false);
+    experimental_metric_preview_=declare_parameter<bool>(
+      "experimental_metric_preview",false);
+    if(experimental_metric_preview_ && !async_depth_stage_a1_)
+      throw std::runtime_error(
+        "Experimental metric preview requires Stage A1 asynchronous RGB-D");
+    metric_preview_world_frame_=declare_parameter<std::string>(
+      "experimental_metric_world_frame","xrslam_experimental_metric_world");
+    if(experimental_metric_preview_ &&
+       (metric_preview_world_frame_.empty() ||
+        metric_preview_world_frame_==visual_world_frame_ ||
+        metric_preview_world_frame_==visual_body_frame_ ||
+        metric_preview_world_frame_==odom_frame_ ||
+        metric_preview_world_frame_==base_frame_ ||
+        metric_preview_world_frame_==camera_frame_ ||
+        metric_preview_world_frame_==map_frame_))
+      throw std::runtime_error(
+        "Experimental metric frame must be isolated from visual and navigation frames");
     enable_map_tf_=declare_parameter<bool>("enable_map_tf",false);
     map_frame_=declare_parameter<std::string>("map_frame","map");
     if(visual_world_frame_==map_frame_ || visual_body_frame_==map_frame_)
@@ -186,6 +203,16 @@ public:
       "/xrslam/visual_landmarks_diagnostics",rclcpp::QoS(10).reliable());
     visual_pose_pub_=create_publisher<geometry_msgs::msg::PoseStamped>("/xrslam/visual_pose",rclcpp::QoS(10));
     visual_path_pub_=create_publisher<nav_msgs::msg::Path>("/xrslam/visual_trajectory",rclcpp::QoS(10));
+    if(experimental_metric_preview_) {
+      metric_pose_pub_=create_publisher<geometry_msgs::msg::PoseStamped>(
+        "/xrslam/experimental_metric/pose",rclcpp::QoS(10));
+      metric_path_pub_=create_publisher<nav_msgs::msg::Path>(
+        "/xrslam/experimental_metric/trajectory",rclcpp::QoS(10));
+      metric_cloud_pub_=create_publisher<sensor_msgs::msg::PointCloud2>(
+        "/xrslam/experimental_metric/sparse_map",qos);
+      metric_status_pub_=create_publisher<std_msgs::msg::String>(
+        "/xrslam/experimental_metric/status",latched);
+    }
     if(use_imu_) {
       imu_sub_=create_subscription<sensor_msgs::msg::Imu>(imu_topic_,qos,
         [this](sensor_msgs::msg::Imu::ConstSharedPtr p){ imu(*p); });
@@ -425,6 +452,83 @@ private:
       " pending_rgb="+std::to_string(pending_.size())+
       " pending_depth="+std::to_string(pending_depth_.size());
     depth_diagnostics_pub_->publish(out);
+    if(experimental_metric_preview_) update_metric_preview(native_ok,native);
+  }
+  void announce_metric_preview(const std::string &state) {
+    if(!experimental_metric_preview_ || state==metric_preview_last_status_)return;
+    metric_preview_last_status_=state;
+    std_msgs::msg::String msg;
+    msg.data=state;
+    metric_status_pub_->publish(msg);
+  }
+  void clear_metric_preview(const std::string &reason) {
+    if(!experimental_metric_preview_)return;
+    metric_scale_frozen_=false;
+    metric_anchor_set_=false;
+    metric_scale_=0.0;
+    metric_last_ratio_frames_=0;
+    metric_path_.poses.clear();
+    metric_preview_evidence_time_={};
+    sensor_msgs::msg::PointCloud2 cloud;
+    cloud.header.stamp=get_clock()->now();
+    cloud.header.frame_id=metric_preview_world_frame_;
+    sensor_msgs::PointCloud2Modifier modifier(cloud);
+    modifier.setPointCloud2FieldsByString(1,"xyz");
+    modifier.resize(0);
+    metric_cloud_pub_->publish(cloud);
+    nav_msgs::msg::Path empty_path;
+    empty_path.header=cloud.header;
+    metric_path_pub_->publish(empty_path);
+    announce_metric_preview("inactive:"+reason);
+  }
+  bool metric_preview_fresh() const {
+    return metric_scale_frozen_ &&
+      metric_preview_evidence_time_.time_since_epoch().count()!=0 &&
+      std::chrono::steady_clock::now()-metric_preview_evidence_time_<
+        std::chrono::seconds(12);
+  }
+  void update_metric_preview(bool native_ok,
+                             const XRSLAMAsyncDepthStats &native) {
+    if(!native_ok || failed_) {
+      announce_metric_preview("waiting_native_depth_stats");
+      return;
+    }
+    const auto now=std::chrono::steady_clock::now();
+    if(native.ratio_frames>metric_last_ratio_frames_) {
+      metric_last_ratio_frames_=native.ratio_frames;
+      metric_preview_evidence_time_=now;
+    } else if(native.ratio_frames<metric_last_ratio_frames_) {
+      clear_metric_preview("native_session_restarted");
+      return;
+    }
+    if(!metric_scale_frozen_) {
+      // Deliberately lenient prototype-grade confidence threshold, applied
+      // to a median of per-frame medians, not to any one depth pixel.
+      if(native.scale_window_frames>=8 &&
+         native.scale_window_frames<=32 &&
+         std::isfinite(native.scale_window_median) &&
+         native.scale_window_median>=0.001 &&
+         native.scale_window_median<=100.0 &&
+         std::isfinite(native.scale_window_relative_mad) &&
+         native.scale_window_relative_mad<=0.25 &&
+         metric_preview_evidence_time_.time_since_epoch().count()!=0 &&
+         now-metric_preview_evidence_time_<std::chrono::seconds(12)) {
+        metric_scale_=native.scale_window_median;
+        metric_scale_frozen_=true;
+        metric_anchor_set_=false;
+        metric_path_.poses.clear();
+        announce_metric_preview("prototype_scale_frozen scale="+
+          std::to_string(metric_scale_)+
+          " frames="+std::to_string(native.scale_window_frames)+
+          " relative_mad="+std::to_string(native.scale_window_relative_mad)+
+          " navigation_authority=0 tf=0");
+      } else {
+        announce_metric_preview("waiting_robust_scale_window");
+      }
+    } else if(!metric_preview_fresh()) {
+      // Stale metric evidence must not keep experimental pose current.
+      announce_metric_preview("stale_depth_evidence_preview_suspended");
+    }
   }
   bool valid_depth(const sensor_msgs::msg::Image &m) const {
     if(m.header.frame_id!=camera_frame_ || m.encoding!="32FC1" ||
@@ -646,6 +750,8 @@ private:
     const bool publish_visual = visual_landmarks_pub_->get_subscription_count()>0;
     const bool publish_metric = pose_validated_ && landmarks_pub_->get_subscription_count()>0;
     if(state!=XRSLAM_STATE_TRACKING_SUCCESS) {
+      if(experimental_metric_preview_ && metric_scale_frozen_)
+        clear_metric_preview("native_tracking_not_successful");
       if(visual_map_was_tracking_) {
         reset_visual_sparse_map("native tracking exited TRACKING_SUCCESS");
         visual_map_was_tracking_=false;
@@ -656,7 +762,11 @@ private:
     }
     visual_map_was_tracking_=true;
     const bool publish_sparse=visual_sparse_map_pub_->get_subscription_count()>0;
-    if(!publish_visual && !publish_metric && !publish_sparse) {
+    const bool publish_preview_map=experimental_metric_preview_ &&
+      metric_preview_fresh() && metric_anchor_set_ &&
+      metric_cloud_pub_->get_subscription_count()>0;
+    if(!publish_visual && !publish_metric && !publish_sparse &&
+       !publish_preview_map) {
       landmark_announce("no_pointcloud_subscribers");
       return;
     }
@@ -727,7 +837,8 @@ private:
     }
     // Publish cached landmarks at a bounded cadence, including while the
     // latest sliding window has zero tracks. Never publish synthetic points.
-    if(publish_sparse && !visual_sparse_map_.empty() &&
+    if((publish_sparse || publish_preview_map) &&
+       !visual_sparse_map_.empty() &&
        (get_clock()->now()-last_visual_sparse_map_publish_).seconds()>=0.5) {
       auto cloud=make_cloud(visual_sparse_map_.size());
       sensor_msgs::PointCloud2Iterator<float> x(cloud,"x"),y(cloud,"y"),z(cloud,"z");
@@ -735,7 +846,21 @@ private:
         (void)id;
         *x=p.x;*y=p.y;*z=p.z;++x;++y;++z;
       }
-      visual_sparse_map_pub_->publish(cloud);
+      if(publish_sparse)visual_sparse_map_pub_->publish(cloud);
+      if(publish_preview_map) {
+        cloud.header.frame_id=metric_preview_world_frame_;
+        sensor_msgs::PointCloud2Iterator<float> mx(cloud,"x"),my(cloud,"y"),mz(cloud,"z");
+        for(const auto &[id,p]:visual_sparse_map_) {
+          (void)id;
+          *mx++=static_cast<float>(metric_scale_*
+            (static_cast<double>(p.x)-metric_anchor_[0]));
+          *my++=static_cast<float>(metric_scale_*
+            (static_cast<double>(p.y)-metric_anchor_[1]));
+          *mz++=static_cast<float>(metric_scale_*
+            (static_cast<double>(p.z)-metric_anchor_[2]));
+        }
+        metric_cloud_pub_->publish(cloud);
+      }
       last_visual_sparse_map_publish_=get_clock()->now();
     }
   }
@@ -780,6 +905,30 @@ private:
       visual_pose.pose.orientation.z=p.quaternion[2];
       visual_pose.pose.orientation.w=p.quaternion[3];
       visual_pose_pub_->publish(visual_pose);
+      // Prototype-only local metric view: scale world displacements
+      // around a session-local anchor. Orientation is unchanged. This is
+      // NOT body/base odometry and does not broadcast any TF.
+      if(experimental_metric_preview_ && metric_preview_fresh()) {
+        if(!metric_anchor_set_) {
+          metric_anchor_={p.translation[0],p.translation[1],p.translation[2]};
+          metric_anchor_set_=true;
+        }
+        auto metric_pose=visual_pose;
+        metric_pose.header.frame_id=metric_preview_world_frame_;
+        metric_pose.pose.position.x=metric_scale_*
+          (p.translation[0]-metric_anchor_[0]);
+        metric_pose.pose.position.y=metric_scale_*
+          (p.translation[1]-metric_anchor_[1]);
+        metric_pose.pose.position.z=metric_scale_*
+          (p.translation[2]-metric_anchor_[2]);
+        metric_pose_pub_->publish(metric_pose);
+        metric_path_.header=metric_pose.header;
+        metric_path_.poses.push_back(metric_pose);
+        if(metric_path_.poses.size()>1000)
+          metric_path_.poses.erase(metric_path_.poses.begin());
+        if(metric_path_pub_->get_subscription_count()>0)
+          metric_path_pub_->publish(metric_path_);
+      }
       // Standalone TF tree: never attach the unscaled body to base_link or odom.
       geometry_msgs::msg::TransformStamped visual_tf;
       visual_tf.header=visual_pose.header;
@@ -906,6 +1055,7 @@ private:
   void fail(const std::string & reason) {
     if(failed_)return;
     failed_=true;pending_.clear();
+    clear_metric_preview(reason);
     reset_visual_sparse_map(reason.c_str());
     visual_map_was_tracking_=false;
     announce(reason,false);
@@ -931,6 +1081,18 @@ private:
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr depth_diagnostics_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr visual_pose_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr visual_path_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr metric_pose_pub_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr metric_path_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr metric_cloud_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr metric_status_pub_;
+  nav_msgs::msg::Path metric_path_;
+  std::array<double,3> metric_anchor_{{0.0,0.0,0.0}};
+  std::string metric_preview_world_frame_,metric_preview_last_status_;
+  std::chrono::steady_clock::time_point metric_preview_evidence_time_{};
+  double metric_scale_=0.0;
+  std::uint64_t metric_last_ratio_frames_=0;
+  bool experimental_metric_preview_=false,metric_scale_frozen_=false;
+  bool metric_anchor_set_=false;
   nav_msgs::msg::Path visual_path_;
   struct VisualMapPoint {float x=0,y=0,z=0; std::uint64_t seq=0;};
   std::map<std::uint64_t,VisualMapPoint> visual_sparse_map_;
