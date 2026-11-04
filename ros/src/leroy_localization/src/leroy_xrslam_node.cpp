@@ -121,12 +121,15 @@ public:
         metric_preview_world_frame_==visual_body_frame_ ||
         metric_preview_world_frame_==odom_frame_ ||
         metric_preview_world_frame_==base_frame_ ||
-        metric_preview_world_frame_==camera_frame_ ||
-        metric_preview_world_frame_==map_frame_))
+        metric_preview_world_frame_==camera_frame_))
       throw std::runtime_error(
         "Experimental metric frame must be isolated from visual and navigation frames");
     enable_map_tf_=declare_parameter<bool>("enable_map_tf",false);
     map_frame_=declare_parameter<std::string>("map_frame","map");
+    if(experimental_metric_preview_ &&
+       metric_preview_world_frame_==map_frame_)
+      throw std::runtime_error(
+        "Experimental metric world frame cannot be the navigation map frame");
     if(visual_world_frame_==map_frame_ || visual_body_frame_==map_frame_)
       throw std::runtime_error("visual TF frames cannot be the map frame");
     map_id_=declare_parameter<std::string>("map_id","");
@@ -527,7 +530,7 @@ private:
       }
     } else if(!metric_preview_fresh()) {
       // Stale metric evidence must not keep experimental pose current.
-      announce_metric_preview("stale_depth_evidence_preview_suspended");
+      clear_metric_preview("stale_depth_evidence");
     }
   }
   bool valid_depth(const sensor_msgs::msg::Image &m) const {
@@ -852,12 +855,13 @@ private:
         sensor_msgs::PointCloud2Iterator<float> mx(cloud,"x"),my(cloud,"y"),mz(cloud,"z");
         for(const auto &[id,p]:visual_sparse_map_) {
           (void)id;
-          *mx++=static_cast<float>(metric_scale_*
+          *mx=static_cast<float>(metric_scale_*
             (static_cast<double>(p.x)-metric_anchor_[0]));
-          *my++=static_cast<float>(metric_scale_*
+          *my=static_cast<float>(metric_scale_*
             (static_cast<double>(p.y)-metric_anchor_[1]));
-          *mz++=static_cast<float>(metric_scale_*
+          *mz=static_cast<float>(metric_scale_*
             (static_cast<double>(p.z)-metric_anchor_[2]));
+          ++mx;++my;++mz;
         }
         metric_cloud_pub_->publish(cloud);
       }
