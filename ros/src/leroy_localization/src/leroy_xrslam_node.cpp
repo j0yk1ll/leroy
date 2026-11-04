@@ -402,6 +402,10 @@ private:
       " depth_geometry_samples="+std::to_string(native_ok?native.geometry_samples:0)+
       " depth_ratio_samples="+std::to_string(native_ok?native.ratio_samples:0)+
       " depth_ratio_frames="+std::to_string(native_ok?native.ratio_frames:0)+
+      " optimized_snapshots="+std::to_string(native_ok?native.optimized_snapshots:0)+
+      " geometry_frames_matched="+std::to_string(native_ok?native.geometry_frames_matched:0)+
+      " geometry_frames_expired="+std::to_string(native_ok?native.geometry_frames_expired:0)+
+      " geometry_pending="+std::to_string(native_ok?native.geometry_pending:0)+
       " depth_min_m="+std::to_string(native_ok?native.depth_min_m:0.0)+
       " depth_max_m="+std::to_string(native_ok?native.depth_max_m:0.0)+
       " latest_depth_median_m="+std::to_string(native_ok?native.latest_depth_median_m:0.0)+
