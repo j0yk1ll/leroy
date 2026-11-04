@@ -387,9 +387,20 @@ private:
   }
   void publish_depth_diagnostics() {
     std_msgs::msg::String out;
+    XRSLAMAsyncDepthStats native{};
+    const bool native_ok = initialized_ && async_depth_stage_a1_ &&
+      XRSLAMGetAsyncDepthStats(&native)!=0;
     out.data="stage_a1_visual_only="+std::to_string(async_depth_stage_a1_?1:0)+
       " depth_received="+std::to_string(depth_received_)+
-      " depth_constraints_added=0"+
+      " native_depth_received="+std::to_string(native_ok?native.received:0)+
+      " depth_frames_associated="+std::to_string(native_ok?native.associated:0)+
+      " depth_frames_too_old="+std::to_string(native_ok?native.too_old:0)+
+      " depth_frames_unknown="+std::to_string(native_ok?native.unknown:0)+
+      " depth_frames_rejected="+std::to_string(native_ok?native.rejected:0)+
+      " depth_tracked_features="+std::to_string(native_ok?native.tracked_feature_samples:0)+
+      " depth_valid_feature_samples="+std::to_string(native_ok?native.valid_feature_samples:0)+
+      " depth_constraints_added="+std::to_string(native_ok?native.constraints_added:0)+
+      " native_pending="+std::to_string(native_ok?native.pending:0)+
       " paired="+std::to_string(depth_pairs_)+
       " dropped_rgb="+std::to_string(depth_dropped_rgb_)+
       " late_depth="+std::to_string(depth_late_)+
@@ -419,8 +430,19 @@ private:
     const auto stamp=rclcpp::Time(m->header.stamp).nanoseconds();
     if(stamp<=0 || !valid_depth(*m)) {++depth_invalid_;return;}
     if(async_depth_stage_a1_) {
-      // Diagnostic-only ingestion. No depth is passed to the estimator until
-      // the delayed association/constraint path is implemented in Stage A2.
+      // Stage A2: pass a timestamped, geometry-checked depth measurement to
+      // the native read-only association queue. The manager copies the image
+      // immediately; no ROS data buffer outlives this callback.
+      XRSLAMDepthImage dep{};
+      dep.data_f32=reinterpret_cast<float*>(
+        const_cast<unsigned char*>(m->data.data()));
+      dep.timeStamp=seconds(m->header.stamp);
+      dep.width=static_cast<int>(m->width);
+      dep.height=static_cast<int>(m->height);
+      dep.stride=static_cast<int>(m->step);
+      dep.format=XRSLAM_DEPTH_FLOAT32;
+      dep.source=XRSLAM_DEPTH_MONOCULAR_METRIC;
+      XRSLAMPushSensorData(XRSLAM_SENSOR_DEPTH_CAMERA,&dep);
       ++depth_received_;
       return;
     }
