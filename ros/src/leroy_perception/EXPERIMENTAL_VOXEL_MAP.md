@@ -1,4 +1,4 @@
-# Stage A7: Experimental session-local voxel map
+# Stages A7–A8: Experimental session-local voxel map and segment archives
 
 This map is an **RViz visualization only**. It is not metric-certified,
 registered to ROS navigation TF, an obstacle grid, a free-space source or
@@ -50,6 +50,39 @@ then add a `PointCloud2` display with topic
 `/xrslam/experimental_scene/voxel_map`. The experimental world is isolated
 from ROS navigation TF by design; do not use the robot's `map` frame.
 
+## A8: Inspect past scale segments (visualization only)
+
+Archive slots are published as independent latched topics:
+
+- `/xrslam/experimental_scene/voxel_archive/slot_0`
+- `/xrslam/experimental_scene/voxel_archive/slot_1`
+- `/xrslam/experimental_scene/voxel_archive/slot_2`
+
+Add a separate RViz PointCloud2 display for each slot that you want to
+inspect. Set its Reliability to **Reliable** and Durability to
+**Transient Local**. The regular `/xrslam/experimental_scene/voxel_map`
+remains the **active segment only**, and is cleared at each boundary.
+
+The mapper status publishes `archived_segments` and `archive_slots`,
+for example `archive_slots=0:segment_3:points_2701,1:segment_4:points_7734`.
+The archive slots are reused cyclically; after three saved segments, the next
+completed segment replaces slot 0. Empty or uninitialized segments are not
+archived. A process restart clears archives; these are **in-memory visualization
+snapshots**, not files on disk.
+
+**Critical frame limitation:** archived PointCloud2 messages use the existing
+`xrslam_experimental_metric_world` frame solely to make individual segments
+inspectable in RViz. They are **not** geometrically registered to one another.
+If several slot displays are enabled together, their apparent overlap is
+meaningless: scale, origin and pose convention may differ. View one archived
+segment at a time, and do not combine, export as a coherent map, or feed the
+archive to navigation, TF, obstacle mapping or motor controllers.
+
+Tuning parameters: `max_archive_segments` (1–8, default 3),
+`max_archive_voxels_per_segment` (default 30,000, deterministic bounded
+subsampling), and `archive_topic_prefix`. Increasing these consumes
+additional memory and latched DDS history.
+
 ## Diagnostics
 
 The status includes the current metric `segment_id`, `active` flag, voxel
@@ -61,7 +94,8 @@ count, cloud accepted/rejected/unmatched counts, and `last_error`.
 - `last_error=LookupException...`: the static camera-to-body TF is absent,
   or `camera_frame` does not match the depth cloud header.
 - `state=suspended_...`: stop accumulating until the metric preview resumes.
-- A new segment clears the accumulated cloud; no cross-segment merging.
+- A new segment archives the old accumulated cloud into a separate bounded
+  slot and clears the active map; no cross-segment merging.
 
 No Nav2 subscriptions, motor outputs, costmap clearings, or global TF are
 created by this adapter. Tune voxel size and pose-match tolerance only after
