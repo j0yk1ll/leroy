@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""Read-only stationary IMU sample statistics for Leroy VIO commissioning.
+
+Usage: ros2 run leroy_localization imu_stationary_diagnostics --ros-args -p duration_sec:=120.0
+
+This does NOT estimate continuous-time bias random walk or camera/IMU time offset.
+Sample variances must not be copied blindly into XRSLAM noise density parameters.
+"""
+import json
+import math
+import statistics
+import time
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import Imu
+
+
+class Diagnostics(Node):
+    def __init__(self):
+        super().__init__("leroy_imu_stationary_diagnostics")
+        self.declare_parameter("imu_topic", "/imu/data_raw")
+        self.declare_parameter("duration_sec", 120.0)
+        self.topic = self.get_parameter("imu_topic").value
+        self.duration = float(self.get_parameter("duration_sec").value)
+        if not math.isfinite(self.duration) or self.duration < 10 or self.duration > 3600:
+            raise ValueError("duration_sec must be in [10, 3600]")
+        self.gyro = [[], [], []]
+        self.accel = [[], [], []]
+        self.stamps = []
+        self.frame_ids = set()
+        self.invalid = 0
+        self.start = time.monotonic()
+        self.create_subscription(Imu, self.topic, self.on_imu, qos_profile_sensor_data)
+
+    def on_imu(self, msg):
+        stamp = msg.header.stamp.sec + 1e-9 * msg.header.stamp.nanosec
+        angular = [msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z]
+        linear = [msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z]
+        if stamp <= 0 or not all(math.isfinite(v) for v in angular + linear):
+            self.invalid += 1
+            return
+        self.stamps.append(stamp)
+        self.frame_ids.add(msg.header.frame_id)
+        for i in range(3):
+            self.gyro[i].append(angular[i])
+            self.accel[i].append(linear[i])
+
+    def report(self):
+        n = len(self.stamps)
+        if n < 100:
+            raise RuntimeError(f"Insufficient valid IMU messages: {n} (need >=100)")
+        if len(self.frame_ids) != 1 or "imu_link" not in self.frame_ids:
+            raise RuntimeError(f"Unexpected IMU frame IDs: {sorted(self.frame_ids)}")
+        intervals = [b - a for a, b in zip(self.stamps, self.stamps[1:])]
+        positives = [dt for dt in intervals if dt > 0]
+        if not positives:
+            raise RuntimeError("No increasing IMU timestamps")
+        def per_axis(measurements):
+            return {
+                "mean": [statistics.mean(col) for col in measurements],
+                "sample_variance": [statistics.variance(col) for col in measurements],
+                "sample_stddev": [statistics.stdev(col) for col in measurements],
+            }
+        result = {
+            "purpose": "stationary exploratory measurement; NOT certified XRSLAM noise calibration",
+            "topic": self.topic,
+            "frame": "imu_link",
+            "elapsed_wall_sec": round(time.monotonic() - self.start, 3),
+            "valid_samples": n,
+            "invalid_samples": self.invalid,
+            "nonincreasing_timestamp_pairs": len(intervals) - len(positives),
+            "median_sample_interval_sec": statistics.median(positives),
+            "median_rate_hz": 1.0 / statistics.median(positives),
+            "max_positive_timestamp_gap_sec": max(positives),
+            "gyro_rad_per_sec": per_axis(self.gyro),
+            "accel_m_per_sec2": per_axis(self.accel),
+            "limitations": [
+                "Robot must remain stationary during this capture",
+                "Sample variances are discrete per-sample statistics, not necessarily XRSLAM continuous-time noise covariances",
+                "Bias random-walk covariances need a long-run model/Allan analysis",
+                "Camera-IMU acquisition-time offset requires synchronized motion or hardware trigger evidence",
+                "Do not enable metric pose or motor authority from these diagnostics",
+            ],
+        }
+        print(json.dumps(result, indent=2, sort_keys=True), flush=True)
+
+
+def main():
+    rclpy.init()
+    node = None
+    try:
+        node = Diagnostics()
+        node.get_logger().info(
+            f"Keep robot stationary; collecting {node.duration:.0f}s on {node.topic}")
+        deadline = time.monotonic() + node.duration
+        while rclpy.ok() and time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.2)
+        node.report()
+    except KeyboardInterrupt:
+        print("Capture interrupted; no noise calibration produced", flush=True)
+    finally:
+        if node is not None:
+            node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
