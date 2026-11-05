@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
     input_cloud_topic: /xrslam/experimental_scene/voxel_map
-    metric_status_topic: /xrslam/experimental_metric/status
+    metric_status_topic: /xrslam/experimental_scene/voxel_map_status
     output_grid_topic: /xrslam/experimental_navigation/occupancy_preview
     status_topic: /xrslam/experimental_navigation/preview_status
     experimental_frame: xrslam_experimental_metric_world
