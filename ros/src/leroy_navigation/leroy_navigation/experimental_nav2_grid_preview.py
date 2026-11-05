@@ -129,8 +129,8 @@ class ExperimentalNav2GridPreview(Node):
 
     def on_metric(self, msg):
         import re
-        match_seg = re.search(r"(?:^|\\s)segment_id=(\\d+)(?:\\s|$)", msg.data)
-        match_state = re.search(r"(?:^|\\s)state=([^\\s]+)", msg.data)
+        match_seg = re.search(r"(?:^|\s)segment_id=(\d+)(?:\s|$)", msg.data)
+        match_state = re.search(r"(?:^|\s)state=([^\s]+)", msg.data)
         if not (match_seg and match_state):
             self.metric_active = False
             self.last_error = "malformed_metric_status"
