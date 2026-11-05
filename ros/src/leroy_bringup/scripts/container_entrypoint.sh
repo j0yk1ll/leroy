@@ -6,7 +6,22 @@ source /opt/ros/jazzy/setup.bash
 source /leroy_ws/install/setup.bash
 set -u
 
-CAMERA_DEVICE="${CAMERA_DEVICE:-/dev/video2}"
+# Prefer an explicit, stable camera device. If unset and exactly one video
+# device exists, use it rather than assuming /dev/video2 survives USB replug.
+# Multiple devices require CAMERA_DEVICE to avoid selecting the wrong camera.
+if [[ -n "${CAMERA_DEVICE:-}" ]]; then
+    camera_device="${CAMERA_DEVICE}"
+else
+    shopt -s nullglob
+    video_devices=(/dev/video[0-9]*)
+    shopt -u nullglob
+    if (( ${#video_devices[@]} != 1 )); then
+        echo "ERROR: Expected one /dev/video* device; found ${#video_devices[@]}. Set CAMERA_DEVICE explicitly." >&2
+        exit 1
+    fi
+    camera_device="${video_devices[0]}"
+fi
+CAMERA_DEVICE="${camera_device}"
 CAMERA_INFO_FILE="${CAMERA_INFO_FILE:-$(ros2 pkg prefix --share leroy_sensors)/config/front_camera.yaml}"
 
 if [[ ! -e "${CAMERA_DEVICE}" ]]; then
