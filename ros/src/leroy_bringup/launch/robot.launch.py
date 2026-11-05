@@ -85,6 +85,7 @@ def generate_launch_description():
     use_camera = LaunchConfiguration('use_camera')
     use_depthart = LaunchConfiguration('use_depthart')
     use_xrslam = LaunchConfiguration('use_xrslam')
+    use_mcu_bridge = LaunchConfiguration('use_mcu_bridge')
 
     video_device = LaunchConfiguration('video_device')
     camera_name = LaunchConfiguration('camera_name')
@@ -106,6 +107,8 @@ def generate_launch_description():
         )
     )
 
+    # In the deployed split-container setup the STM32 serial owner is leroy-imu.
+    # The viz container must never start a second MCU bridge by default.
     bridge = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -113,7 +116,8 @@ def generate_launch_description():
                 'launch',
                 'leroy_mcu.launch.py',
             ])
-        )
+        ),
+        condition=IfCondition(use_mcu_bridge),
     )
 
     camera = Node(
@@ -123,6 +127,8 @@ def generate_launch_description():
         name='usb_cam',
         output='screen',
         condition=IfCondition(use_camera),
+        respawn=True,
+        respawn_delay=3.0,
         parameters=[{
             'video_device': video_device,
             'image_width': image_width,
@@ -143,6 +149,8 @@ def generate_launch_description():
         namespace='',
         output='screen',
         condition=IfCondition(use_camera),
+        respawn=True,
+        respawn_delay=3.0,
         composable_node_descriptions=[
             ComposableNode(
                 package='image_proc',
@@ -184,6 +192,8 @@ def generate_launch_description():
         DeclareLaunchArgument('io_method', default_value='mmap'),
         DeclareLaunchArgument('pixel_format', default_value='mjpeg2rgb'),
         DeclareLaunchArgument('use_camera', default_value='true'),
+        # Explicit opt-in only: leroy-imu owns /dev/ttyACM0 in normal deployments.
+        DeclareLaunchArgument('use_mcu_bridge', default_value='false'),
         DeclareLaunchArgument('use_depthart', default_value='true'),
         DeclareLaunchArgument('use_xrslam', default_value='false'),
         # No guesswork: find actual rectified topic + matching CameraInfo.
