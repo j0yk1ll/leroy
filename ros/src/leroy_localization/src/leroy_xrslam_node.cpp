@@ -82,9 +82,13 @@ public:
     tf_buffer_(this->get_clock()), tf_listener_(tf_buffer_),
     tf_broadcaster_(*this) {
     slam_yaml_=declare_parameter<std::string>("slam_yaml","");
-    // Legacy device template is only used for IMU noise covariance fields.
-    // Camera calibration always comes from ROS CameraInfo and static TF.
-    template_yaml_=declare_parameter<std::string>("device_template_yaml","");
+    // Sensor geometry comes from ROS CameraInfo and TF. IMU noise inputs
+    // are explicit Leroy-owned estimator covariances (not EuRoC calibration).
+    // The four diagonal values are required for visual-inertial commissioning.
+    imu_cov_g_=declare_parameter<double>("imu_cov_g_diagonal",std::numeric_limits<double>::quiet_NaN());
+    imu_cov_a_=declare_parameter<double>("imu_cov_a_diagonal",std::numeric_limits<double>::quiet_NaN());
+    imu_cov_bg_=declare_parameter<double>("imu_cov_bg_diagonal",std::numeric_limits<double>::quiet_NaN());
+    imu_cov_ba_=declare_parameter<double>("imu_cov_ba_diagonal",std::numeric_limits<double>::quiet_NaN());
     keypoint_noise_variance_=declare_parameter<double>(
       "keypoint_noise_variance_px2",0.5);
     if(!is_finite_value(keypoint_noise_variance_) ||
@@ -160,10 +164,12 @@ public:
       throw std::runtime_error(
         "XRSLAM adapter supports sensor.mode=monocular, monocular_imu or rgbd only");
     use_imu_=leroy_xrslam::sensor_mode_requires_imu(mode);
-    if(use_imu_ && template_yaml_.empty())
-      throw std::runtime_error(
-        "IMU mode requires device_template_yaml for IMU noise covariance; "
-        "camera-only mode uses CameraInfo and TF without a template");
+    if(use_imu_) {
+      for(double v : {imu_cov_g_,imu_cov_a_,imu_cov_bg_,imu_cov_ba_})
+        if(!is_finite_value(v) || v<=0.0)
+          throw std::runtime_error(
+            "monocular_imu requires explicit positive finite imu_cov_{g,a,bg,ba}_diagonal parameters");
+    }
     use_depth_=leroy_xrslam::sensor_mode_requires_depth(mode);
     async_depth_stage_a1_=declare_parameter<bool>("async_depth_stage_a1",false);
     if(experimental_metric_preview_ && !async_depth_stage_a1_)
@@ -345,9 +351,14 @@ private:
     // ROS-owned sensor geometry transiently, without an external template.
     YAML::Node dev(YAML::NodeType::Map);
     if(use_imu_) {
-      // Legacy compatibility for IMU covariance inputs only. All camera
-      // calibration entries are overwritten with CameraInfo and TF below.
-      dev=YAML::LoadFile(template_yaml_);
+      const std::array<std::pair<const char *,double>,4> covariances{{
+        {"cov_g",imu_cov_g_},{"cov_a",imu_cov_a_},
+        {"cov_bg",imu_cov_bg_},{"cov_ba",imu_cov_ba_}}};
+      for(const auto & item : covariances) {
+        YAML::Node m(YAML::NodeType::Sequence);
+        for(int i=0;i<9;++i)m.push_back(i%4==0 ? item.second : 0.0);
+        dev["imu"]["noise"][item.first]=m;
+      }
     }
     const YAML::Node slam=YAML::LoadFile(slam_yaml_);
     if(!slam["sensor"] || !slam["sensor"]["mode"] ||
@@ -382,7 +393,7 @@ private:
     dev["cam0"]["distortion"]=zeros;
     dev["cam0"]["time_offset"]=use_imu_ ? offset_ : 0.0;
     // Frontend keypoint noise is an estimator parameter, not sensor geometry.
-    if(!use_imu_) {
+    {
       YAML::Node noise(YAML::NodeType::Sequence);
       for(double v:{keypoint_noise_variance_,0.0,0.0,keypoint_noise_variance_})
         noise.push_back(v);
@@ -1237,8 +1248,9 @@ private:
   std::int64_t last_image_time_ns_=0;
   int depth_wait_ms_=3000;
   double min_depth_valid_fraction_=0.01;
-  std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_,depth_topic_;
+  std::string slam_yaml_,image_topic_,info_topic_,imu_topic_,depth_topic_;
   double keypoint_noise_variance_=0.5;
+   double imu_cov_g_=0.0,imu_cov_a_=0.0,imu_cov_bg_=0.0,imu_cov_ba_=0.0;
   std::string camera_frame_,imu_frame_,base_frame_,odom_frame_,generated_yaml_;
   std::string map_frame_,map_id_,map_status_,visual_world_frame_,visual_body_frame_;
   std::string last_status_,last_landmark_status_;
