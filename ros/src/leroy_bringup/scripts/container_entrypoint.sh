@@ -24,7 +24,10 @@ if [[ ! -f "${CAMERA_INFO_FILE}" ]]; then
     exit 1
 fi
 
+echo "Starting Leroy bringup: camera, rectifier, sensor TF and health nodes."
+echo "MCU bridge is disabled in viz; the leroy-imu container owns serial."
 exec ros2 launch leroy_bringup robot.launch.py \
     video_device:="${CAMERA_DEVICE}" \
     camera_info_file:="${CAMERA_INFO_FILE}" \
+    use_mcu_bridge:=false \
     "$@"
