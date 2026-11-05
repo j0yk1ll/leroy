@@ -81,6 +81,18 @@ def _launch_xrslam(context, *args, **kwargs):
     )]
 
 
+
+def _validate_depth_backend(context, *args, **kwargs):
+    """Never run competing CPU depth backends in the normal bringup."""
+    vda = LaunchConfiguration('use_vda').perform(context).strip().lower()
+    depthart = LaunchConfiguration('use_depthart').perform(context).strip().lower()
+    if vda not in ('true', 'false') or depthart not in ('true', 'false'):
+        raise RuntimeError('use_vda and use_depthart must be true or false')
+    if vda == 'true' and depthart == 'true':
+        raise RuntimeError('Only one depth backend may run: disable VDA or DepthART')
+    return []
+
+
 def generate_launch_description():
     use_camera = LaunchConfiguration('use_camera')
     use_depthart = LaunchConfiguration('use_depthart')
@@ -222,6 +234,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'xrslam_pose_convention_validated', default_value='false',
         ),
+        OpaqueFunction(function=_validate_depth_backend),
         Node(package='leroy_bringup', executable='readiness_node',
              name='leroy_readiness', output='screen'),
         Node(package='leroy_sensors', executable='leroy_sensors_health', name='leroy_sensors_health', output='screen'),
