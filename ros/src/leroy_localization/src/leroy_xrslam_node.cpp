@@ -435,6 +435,14 @@ private:
       " optimized_snapshots="+std::to_string(native_ok?native.optimized_snapshots:0)+
       " geometry_frames_matched="+std::to_string(native_ok?native.geometry_frames_matched:0)+
       " geometry_frames_expired="+std::to_string(native_ok?native.geometry_frames_expired:0)+
+      " geometry_queue_evictions="+std::to_string(native_ok?native.geometry_queue_evictions:0)+
+      " geometry_empty_snapshot_expirations="+std::to_string(native_ok?native.geometry_empty_snapshot_expirations:0)+
+      " geometry_empty_snapshot_waits="+std::to_string(native_ok?native.geometry_empty_snapshot_waits:0)+
+      " geometry_missing_snapshot_waits="+std::to_string(native_ok?native.geometry_missing_snapshot_waits:0)+
+      " geometry_match_age_s="+std::to_string(
+        native_ok && native.latest_geometry_matched_timestamp_s>0.0 &&
+        native.latest_rgb_timestamp_s>=native.latest_geometry_matched_timestamp_s ?
+        native.latest_rgb_timestamp_s-native.latest_geometry_matched_timestamp_s : -1.0)+
       " geometry_pending="+std::to_string(native_ok?native.geometry_pending:0)+
       " geometry_frames_unselected="+std::to_string(native_ok?native.geometry_frames_unselected:0)+
       " scale_window_frames="+std::to_string(native_ok?native.scale_window_frames:0)+
