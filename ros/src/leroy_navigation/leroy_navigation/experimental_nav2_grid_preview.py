@@ -50,7 +50,7 @@ class ExperimentalNav2GridPreview(Node):
         super().__init__("leroy_experimental_nav2_grid_preview")
         defaults = {
             "input_cloud_topic": "/xrslam/experimental_scene/voxel_map",
-            "metric_status_topic": "/xrslam/experimental_metric/status",
+            "metric_status_topic": "/xrslam/experimental_scene/voxel_map_status",
             "output_grid_topic": "/xrslam/experimental_navigation/occupancy_preview",
             "status_topic": "/xrslam/experimental_navigation/preview_status",
             "experimental_frame": "xrslam_experimental_metric_world",
@@ -140,8 +140,13 @@ class ExperimentalNav2GridPreview(Node):
         if segment != self.last_segment:
             self.last_segment = segment
             self.empty_grid()
-        self.metric_active = match_state.group(1) in (
-            "prototype_scale_frozen", "resumed_same_segment")
+        # Mapper state is authoritative for whether it is actually accepting
+        # geometry; metric preview state alone is insufficient.
+        match_active = re.search(r"(?:^|\s)active=([01])(?:\s|$)", msg.data)
+        self.metric_active = (match_active is not None and
+                              match_active.group(1) == "1" and
+                              match_state.group(1) in (
+                                  "prototype_scale_frozen", "resumed_same_segment"))
         if not self.metric_active:
             # Preserve the last view during temporary suspension, but
             # absolutely no new observations are accepted.
