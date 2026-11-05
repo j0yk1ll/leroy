@@ -230,4 +230,4 @@ RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc \
 COPY src/leroy_bringup/scripts/container_entrypoint.sh /usr/local/bin/leroy-entrypoint
 RUN chmod +x /usr/local/bin/leroy-entrypoint
 
-CMD ["/usr/local/bin/leroy-entrypoint"]
+# Normal container start always runs the ROS bringup as PID 1.\n# Recreate pre-existing containers to pick up this image configuration.\nENTRYPOINT ["/usr/local/bin/leroy-entrypoint"]\nCMD []
