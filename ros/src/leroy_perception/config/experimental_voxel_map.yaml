@@ -5,6 +5,9 @@
     metric_status_topic: /xrslam/experimental_metric/status
     output_cloud_topic: /xrslam/experimental_scene/voxel_map
     mapper_status_topic: /xrslam/experimental_scene/voxel_map_status
+    archive_topic_prefix: /xrslam/experimental_scene/voxel_archive/slot_
+    max_archive_segments: 3
+    max_archive_voxels_per_segment: 30000
     world_frame: xrslam_experimental_metric_world
     camera_frame: camera_optical_frame
     body_frame: base_link
