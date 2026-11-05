@@ -18,7 +18,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "device", default_value="cpu", choices=["cpu", "cuda", "auto"]
         ),
+        DeclareLaunchArgument(
+            "python_executable", default_value="/opt/vda-venv/bin/python3",
+            description="Python interpreter with VDA, ROS and PyTorch dependencies",
+        ),
         Node(
+            prefix=LaunchConfiguration("python_executable"),
             package="leroy_perception",
             executable="metric_video_depth_node",
             name="metric_video_depth_anything",
