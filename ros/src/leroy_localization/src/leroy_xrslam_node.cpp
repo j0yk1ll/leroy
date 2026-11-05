@@ -407,9 +407,19 @@ private:
   }
   void info(const sensor_msgs::msg::CameraInfo & c) {
     std::lock_guard<std::mutex> lock(mutex_);
-    if(initialized_)return;
     if(c.header.frame_id!=camera_frame_ || c.width==0 || c.height==0 ||
        !is_finite_value(c.p[0])||!is_finite_value(c.p[5]))return;
+    if(initialized_) {
+      // The native calibration is fixed at XRSLAMCreate. A changed CameraInfo
+      // must not silently diverge from the ROS sensor source of truth.
+      if(!info_ || c.width!=info_->width || c.height!=info_->height ||
+         std::abs(c.p[0]-info_->p[0])>1e-6 ||
+         std::abs(c.p[2]-info_->p[2])>1e-6 ||
+         std::abs(c.p[5]-info_->p[5])>1e-6 ||
+         std::abs(c.p[6]-info_->p[6])>1e-6)
+        fail("camera_calibration_changed_restart_required");
+      return;
+    }
     info_=c;
   }
   void imu(const sensor_msgs::msg::Imu & m) {
