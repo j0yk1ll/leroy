@@ -84,6 +84,7 @@ def _launch_xrslam(context, *args, **kwargs):
 def generate_launch_description():
     use_camera = LaunchConfiguration('use_camera')
     use_depthart = LaunchConfiguration('use_depthart')
+    use_vda = LaunchConfiguration('use_vda')
     use_xrslam = LaunchConfiguration('use_xrslam')
     use_mcu_bridge = LaunchConfiguration('use_mcu_bridge')
 
@@ -165,8 +166,9 @@ def generate_launch_description():
         ],
     )
 
-    # DepthART stays independent: no depth data is fed into localization or
-    # safety-critical collision avoidance by this launch.
+    # DepthART is legacy comparison-only; Metric Video Depth Anything Small
+    # is the selected experimental depth backend. Neither is authorized
+    # for safety-critical collision avoidance or native VIO constraints.
     depthart = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -176,6 +178,17 @@ def generate_launch_description():
             ])
         ),
         condition=IfCondition(use_depthart),
+    )
+
+    vda = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('leroy_perception'),
+                'launch',
+                'metric_video_depth.launch.py',
+            ])
+        ),
+        condition=IfCondition(use_vda),
     )
 
     return LaunchDescription([
@@ -194,7 +207,8 @@ def generate_launch_description():
         DeclareLaunchArgument('use_camera', default_value='true'),
         # Explicit opt-in only: leroy-imu owns /dev/ttyACM0 in normal deployments.
         DeclareLaunchArgument('use_mcu_bridge', default_value='false'),
-        DeclareLaunchArgument('use_depthart', default_value='true'),
+        DeclareLaunchArgument('use_depthart', default_value='false'),
+        DeclareLaunchArgument('use_vda', default_value='true'),
         DeclareLaunchArgument('use_xrslam', default_value='false'),
         # No guesswork: find actual rectified topic + matching CameraInfo.
         DeclareLaunchArgument('xrslam_image_topic', default_value=''),
@@ -219,5 +233,6 @@ def generate_launch_description():
         camera,
         image_proc_container,
         depthart,
+        vda,
         OpaqueFunction(function=_launch_xrslam, condition=IfCondition(use_xrslam)),
     ])
