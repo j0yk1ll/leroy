@@ -65,6 +65,9 @@ class ExperimentalVoxelMapper(Node):
             "metric_status_topic": "/xrslam/experimental_metric/status",
             "output_cloud_topic": "/xrslam/experimental_scene/voxel_map",
             "mapper_status_topic": "/xrslam/experimental_scene/voxel_map_status",
+            "archive_topic_prefix": "/xrslam/experimental_scene/voxel_archive/slot_",
+            "max_archive_segments": 3,
+            "max_archive_voxels_per_segment": 30000,
             "world_frame": "xrslam_experimental_metric_world",
             "camera_frame": "camera_optical_frame",
             "body_frame": "base_link",
@@ -88,6 +91,9 @@ class ExperimentalVoxelMapper(Node):
         self.body_frame = str(p["body_frame"])
         self.voxel_size = float(p["voxel_size_m"])
         self.max_voxels = int(p["max_voxels"])
+        self.max_archives = int(p["max_archive_segments"])
+        self.max_archive_voxels = int(p["max_archive_voxels_per_segment"])
+        self.archive_prefix = str(p["archive_topic_prefix"])
         self.max_age_ns = round(float(p["max_depth_age_s"]) * 1e9)
         self.match_ns = round(float(p["max_pose_delta_s"]) * 1e9)
         self.history_ns = round(float(p["max_pose_history_s"]) * 1e9)
@@ -100,6 +106,10 @@ class ExperimentalVoxelMapper(Node):
             raise ValueError("Experimental frames must be distinct from navigation frames")
         if (not math.isfinite(self.voxel_size) or not 0.01 <= self.voxel_size <= 1.0 or
                 not 100 <= self.max_voxels <= 500000 or
+                not 1 <= self.max_archives <= 8 or
+                not 100 <= self.max_archive_voxels <= self.max_voxels or
+                not self.archive_prefix.startswith("/") or
+                not self.archive_prefix.endswith("slot_") or
                 not 0 < self.max_age_ns <= 60_000_000_000 or
                 not 0 < self.match_ns <= 500_000_000 or
                 self.history_ns < self.max_age_ns or
@@ -111,6 +121,10 @@ class ExperimentalVoxelMapper(Node):
         self.tf_buffer = Buffer(cache_time=Duration(seconds=30.0))
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.voxels = OrderedDict()  # voxel key -> first observed XYZ; bounded
+        # Fixed slots and per-segment downsampling bound memory and DDS history.
+        # Archives are NOT registered or composited across scale segments.
+        self.archives = OrderedDict()  # slot index -> (segment_id, XYZ array)
+        self.next_archive_slot = 0
         self.poses = deque()  # (stamp_ns, PoseStamped), increasing time
         self.pending = deque()  # (arrival_monotonic, PointCloud2)
         self.segment = None
@@ -134,6 +148,12 @@ class ExperimentalVoxelMapper(Node):
         self.status_pub = self.create_publisher(
             String, str(p["mapper_status_topic"]), status_qos
         )
+        self.archive_pubs = [
+            self.create_publisher(
+                PointCloud2, f"{self.archive_prefix}{slot}", status_qos
+            )
+            for slot in range(self.max_archives)
+        ]
         self.status_sub = self.create_subscription(
             String, self.metric_status_topic, self.on_status, status_qos
         )
@@ -160,10 +180,48 @@ class ExperimentalVoxelMapper(Node):
             f"accepted_clouds={self.accepted_clouds} "
             f"rejected_clouds={self.rejected_clouds} "
             f"unmatched_clouds={self.unmatched_clouds} "
+            f"archived_segments={len(self.archives)} "
+            f"archive_slots={self.archive_inventory()} "
             f"reason={reason} last_error={self.last_error} "
             "navigation_authority=0 tf=0"
         )
         self.status_pub.publish(msg)
+
+    def archive_inventory(self):
+        if not self.archives:
+            return "none"
+        return ",".join(
+            f"{slot}:segment_{segment}:points_{len(points)}"
+            for slot, (segment, points) in self.archives.items()
+        )
+
+    def publish_archive_slot(self, slot: int, points: np.ndarray):
+        # Same experimental session frame ID for RViz visualization only.
+        # Never treat archived segment origins or scale as aligned.
+        self.archive_pubs[slot].publish(point_cloud2.create_cloud_xyz32(
+            Header(stamp=self.get_clock().now().to_msg(),
+                   frame_id=self.world_frame), points,
+        ))
+
+    def archive_current_segment(self):
+        if self.segment is None or not self.voxels:
+            return
+        points = np.stack(tuple(self.voxels.values())).astype(np.float32)
+        # Deterministic bounded subsampling, preserving full active-map resolution.
+        if len(points) > self.max_archive_voxels:
+            stride = math.ceil(len(points) / self.max_archive_voxels)
+            points = points[::stride][:self.max_archive_voxels]
+        slot = self.next_archive_slot
+        self.next_archive_slot = (slot + 1) % self.max_archives
+        # The slot may previously contain another segment. Its latched data is
+        # replaced, not merged or transformed into the new segment.
+        self.archives.pop(slot, None)
+        self.archives[slot] = (self.segment, points)
+        self.publish_archive_slot(slot, points)
+        self.get_logger().info(
+            f"Archived experimental segment {self.segment}: "
+            f"{len(points)} points in slot {slot}; visualization only"
+        )
 
     def clear_map(self, reason: str):
         self.voxels.clear()
@@ -188,6 +246,7 @@ class ExperimentalVoxelMapper(Node):
             return
         segment, state = status
         if self.segment != segment:
+            self.archive_current_segment()
             self.segment = segment
             self.active = False
             self.last_status_state = state
