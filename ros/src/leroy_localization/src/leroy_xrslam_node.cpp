@@ -82,7 +82,14 @@ public:
     tf_buffer_(this->get_clock()), tf_listener_(tf_buffer_),
     tf_broadcaster_(*this) {
     slam_yaml_=declare_parameter<std::string>("slam_yaml","");
+    // Legacy device template is only used for IMU noise covariance fields.
+    // Camera calibration always comes from ROS CameraInfo and static TF.
     template_yaml_=declare_parameter<std::string>("device_template_yaml","");
+    keypoint_noise_variance_=declare_parameter<double>(
+      "keypoint_noise_variance_px2",0.5);
+    if(!is_finite_value(keypoint_noise_variance_) ||
+       keypoint_noise_variance_<=0.0 || keypoint_noise_variance_>100.0)
+      throw std::runtime_error("Invalid feature keypoint noise variance");
     image_topic_=declare_parameter<std::string>("image_topic","");
     info_topic_=declare_parameter<std::string>("camera_info_topic","");
     imu_topic_=declare_parameter<std::string>("imu_topic","/imu/data_raw");
@@ -141,10 +148,10 @@ public:
     offset_=declare_parameter<double>("camera_imu_offset_sec",std::numeric_limits<double>::quiet_NaN());
     max_jump_=declare_parameter<double>("max_pose_step_m",1.0);
     max_angular_jump_=declare_parameter<double>("max_pose_step_rad",1.0);
-    if(slam_yaml_.empty()||template_yaml_.empty()||image_topic_.empty()||
+    if(slam_yaml_.empty()||image_topic_.empty()||
        info_topic_.empty()||camera_frame_.empty()) {
       throw std::runtime_error(
-        "Configure SLAM YAML, device template, image/CameraInfo topics and camera frame");
+        "Configure SLAM YAML, image/CameraInfo topics and camera frame");
     }
     const YAML::Node slam=YAML::LoadFile(slam_yaml_);
     const std::string mode=(slam["sensor"] && slam["sensor"]["mode"]) ?
@@ -153,6 +160,10 @@ public:
       throw std::runtime_error(
         "XRSLAM adapter supports sensor.mode=monocular, monocular_imu or rgbd only");
     use_imu_=leroy_xrslam::sensor_mode_requires_imu(mode);
+    if(use_imu_ && template_yaml_.empty())
+      throw std::runtime_error(
+        "IMU mode requires device_template_yaml for IMU noise covariance; "
+        "camera-only mode uses CameraInfo and TF without a template");
     use_depth_=leroy_xrslam::sensor_mode_requires_depth(mode);
     async_depth_stage_a1_=declare_parameter<bool>("async_depth_stage_a1",false);
     if(experimental_metric_preview_ && !async_depth_stage_a1_)
@@ -330,7 +341,14 @@ private:
     if((use_imu_ && !valid_quat(body_imu.transform.rotation)) ||
        !valid_quat(body_cam.transform.rotation))
       throw std::runtime_error("Invalid static TF quaternion");
-    YAML::Node dev=YAML::LoadFile(template_yaml_);
+    // Native XRSLAM still accepts YAML at initialization. Serialize the
+    // ROS-owned sensor geometry transiently, without an external template.
+    YAML::Node dev(YAML::NodeType::Map);
+    if(use_imu_) {
+      // Legacy compatibility for IMU covariance inputs only. All camera
+      // calibration entries are overwritten with CameraInfo and TF below.
+      dev=YAML::LoadFile(template_yaml_);
+    }
     const YAML::Node slam=YAML::LoadFile(slam_yaml_);
     if(!slam["sensor"] || !slam["sensor"]["mode"] ||
        leroy_xrslam::sensor_mode_requires_imu(
@@ -362,7 +380,14 @@ private:
     YAML::Node zeros(YAML::NodeType::Sequence);
     for(int i=0;i<4;++i)zeros.push_back(0.0);
     dev["cam0"]["distortion"]=zeros;
-    dev["cam0"]["time_offset"]=offset_;
+    dev["cam0"]["time_offset"]=use_imu_ ? offset_ : 0.0;
+    // Frontend keypoint noise is an estimator parameter, not sensor geometry.
+    if(!use_imu_) {
+      YAML::Node noise(YAML::NodeType::Sequence);
+      for(double v:{keypoint_noise_variance_,0.0,0.0,keypoint_noise_variance_})
+        noise.push_back(v);
+      dev["cam0"]["noise"]=noise;
+    }
     auto tmp=std::filesystem::temp_directory_path()/
       ("leroy_xrslam_"+std::to_string(reinterpret_cast<std::uintptr_t>(this))+".yaml");
     generated_yaml_=tmp.string();
@@ -1203,6 +1228,7 @@ private:
   int depth_wait_ms_=3000;
   double min_depth_valid_fraction_=0.01;
   std::string slam_yaml_,template_yaml_,image_topic_,info_topic_,imu_topic_,depth_topic_;
+  double keypoint_noise_variance_=0.5;
   std::string camera_frame_,imu_frame_,base_frame_,odom_frame_,generated_yaml_;
   std::string map_frame_,map_id_,map_status_,visual_world_frame_,visual_body_frame_;
   std::string last_status_,last_landmark_status_;
