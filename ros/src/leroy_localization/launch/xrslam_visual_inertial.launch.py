@@ -9,12 +9,17 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+from ament_index_python.packages import get_package_share_directory
+from pathlib import Path
 
 
 def generate_launch_description():
+    slam_config = str(Path(get_package_share_directory("leroy_localization")) /
+                      "config" / "leroy_monocular_imu_slam.yaml")
     return LaunchDescription([
         DeclareLaunchArgument("slam_yaml",
-                              default_value="/opt/xrslam/configs/leroy_monocular_imu_slam.yaml"),
+                              default_value=slam_config),
         DeclareLaunchArgument("camera_imu_offset_sec"),
         DeclareLaunchArgument("imu_cov_g_diagonal"),
         DeclareLaunchArgument("imu_cov_a_diagonal"),
@@ -33,11 +38,11 @@ def generate_launch_description():
                 "imu_topic": "/imu/data_raw",
                 "imu_frame": "imu_link",
                 "base_frame": "base_link",
-                "camera_imu_offset_sec": LaunchConfiguration("camera_imu_offset_sec"),
-                "imu_cov_g_diagonal": LaunchConfiguration("imu_cov_g_diagonal"),
-                "imu_cov_a_diagonal": LaunchConfiguration("imu_cov_a_diagonal"),
-                "imu_cov_bg_diagonal": LaunchConfiguration("imu_cov_bg_diagonal"),
-                "imu_cov_ba_diagonal": LaunchConfiguration("imu_cov_ba_diagonal"),
+                "camera_imu_offset_sec": ParameterValue(LaunchConfiguration("camera_imu_offset_sec"), value_type=float),
+                "imu_cov_g_diagonal": ParameterValue(LaunchConfiguration("imu_cov_g_diagonal"), value_type=float),
+                "imu_cov_a_diagonal": ParameterValue(LaunchConfiguration("imu_cov_a_diagonal"), value_type=float),
+                "imu_cov_bg_diagonal": ParameterValue(LaunchConfiguration("imu_cov_bg_diagonal"), value_type=float),
+                "imu_cov_ba_diagonal": ParameterValue(LaunchConfiguration("imu_cov_ba_diagonal"), value_type=float),
                 "async_depth_stage_a1": False,
                 "experimental_metric_preview": False,
                 "pose_convention_validated": False,
