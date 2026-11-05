@@ -115,7 +115,13 @@ def _start_configured_publishers(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    # Colcon --symlink-install may expose the installed config as a symlink.\n    # Resolve only the package-owned default to its regular source file;\n    # load_sensor_transforms continues to reject caller-supplied symlink paths\n    # and validates every calibration field and frame invariant.\n    installed_yaml = str((\n        Path(get_package_share_directory("leroy_description")) /\n        "config" / "sensor_mounts.yaml").resolve(strict=True))
+    # Colcon --symlink-install may expose the installed config as a symlink.
+    # Resolve only the package-owned default to its regular source file;
+    # load_sensor_transforms still validates all calibration/frame invariants.
+    installed_yaml = str(
+        (Path(get_package_share_directory("leroy_description")) /
+         "config" / "sensor_mounts.yaml").resolve(strict=True)
+    )
     return LaunchDescription([
         DeclareLaunchArgument(
             "sensor_mounts_file", default_value=installed_yaml,
