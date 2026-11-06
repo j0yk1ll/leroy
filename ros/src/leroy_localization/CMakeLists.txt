@@ -48,6 +48,7 @@ install(TARGETS leroy_xrslam_node DESTINATION lib/${PROJECT_NAME})
 install(PROGRAMS
   scripts/leroy_localization_health
   scripts/imu_stationary_diagnostics
+  scripts/imu_allan_diagnostics
   scripts/camera_imu_temporal_diagnostics
   scripts/camera_imu_axis_diagnostics
   scripts/camera_imu_fixed_tf_diagnostics
