@@ -50,7 +50,7 @@ The corresponding *axis-specific* continuous-time covariance estimates
 A possible **isotropic exploratory aggregate** is the arithmetic mean
 of those three *variances*, not the square of the average density:
 `imu_cov_g_diagonal ~ 6.8500e-8` and
-`imu_cov_a_diagonal ~ 1.08545e-5`.
+`imu_cov_a_diagonal ~ 1.08472e-5`.
 These are *candidate measurement-noise inputs*, not validated navigation
 parameters and not a YAML/launch preset.
 
