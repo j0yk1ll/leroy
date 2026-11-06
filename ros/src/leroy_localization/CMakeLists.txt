@@ -45,7 +45,11 @@ ament_target_dependencies(leroy_xrslam_node
 target_compile_options(leroy_xrslam_node PRIVATE -Wall -Wextra -Wpedantic)
 
 install(TARGETS leroy_xrslam_node DESTINATION lib/${PROJECT_NAME})
-install(PROGRAMS scripts/leroy_localization_health scripts/imu_stationary_diagnostics DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS
+  scripts/leroy_localization_health
+  scripts/imu_stationary_diagnostics
+  scripts/camera_imu_temporal_diagnostics
+  DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
