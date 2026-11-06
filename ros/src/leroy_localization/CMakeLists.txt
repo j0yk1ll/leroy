@@ -49,6 +49,7 @@ install(PROGRAMS
   scripts/leroy_localization_health
   scripts/imu_stationary_diagnostics
   scripts/camera_imu_temporal_diagnostics
+  scripts/camera_imu_axis_diagnostics
   DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
