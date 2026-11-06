@@ -86,13 +86,25 @@ trap cleanup EXIT INT TERM
 
 # Verify group leadership: never signal a potentially shared process group.
 register_group() {
-  local leader="$1" pgid
-  pgid="$(ps -o pgid= -p "$leader" 2>/dev/null | tr -d ' ' || true)"
-  if [[ "$pgid" != "$leader" ]]; then
-    echo "Offline child did not acquire its own process group: pid=$leader pgid=$pgid" >&2
-    exit 4
-  fi
-  pids+=("$leader")
+  local leader="$1" pgid attempt
+  # The asynchronous shell may not have exec'd setsid when $! is read.
+  # Poll for the NEW group and never kill the original/shared shell group.
+  for attempt in {1..60}; do
+    pgid="$(ps -o pgid= -p "$leader" 2>/dev/null | tr -d ' ' || true)"
+    if [[ "$pgid" == "$leader" ]]; then
+      pids+=("$leader")
+      return 0
+    fi
+    if [[ -z "$pgid" ]]; then
+      echo "Offline launch process exited before session creation: pid=$leader" >&2
+      exit 4
+    fi
+    sleep 0.05
+  done
+  echo "Offline child failed to acquire its own process group: pid=$leader pgid=$pgid" >&2
+  # Kill only the direct child; NEVER signal a group that we did not own.
+  kill -TERM "$leader" 2>/dev/null || true
+  exit 4
 }
 
 setsid ros2 launch leroy_description description.launch.py \
