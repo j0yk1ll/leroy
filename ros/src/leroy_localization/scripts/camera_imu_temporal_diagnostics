@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""Exploratory, read-only camera/IMU temporal alignment from a ROS 2 MCAP bag.
+
+Reports candidate delta such that t_imu = t_camera + delta.  Uses rotation
+MAGNITUDES, which do not require a trusted camera/IMU mounting rotation.
+Homography-derived rotations are unreliable under translation/parallax; fail
+closed on weak motion, uncertain correlation, or inconsistent subwindows.
+This is NOT a calibrated temporal extrinsic or permission to enable VIO.
+"""
+import argparse
+import json
+import math
+import sys
+
+import cv2
+import numpy as np
+from rclpy.serialization import deserialize_message
+from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
+from sensor_msgs.msg import CameraInfo, Image, Imu
+
+
+def seconds(stamp):
+    return float(stamp.sec) + float(stamp.nanosec) * 1e-9
+
+
+def grayscale(msg):
+    if msg.encoding == "mono8":
+        row = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.step)
+        return row[:, :msg.width].copy()
+    if msg.encoding in ("bgr8", "rgb8"):
+        a = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.step)
+        a = a[:, :msg.width * 3].reshape(msg.height, msg.width, 3)
+        return cv2.cvtColor(a, cv2.COLOR_BGR2GRAY if msg.encoding == "bgr8"
+                            else cv2.COLOR_RGB2GRAY)
+    raise ValueError("Unsupported image encoding " + msg.encoding)
+
+
+def read_bag(uri):
+    reader = SequentialReader()
+    reader.open(StorageOptions(uri=uri, storage_id="mcap"),
+                ConverterOptions(input_serialization_format="cdr",
+                                 output_serialization_format="cdr"))
+    images, imus, intrinsics = [], [], None
+    while reader.has_next():
+        topic, raw, _ = reader.read_next()
+        if topic == "/camera/image_rect":
+            m = deserialize_message(raw, Image)
+            if m.header.frame_id != "camera_optical_frame":
+                raise ValueError("Unexpected image frame " + m.header.frame_id)
+            images.append((seconds(m.header.stamp), grayscale(m)))
+        elif topic == "/imu/data_raw":
+            m = deserialize_message(raw, Imu)
+            if m.header.frame_id != "imu_link":
+                raise ValueError("Unexpected IMU frame " + m.header.frame_id)
+            imus.append((seconds(m.header.stamp),
+                         m.angular_velocity.x, m.angular_velocity.y,
+                         m.angular_velocity.z))
+        elif topic == "/camera/camera_info" and intrinsics is None:
+            m = deserialize_message(raw, CameraInfo)
+            # Rectified images must use the rectified projection intrinsics.
+            intrinsics = np.array([[m.p[0], 0, m.p[2]],
+                                   [0, m.p[5], m.p[6]],
+                                   [0, 0, 1]], dtype=np.float64)
+            if not np.isfinite(intrinsics).all() or min(m.p[0], m.p[5]) <= 0:
+                raise ValueError("CameraInfo projection P has invalid intrinsics")
+    if intrinsics is None or len(images) < 20 or len(imus) < 100:
+        raise ValueError("Insufficient CameraInfo, images, or IMU messages")
+    images.sort(key=lambda x: x[0])
+    imus.sort(key=lambda x: x[0])
+    ti = np.array([x[0] for x in imus])
+    gy = np.array([x[1:] for x in imus], dtype=np.float64)
+    if np.any(np.diff(ti) <= 0):
+        raise ValueError("IMU timestamps are not strictly increasing")
+    if np.any(np.diff([x[0] for x in images]) <= 0):
+        raise ValueError("Image timestamps are not strictly increasing")
+    if np.any(~np.isfinite(gy)):
+        raise ValueError("Nonfinite IMU angular velocities")
+    return images, intrinsics, ti, gy
+
+
+def visual_rotations(images, k):
+    results = []
+    rejections = {"gap": 0, "few_tracks": 0, "homography": 0,
+                  "not_rotation_like": 0}
+    inverse_k = np.linalg.inv(k)
+    for (ta, a), (tb, b) in zip(images, images[1:]):
+        dt = tb - ta
+        if dt <= 0 or dt > 0.25:
+            rejections["gap"] += 1
+            continue
+        points = cv2.goodFeaturesToTrack(a, maxCorners=450, qualityLevel=0.015,
+                                         minDistance=9)
+        if points is None or len(points) < 45:
+            rejections["few_tracks"] += 1
+            continue
+        points2, status, _ = cv2.calcOpticalFlowPyrLK(
+            a, b, points, None, winSize=(21, 21), maxLevel=3)
+        if points2 is None:
+            rejections["few_tracks"] += 1
+            continue
+        mask = status.reshape(-1).astype(bool)
+        p = points.reshape(-1, 2)[mask]
+        q = points2.reshape(-1, 2)[mask]
+        if len(p) < 35:
+            rejections["few_tracks"] += 1
+            continue
+        h, inliers = cv2.findHomography(p, q, cv2.RANSAC, 3.0)
+        if h is None or inliers is None or int(inliers.sum()) < 30 or (
+                inliers.sum() / len(p) < 0.6):
+            rejections["homography"] += 1
+            continue
+        normalized = inverse_k @ h @ k
+        try:
+            u, s, vt = np.linalg.svd(normalized)
+        except np.linalg.LinAlgError:
+            rejections["homography"] += 1
+            continue
+        # A homography from a pure rotation is an orthogonal matrix up to scale.
+        # A translation-induced plane homography typically fails this gate.
+        shape_error = float(np.max(np.abs(s / np.median(s) - 1)))
+        if shape_error > 0.20:
+            rejections["not_rotation_like"] += 1
+            continue
+        correction = np.eye(3)
+        correction[2, 2] = np.linalg.det(u @ vt)
+        rotation = u @ correction @ vt
+        angle = math.acos(float(np.clip((np.trace(rotation) - 1) / 2, -1, 1)))
+        if not np.isfinite(angle):
+            rejections["homography"] += 1
+            continue
+        results.append((ta, tb, angle / dt, float(inliers.sum() / len(p))))
+    return np.asarray(results, dtype=float).reshape(-1, 4), rejections
+
+
+def score_shift(visual, ti, gyro_norm, shift):
+    a = visual[:, 0] + shift
+    b = visual[:, 1] + shift
+    valid = (a >= ti[0]) & (b <= ti[-1])
+    if int(valid.sum()) < 15:
+        return None
+    # Trapezoidal integral of IMU angular speed, using the IMU timestamps.
+    cumul = np.zeros(len(ti))
+    cumul[1:] = np.cumsum(0.5 * (gyro_norm[1:] + gyro_norm[:-1]) * np.diff(ti))
+    def integrated_at(t):
+        idx = np.clip(np.searchsorted(ti, t, side="right") - 1, 0, len(ti) - 2)
+        dt = t - ti[idx]
+        seg = ti[idx + 1] - ti[idx]
+        rate = gyro_norm[idx] + (gyro_norm[idx + 1] - gyro_norm[idx]) * dt / seg
+        return cumul[idx] + 0.5 * (gyro_norm[idx] + rate) * dt
+    va = visual[valid, 2]
+    ib = (integrated_at(b[valid]) - integrated_at(a[valid])) / (
+        b[valid] - a[valid])
+    # Reject near-static pair rates and require enough varying motion.
+    active = (va > 0.06) | (ib > 0.06)
+    if int(active.sum()) < 20:
+        return None
+    va, ib = va[active], ib[active]
+    if np.std(va) < 0.04 or np.std(ib) < 0.04:
+        return None
+    corr = float(np.corrcoef(va, ib)[0, 1])
+    if not math.isfinite(corr):
+        return None
+    return corr, int(active.sum())
+
+
+def candidate(visual, ti, gyro_norm, shifts):
+    values = []
+    for dt in shifts:
+        result = score_shift(visual, ti, gyro_norm, float(dt))
+        if result is not None:
+            values.append((float(dt), *result))
+    return max(values, key=lambda x: x[1]) if values else None
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("bag", help="Directory of rosbag2 MCAP recording")
+    parser.add_argument("--max-shift-sec", type=float, default=0.5)
+    parser.add_argument("--step-sec", type=float, default=0.005)
+    args = parser.parse_args()
+    if not (0.05 <= args.max_shift_sec <= 2 and
+            0.001 <= args.step_sec <= 0.02):
+        parser.error("shift range must be 0.05..2 seconds, step 0.001..0.02")
+    images, k, ti, gy = read_bag(args.bag)
+    visual, rejected = visual_rotations(images, k)
+    result = {
+        "purpose": "exploratory rotational alignment only; not certified time offset",
+        "convention": "t_imu = t_camera + candidate_shift_sec",
+        "images": len(images), "imu_samples": len(ti),
+        "visual_pairs_accepted": len(visual), "visual_pairs_rejected": rejected,
+        "candidate_shift_sec": None, "correlation": None,
+        "decision": "INSUFFICIENT_EVIDENCE",
+        "limitations": [
+            "Unsigned rotation magnitude cannot validate camera-to-IMU rotation",
+            "Rotation homographies may still contain translational/parallax bias",
+            "No assurance header timestamps encode optical exposure time",
+            "One 90-degree rotation is insufficient for certified temporal calibration",
+            "Never populate XRSLAM VIO calibration or enable navigation from this result",
+        ],
+    }
+    if len(visual) >= 30:
+        shifts = np.arange(-args.max_shift_sec, args.max_shift_sec +
+                           args.step_sec / 2, args.step_sec)
+        gyro_norm = np.linalg.norm(gy, axis=1)
+        best = candidate(visual, ti, gyro_norm, shifts)
+        if best:
+            shift, corr, count = best
+            result.update(candidate_shift_sec=round(shift, 6),
+                          correlation=round(corr, 4), active_pairs=count)
+            # A wide peak is ambiguous even if its absolute correlation is high.
+            alternatives = [score_shift(visual, ti, gyro_norm, float(s))
+                            for s in shifts if abs(s - shift) >= 0.05]
+            alt = max((x[0] for x in alternatives if x is not None),
+                      default=float("-inf"))
+            result["best_correlation_outside_50ms"] = (
+                round(alt, 4) if math.isfinite(alt) else None)
+            midpoint = float(np.median(visual[:, 0]))
+            halves = [visual[visual[:, 0] < midpoint],
+                      visual[visual[:, 0] >= midpoint]]
+            half_results = [
+                candidate(half, ti, gyro_norm, shifts)
+                if len(half) >= 20 else None for half in halves
+            ]
+            result["split_half_shifts_sec"] = [
+                round(x[0], 6) if x is not None else None for x in half_results]
+            if (corr >= 0.65 and count >= 35 and
+                corr - alt >= 0.07 and
+                all(x is not None and x[1] >= 0.45 for x in half_results) and
+                abs(half_results[0][0] - half_results[1][0]) <= 0.04 and
+                abs(shift) < args.max_shift_sec - 0.02):
+                result["decision"] = "PRELIMINARY_CANDIDATE_ONLY"
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, RuntimeError, OSError) as exc:
+        print(f"Calibration diagnostic failed: {exc}", file=sys.stderr)
+        sys.exit(2)
