@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Read-only, signed camera/IMU rotation consistency check for Leroy C1 bags.
+
+For consecutive rectified frames, a pure-rotation scene homography maps
+bearings by R_scene = R_camera(t2)^T R_camera(t1). Therefore the camera's
+own angular displacement is approximately -Rodrigues(R_scene).
+Find R_camera_from_imu in SO(3) and a candidate time shift on held-out data.
+This is an exploratory check, NOT an extrinsic or timing calibration.
+"""
+import argparse
+import json
+import math
+import os
+import runpy
+import sys
+
+import cv2
+import numpy as np
+
+# Reuse the existing ROS bag reader and its strict frame/intrinsics checks.
+_temporal = runpy.run_path(os.path.join(
+    os.path.dirname(os.path.realpath(__file__)),
+    "camera_imu_temporal_diagnostics"))
+read_bag = _temporal["read_bag"]
+
+
+def rotations(images, k):
+    inv_k = np.linalg.inv(k)
+    samples = []
+    rejects = {"gap": 0, "features": 0, "homography": 0, "shape": 0}
+    for (ta, a), (tb, b) in zip(images, images[1:]):
+        dt = tb - ta
+        if not 0 < dt <= 0.25:
+            rejects["gap"] += 1
+            continue
+        p0 = cv2.goodFeaturesToTrack(
+            a, maxCorners=450, qualityLevel=0.015, minDistance=9)
+        if p0 is None or len(p0) < 45:
+            rejects["features"] += 1
+            continue
+        p1, status, _ = cv2.calcOpticalFlowPyrLK(
+            a, b, p0, None, winSize=(21, 21), maxLevel=3)
+        if p1 is None or status is None:
+            rejects["features"] += 1
+            continue
+        mask = status.reshape(-1).astype(bool)
+        src = p0.reshape(-1, 2)[mask]
+        dst = p1.reshape(-1, 2)[mask]
+        if len(src) < 35:
+            rejects["features"] += 1
+            continue
+        h, inliers = cv2.findHomography(src, dst, cv2.RANSAC, 3.0)
+        if (h is None or inliers is None or inliers.sum() < 30
+                or inliers.sum() / len(src) < 0.6):
+            rejects["homography"] += 1
+            continue
+        m = inv_k @ h @ k
+        try:
+            u, s, vt = np.linalg.svd(m)
+        except np.linalg.LinAlgError:
+            rejects["homography"] += 1
+            continue
+        if not np.isfinite(s).all() or min(s) <= 0 or (
+                np.max(np.abs(s / np.median(s) - 1)) > 0.20):
+            rejects["shape"] += 1
+            continue
+        d = np.eye(3)
+        d[2, 2] = np.linalg.det(u @ vt)
+        r_scene = u @ d @ vt
+        # Image homography rotates rays opposite to physical camera rotation.
+        omega_cam = -cv2.Rodrigues(r_scene)[0].reshape(3) / dt
+        if np.isfinite(omega_cam).all():
+            samples.append([ta, tb, *omega_cam])
+    return np.asarray(samples, dtype=np.float64).reshape(-1, 5), rejects
+
+
+def integrate_gyro(t, gyro, query):
+    """Piecewise-linear integration at arbitrary timestamps, vectorized."""
+    cumulative = np.zeros_like(gyro)
+    cumulative[1:] = np.cumsum(
+        (gyro[1:] + gyro[:-1]) * np.diff(t)[:, None] * 0.5, axis=0)
+    idx = np.clip(np.searchsorted(t, query, side="right") - 1, 0, len(t)-2)
+    span = t[idx+1] - t[idx]
+    delta = query - t[idx]
+    rate = gyro[idx] + (gyro[idx+1] - gyro[idx]) * (delta / span)[:, None]
+    return cumulative[idx] + (gyro[idx] + rate) * delta[:, None] * 0.5
+
+
+def samples_for_shift(visual, ti, gyro, shift):
+    a, b = visual[:, 0] + shift, visual[:, 1] + shift
+    valid = (a >= ti[0]) & (b <= ti[-1])
+    if valid.sum() < 50:
+        return None
+    obs = visual[valid, 2:5]
+    imu = (integrate_gyro(ti, gyro, b[valid])
+           - integrate_gyro(ti, gyro, a[valid])) / (b[valid]-a[valid])[:, None]
+    # Retain active motion only; stationary measurements do not constrain axes.
+    active = (np.linalg.norm(obs, axis=1) > 0.12) | (
+        np.linalg.norm(imu, axis=1) > 0.12)
+    if active.sum() < 60:
+        return None
+    return obs[active], imu[active], visual[valid, 0][active]
+
+
+def fit_rotation(obs, imu):
+    """Orthogonal Procrustes: camera angular rates ~= R * IMU angular rates."""
+    cross = obs.T @ imu
+    u, _, vt = np.linalg.svd(cross)
+    det = np.linalg.det(u @ vt)
+    flip = np.diag([1., 1., float(np.sign(det))])
+    return u @ flip @ vt
+
+
+def metrics(obs, imu, r):
+    predicted = imu @ r.T
+    dot = np.sum(obs * predicted, axis=1)
+    denom = np.linalg.norm(obs, axis=1) * np.linalg.norm(predicted, axis=1)
+    keep = denom > 1e-5
+    cosine = float(np.mean(dot[keep] / denom[keep])) if keep.any() else None
+    rms = float(np.sqrt(np.mean((obs - predicted)**2)))
+    # Centered vector correlation distinguishes constant bias/shape mismatch.
+    centered_a = (obs - obs.mean(axis=0)).ravel()
+    centered_b = (predicted - predicted.mean(axis=0)).ravel()
+    correlation = (float(np.corrcoef(centered_a, centered_b)[0, 1])
+                   if centered_a.std() > 1e-5 and centered_b.std() > 1e-5
+                   else None)
+    return {"mean_direction_cosine": round(cosine, 4) if cosine is not None else None,
+            "vector_correlation": round(correlation, 4) if correlation is not None else None,
+            "rms_angular_rate_residual_rad_s": round(rms, 4)}
+
+
+def evaluate(visual, ti, gyro, shift):
+    matched = samples_for_shift(visual, ti, gyro, shift)
+    if matched is None:
+        return None
+    obs, imu, stamps = matched
+    mid = np.median(stamps)
+    train = stamps < mid
+    test = ~train
+    if min(train.sum(), test.sum()) < 25:
+        return None
+    r = fit_rotation(obs[train], imu[train])
+    holdout = metrics(obs[test], imu[test], r)
+    if holdout["vector_correlation"] is None:
+        return None
+    # Diagnostic excitation spectrum of demeaned 3-axis IMU movement.
+    singular = np.linalg.svd(imu[train] - imu[train].mean(axis=0),
+                             compute_uv=False)
+    ratio = float(singular[-1] / singular[0]) if singular[0] > 0 else 0.
+    return {"shift_sec": round(float(shift), 6),
+            "active_pairs": int(len(obs)),
+            "train_pairs": int(train.sum()),
+            "held_out_pairs": int(test.sum()),
+            "camera_from_imu_rotation_matrix": np.round(r, 5).tolist(),
+            "excitation_singular_values": np.round(singular, 5).tolist(),
+            "excitation_min_max_ratio": round(ratio, 4),
+            "training": metrics(obs[train], imu[train], r),
+            "held_out": holdout}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("bag")
+    parser.add_argument("--max-shift-sec", type=float, default=0.15)
+    parser.add_argument("--step-sec", type=float, default=0.005)
+    args = parser.parse_args()
+    if not 0.02 <= args.max_shift_sec <= 0.5 or not (
+            0.001 <= args.step_sec <= 0.02):
+        parser.error("max shift must be 0.02..0.5 s; step 0.001..0.02 s")
+
+    images, k, ti, gyro = read_bag(args.bag)
+    visual, rejected = rotations(images, k)
+    report = {
+        "purpose": "read-only signed three-axis consistency; NOT certified extrinsics",
+        "convention": "t_imu = t_camera + candidate_shift_sec",
+        "frame_convention": "camera_from_imu maps imu_link angular rates to camera_optical_frame",
+        "images": len(images), "imu_samples": len(ti),
+        "visual_pairs": len(visual), "rejected_pairs": rejected,
+        "decision": "INSUFFICIENT_EVIDENCE",
+        "limitations": [
+            "Homography rotation can contain translation/parallax bias",
+            "Camera/IMU mounting rotation is fitted, not independently verified",
+            "This cannot measure true optical exposure time",
+            "IMU bias, extrinsic translation, and covariance are not calibrated",
+            "Never enable XRSLAM metric output, TF, navigation, or motors from this result"],
+        "best": None,
+    }
+    if len(visual) >= 100:
+        shifts = np.arange(-args.max_shift_sec,
+                           args.max_shift_sec + args.step_sec / 2, args.step_sec)
+        candidates = [evaluate(visual, ti, gyro, float(s)) for s in shifts]
+        candidates = [x for x in candidates if x is not None]
+        if candidates:
+            best = max(candidates,
+                       key=lambda x: x["held_out"]["vector_correlation"])
+            report["best"] = best
+            report["best_other_shift_correlation_outside_50ms"] = max(
+                (x["held_out"]["vector_correlation"] for x in candidates
+                 if abs(x["shift_sec"] - best["shift_sec"]) >= 0.05),
+                default=None)
+            report["best_is_search_edge"] = (
+                abs(best["shift_sec"]) >= args.max_shift_sec - args.step_sec)
+            report["excitation_assessment"] = (
+                "WEAK_THREE_AXIS_EXCITATION"
+                if best["excitation_min_max_ratio"] < 0.15
+                else "THREE_AXIS_EXCITATION_PRESENT")
+    print(json.dumps(report, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, RuntimeError, OSError, cv2.error) as exc:
+        print("Signed rotation diagnostic failed: " + str(exc), file=sys.stderr)
+        sys.exit(2)
