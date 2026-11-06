@@ -116,9 +116,11 @@ if ! kill -0 "${pids[0]}" 2>/dev/null; then
   exit 4
 fi
 
-# Capture tracking status and the fail-closed localization validity signal.
+# Capture native pose (isolated/unscaled), raw IMU and the fail-closed
+# tracking/validity status for offline comparison. No odom or map topics.
 setsid ros2 bag record -o "$run_dir/status_bag" --topics \
   /xrslam/tracking_status /xrslam/localization_valid \
+  /xrslam/visual_pose /imu/data_raw \
   > "$run_dir/status_record.log" 2>&1 &
 register_group "$!"
 
