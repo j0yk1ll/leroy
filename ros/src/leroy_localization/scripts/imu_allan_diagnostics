@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Read-only IMU Allan-deviation exploration from stationary ROS 2 MCAP.
+
+Uses non-overlapping cluster averages of angular rates / accelerations.
+Reports white-noise-density and bias-RW *candidate* coefficients only where
+local log-log slopes agree with their theoretical Allan deviation regimes.
+No values are written to XRSLAM configs. Temperature, clock jitter, slopes
+and physical stationarity limit interpretation.
+"""
+import argparse
+import json
+import math
+import sys
+
+import numpy as np
+from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
+from rclpy.serialization import deserialize_message
+from sensor_msgs.msg import Imu
+
+
+def load(uri):
+    reader = SequentialReader()
+    reader.open(StorageOptions(uri=uri, storage_id="mcap"),
+                ConverterOptions(input_serialization_format="cdr",
+                                 output_serialization_format="cdr"))
+    times = []
+    signals = []
+    invalid = 0
+    frames = set()
+    while reader.has_next():
+        topic, raw, _ = reader.read_next()
+        if topic != "/imu/data_raw":
+            continue
+        msg = deserialize_message(raw, Imu)
+        frames.add(msg.header.frame_id)
+        t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        x = [msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z,
+             msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z]
+        if t <= 0 or not math.isfinite(t) or not all(math.isfinite(y) for y in x):
+            invalid += 1
+            continue
+        times.append(t)
+        signals.append(x)
+    if frames != {"imu_link"}:
+        raise ValueError("Unexpected IMU frame IDs: " + repr(frames))
+    if len(times) < 1000:
+        raise ValueError("Need at least 1000 valid IMU messages")
+    t = np.asarray(times, dtype=np.float64)
+    x = np.asarray(signals, dtype=np.float64)
+    intervals = np.diff(t)
+    if (intervals <= 0).any():
+        raise ValueError("Non-increasing IMU header timestamps")
+    return t, x, intervals, invalid
+
+
+def stat(value):
+    return round(float(value), 9)
+
+
+def curve(x, sample_period, max_tau_sec, min_clusters):
+    n = len(x)
+    max_m = min(int(max_tau_sec / sample_period),
+                n // min_clusters)
+    if max_m < 2:
+        raise ValueError("Not enough samples for specified tau and cluster count")
+    ms = np.unique(np.maximum(1, np.round(
+        np.geomspace(1, max_m, num=40)).astype(int)))
+    result = []
+    for m in ms:
+        blocks = n // m
+        if blocks < min_clusters:
+            continue
+        averages = x[:blocks*m].reshape(blocks, m, 6).mean(axis=1)
+        # Adjacent nonoverlapping cluster-average differences
+        differences = np.diff(averages, axis=0)
+        adev = np.sqrt(0.5 * np.mean(differences ** 2, axis=0))
+        result.append((m * sample_period, blocks, adev))
+    return result
+
+
+def extract_regime(curves, column, target_slope, tolerance, min_tau, max_tau):
+    taus = np.array([c[0] for c in curves])
+    adev = np.array([c[2][column] for c in curves])
+    logs = np.log(adev)
+    slopes = np.gradient(logs, np.log(taus))
+    # Avoid endpoints and require local regime consistency (3 adjacent samples).
+    valid = ((np.abs(slopes - target_slope) <= tolerance) &
+             (taus >= min_tau) & (taus <= max_tau))
+    indexes = []
+    for i in range(1, len(curves)-1):
+        if valid[i-1:i+2].all():
+            indexes.append(i)
+    if not indexes:
+        return None
+    # Use earliest stable white-noise region or longest-tau stable bias-RW region.
+    chosen = indexes[0] if target_slope < 0 else indexes[-1]
+    tau, cluster_count, value = curves[chosen]
+    sigma = float(value[column])
+    density = sigma * math.sqrt(tau) if target_slope < 0 else (
+        sigma * math.sqrt(3.0 / tau))
+    return {
+        "coefficient": stat(density),
+        "tau_sec": stat(tau),
+        "allan_deviation": stat(sigma),
+        "local_loglog_slope": round(float(slopes[chosen]), 4),
+        "clusters": int(cluster_count),
+        "note": "Exploratory local-slope estimate only; not XRSLAM covariance"
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("bag")
+    parser.add_argument("--max-tau-sec", type=float, default=400.)
+    parser.add_argument("--min-clusters", type=int, default=12)
+    args = parser.parse_args()
+    if not (10 <= args.max_tau_sec <= 3600):
+        parser.error("--max-tau-sec must be 10..3600")
+    if not 10 <= args.min_clusters <= 100:
+        parser.error("--min-clusters must be 10..100")
+    t, x, dt, invalid = load(args.bag)
+    median_dt = float(np.median(dt))
+    jitter_p99 = float(np.percentile(dt, 99))
+    irregular = (np.mean(np.abs(dt - median_dt) > 0.2*median_dt) > 0.01)
+    curves = curve(x, median_dt, args.max_tau_sec, args.min_clusters)
+    measurements = []
+    for i, channel in enumerate(("gyro_x", "gyro_y", "gyro_z",
+                                 "accel_x", "accel_y", "accel_z")):
+        unit = "rad/s" if i < 3 else "m/s^2"
+        measurements.append({
+            "channel": channel,
+            "input_unit": unit,
+            "mean": stat(np.mean(x[:, i])),
+            "sample_stddev": stat(np.std(x[:, i], ddof=1)),
+            "allan_minimum": {
+                "tau_sec": stat(min(curves, key=lambda c: c[2][i])[0]),
+                "deviation": stat(min(c[2][i] for c in curves))
+            },
+            "white_noise_density_candidate": extract_regime(
+                curves, i, -0.5, 0.20, median_dt, min(10., args.max_tau_sec)),
+            "bias_random_walk_candidate": extract_regime(
+                curves, i, +0.5, 0.20, 10., args.max_tau_sec)
+        })
+    result = {
+        "purpose": "offline Allan analysis; not certified IMU calibration",
+        "decision": "INSUFFICIENT_EVIDENCE_FOR_XRSLAM_PARAMETERS",
+        "samples": len(t), "invalid_samples": invalid,
+        "duration_by_header_sec": stat(t[-1] - t[0]),
+        "median_rate_hz": round(1 / median_dt, 4),
+        "median_interval_sec": stat(median_dt),
+        "p99_interval_sec": stat(jitter_p99),
+        "max_gap_sec": stat(dt.max()),
+        "irregular_intervals": bool(irregular),
+        "cluster_method": "nonoverlapping adjacent-block Allan deviation",
+        "effective_period_assumption_sec": stat(median_dt),
+        "taus_sec": [stat(c[0]) for c in curves],
+        "gyro_allan_rad_per_sec": [
+            [stat(c[2][i]) for c in curves] for i in range(3)],
+        "accel_allan_m_per_sec2": [
+            [stat(c[2][i]) for c in curves] for i in range(3, 6)],
+        "axes": measurements,
+        "white_noise_coefficient_units": {
+            "gyro": "rad/s/sqrt(Hz) (equivalently rad/sqrt(s))",
+            "accel": "(m/s^2)/sqrt(Hz)"
+        },
+        "bias_rw_coefficient_units": {
+            "gyro": "(rad/s)/sqrt(s)",
+            "accel": "(m/s^2)/sqrt(s)"
+        },
+        "limitations": [
+            "Allan coefficients assume an effectively uniform sampling period",
+            "Sampling jitter/gaps, sensor filtering, clock changes and quantization may affect slopes",
+            "Any motion, vibration, thermal drift or nonstationarity contaminates estimates",
+            "A 34-minute record may be too short to identify bias random walk",
+            "Local slopes and coefficients are exploratory, not guaranteed stochastic process fits",
+            "XRSLAM parameter units and discrete-time scaling must be verified in its source",
+            "Do not populate XRSLAM parameters or enable metric pose, navigation, or motors from this output"
+        ]
+    }
+    print(json.dumps(result, sort_keys=True, indent=2))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, RuntimeError, OSError) as exc:
+        print("Allan analysis failed:", exc, file=sys.stderr)
+        sys.exit(2)
