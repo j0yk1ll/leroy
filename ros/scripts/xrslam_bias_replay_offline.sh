@@ -46,20 +46,58 @@ mkdir -p "$run_dir"
 printf '{"scenario":"%s","domain":191,"bag":"%s","imu_cov_g_diagonal":6.850035236e-8,"imu_cov_a_diagonal":1.084722832e-5,"imu_cov_bg_diagonal":%s,"imu_cov_ba_diagonal":%s,"camera_imu_offset_sec":0.0,"estimated_bias_covariances":false,"pose_authority":false}\n' \
   "$scenario" "$bag" "$bg" "$ba" > "$run_dir/inputs.json"
 
+# Each launched ROS command owns a separate session/process group.
+# ROS 2 launch and rosbag can spawn grandchildren which outlive their parents.
+# Signal ONLY verified process-group leaders created here, not the live graph.
+command -v setsid >/dev/null || { echo "setsid is required" >&2; exit 2; }
 pids=()
 cleanup() {
-  local pid
+  local leader pgid i alive
   trap - EXIT INT TERM
-  for pid in "${pids[@]}"; do kill -INT "$pid" 2>/dev/null || true; done
-  sleep 1
-  for pid in "${pids[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done
-  for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+  for leader in "${pids[@]}"; do
+    pgid="$(ps -o pgid= -p "$leader" 2>/dev/null | tr -d ' ' || true)"
+    if [[ "$pgid" == "$leader" ]]; then
+      kill -INT -- "-$leader" 2>/dev/null || true
+    fi
+  done
+  # Give rosbag recorder and launch-managed nodes time for graceful shutdown.
+  sleep 3
+  for leader in "${pids[@]}"; do
+    # The group may survive after its leader exits; group IDs remain reserved.
+    kill -TERM -- "-$leader" 2>/dev/null || true
+  done
+  for i in 1 2 3 4 5; do
+    alive=0
+    for leader in "${pids[@]}"; do
+      if kill -0 -- "-$leader" 2>/dev/null; then alive=1; fi
+    done
+    [[ "$alive" == 0 ]] && break
+    sleep 1
+  done
+  for leader in "${pids[@]}"; do
+    if kill -0 -- "-$leader" 2>/dev/null; then
+      echo "Force-stopping remaining offline group $leader" >&2
+      kill -KILL -- "-$leader" 2>/dev/null || true
+    fi
+  done
+  for leader in "${pids[@]}"; do wait "$leader" 2>/dev/null || true; done
 }
 trap cleanup EXIT INT TERM
 
-ros2 launch leroy_description description.launch.py \
+# Verify group leadership: never signal a potentially shared process group.
+register_group() {
+  local leader="$1" pgid
+  pgid="$(ps -o pgid= -p "$leader" 2>/dev/null | tr -d ' ' || true)"
+  if [[ "$pgid" != "$leader" ]]; then
+    echo "Offline child did not acquire its own process group: pid=$leader pgid=$pgid" >&2
+    exit 4
+  fi
+  pids+=("$leader")
+}
+
+setsid ros2 launch leroy_description description.launch.py \
   > "$run_dir/tf.log" 2>&1 &
-pids+=("$!")
+register_group "$!"
 sleep 3
 if ! kill -0 "${pids[0]}" 2>/dev/null; then
   echo "Static TF launch exited; see $run_dir/tf.log" >&2
@@ -67,19 +105,19 @@ if ! kill -0 "${pids[0]}" 2>/dev/null; then
 fi
 
 # Capture tracking status and the fail-closed localization validity signal.
-ros2 bag record -o "$run_dir/status_bag" --topics \
+setsid ros2 bag record -o "$run_dir/status_bag" --topics \
   /xrslam/tracking_status /xrslam/localization_valid \
   > "$run_dir/status_record.log" 2>&1 &
-pids+=("$!")
+register_group "$!"
 
-ros2 launch leroy_localization xrslam_visual_inertial.launch.py \
+setsid ros2 launch leroy_localization xrslam_visual_inertial.launch.py \
   camera_imu_offset_sec:=0.0 \
   imu_cov_g_diagonal:=6.850035236e-8 \
   imu_cov_a_diagonal:=1.084722832e-5 \
   imu_cov_bg_diagonal:="$bg" \
   imu_cov_ba_diagonal:="$ba" \
   > "$run_dir/xrslam.log" 2>&1 &
-pids+=("$!")
+register_group "$!"
 sleep 5
 if ! kill -0 "${pids[2]}" 2>/dev/null; then
   echo "XRSLAM launch exited; see $run_dir/xrslam.log" >&2
