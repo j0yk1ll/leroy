@@ -19,9 +19,12 @@ case "$scenario" in
   *) usage ;;
 esac
 
-# Source ROS before launching subprocesses.
+# ROS setup scripts may read unset environment variables. Source with nounset
+# disabled, then restore strict checking for the experiment itself.
+set +u
 source /opt/ros/jazzy/setup.bash
 source /leroy_ws/install/setup.bash
+set -u
 export ROS_DOMAIN_ID=191
 export FASTDDS_BUILTIN_TRANSPORTS=UDPv4
 
