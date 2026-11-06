@@ -82,14 +82,18 @@ def visual_rotations(images, k):
     results = []
     rejections = {"gap": 0, "few_tracks": 0, "homography": 0,
                   "not_rotation_like": 0}
+    samples = {"image_stddev": [], "detected_corners": [],
+               "tracked_corners": [], "optical_flow_displacement_px": []}
     inverse_k = np.linalg.inv(k)
     for (ta, a), (tb, b) in zip(images, images[1:]):
         dt = tb - ta
         if dt <= 0 or dt > 0.25:
             rejections["gap"] += 1
             continue
+        samples["image_stddev"].append(float(a.std()))
         points = cv2.goodFeaturesToTrack(a, maxCorners=450, qualityLevel=0.015,
                                          minDistance=9)
+        samples["detected_corners"].append(0 if points is None else len(points))
         if points is None or len(points) < 45:
             rejections["few_tracks"] += 1
             continue
@@ -101,6 +105,10 @@ def visual_rotations(images, k):
         mask = status.reshape(-1).astype(bool)
         p = points.reshape(-1, 2)[mask]
         q = points2.reshape(-1, 2)[mask]
+        samples["tracked_corners"].append(len(p))
+        if len(p):
+            samples["optical_flow_displacement_px"].append(
+                float(np.median(np.linalg.norm(q - p, axis=1))))
         if len(p) < 35:
             rejections["few_tracks"] += 1
             continue
@@ -129,7 +137,17 @@ def visual_rotations(images, k):
             rejections["homography"] += 1
             continue
         results.append((ta, tb, angle / dt, float(inliers.sum() / len(p))))
-    return np.asarray(results, dtype=float).reshape(-1, 4), rejections
+    def distribution(values):
+        if not values:
+            return None
+        return {"min": round(float(np.min(values)), 3),
+                "p10": round(float(np.percentile(values, 10)), 3),
+                "median": round(float(np.median(values)), 3),
+                "p90": round(float(np.percentile(values, 90)), 3),
+                "max": round(float(np.max(values)), 3)}
+    diagnostics = {k: distribution(v) for k, v in samples.items()}
+    diagnostics["image_shape"] = list(images[0][1].shape)
+    return np.asarray(results, dtype=float).reshape(-1, 4), rejections, diagnostics
 
 
 def score_shift(visual, ti, gyro_norm, shift):
@@ -182,12 +200,13 @@ def main():
             0.001 <= args.step_sec <= 0.02):
         parser.error("shift range must be 0.05..2 seconds, step 0.001..0.02")
     images, k, ti, gy = read_bag(args.bag)
-    visual, rejected = visual_rotations(images, k)
+    visual, rejected, feature_diagnostics = visual_rotations(images, k)
     result = {
         "purpose": "exploratory rotational alignment only; not certified time offset",
         "convention": "t_imu = t_camera + candidate_shift_sec",
         "images": len(images), "imu_samples": len(ti),
         "visual_pairs_accepted": len(visual), "visual_pairs_rejected": rejected,
+        "feature_diagnostics": feature_diagnostics,
         "candidate_shift_sec": None, "correlation": None,
         "decision": "INSUFFICIENT_EVIDENCE",
         "limitations": [
