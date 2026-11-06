@@ -50,6 +50,7 @@ install(PROGRAMS
   scripts/imu_stationary_diagnostics
   scripts/camera_imu_temporal_diagnostics
   scripts/camera_imu_axis_diagnostics
+  scripts/camera_imu_fixed_tf_diagnostics
   DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
