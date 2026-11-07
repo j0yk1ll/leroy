@@ -6,17 +6,17 @@
 namespace leroy_xrslam {
 
 // RGB-D is admitted only with the explicit depth subscriber and exact-stamp pairing.
-// RGB-D plus IMU is not supported yet.
+// RGB-D plus IMU is experimental and requires a separate guarded adapter flag.
 inline bool supported_sensor_mode(std::string_view mode) {
-  return mode == "monocular" || mode == "monocular_imu" || mode == "rgbd";
+  return mode == "monocular" || mode == "monocular_imu" || mode == "rgbd" || mode == "rgbd_imu";
 }
 
 inline bool sensor_mode_requires_depth(std::string_view mode) {
-  return mode == "rgbd";
+  return mode == "rgbd" || mode == "rgbd_imu";
 }
 
 inline bool sensor_mode_requires_imu(std::string_view mode) {
-  return mode == "monocular_imu";
+  return mode == "monocular_imu" || mode == "rgbd_imu";
 }
 
 // Pure-monocular images must not be blocked on an IMU that is deliberately
