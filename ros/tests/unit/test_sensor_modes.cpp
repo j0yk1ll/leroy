@@ -18,12 +18,17 @@ bool check(const char* name, bool actual, bool expected) {
 int main() {
   using leroy_xrslam::supported_sensor_mode;
   using leroy_xrslam::sensor_mode_requires_imu;
+  using leroy_xrslam::sensor_mode_requires_depth;
   using leroy_xrslam::can_queue_camera;
   using leroy_xrslam::await_imu_for_camera;
   bool ok=true;
 
   ok &= check("mono supported",supported_sensor_mode("monocular"),true);
   ok &= check("vio supported",supported_sensor_mode("monocular_imu"),true);
+  ok &= check("rgbd supported",supported_sensor_mode("rgbd"),true);
+  ok &= check("rgbd requires depth",sensor_mode_requires_depth("rgbd"),true);
+  ok &= check("mono no depth",sensor_mode_requires_depth("monocular"),false);
+  ok &= check("rgbd no IMU",sensor_mode_requires_imu("rgbd"),false);
   ok &= check("reject stereo",supported_sensor_mode("stereo"),false);
   ok &= check("reject rgbd",supported_sensor_mode("rgbd_imu"),false);
   ok &= check("reject empty",supported_sensor_mode(""),false);

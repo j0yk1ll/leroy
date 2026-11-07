@@ -1,0 +1,20 @@
+# Experimental optical-frame depth cloud only. No navigation/costmap authority.
+/**:
+  ros__parameters:
+    depth_topic: /video_depth_anything/depth
+    camera_info_topic: /camera/camera_info
+    raw_cloud_topic: /xrslam/experimental_scene/depth_cloud
+    obstacle_cloud_topic: /xrslam/experimental_scene/disabled_obstacles
+
+    # Sparse sampling keeps RViz traffic bounded: 640x480 -> <= 4800 points.
+    stride: 8
+    min_depth_m: 0.2
+    max_depth_m: 8.0
+    max_acquisition_age_s: 5.0
+    max_future_skew_s: 0.1
+    camera_info_cache_size: 512
+
+    # Must remain false until independently commissioned for physical safety.
+    publish_obstacles: false
+    extrinsics_validated: false
+    ground_reference_validated: false

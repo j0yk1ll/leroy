@@ -45,7 +45,16 @@ ament_target_dependencies(leroy_xrslam_node
 target_compile_options(leroy_xrslam_node PRIVATE -Wall -Wextra -Wpedantic)
 
 install(TARGETS leroy_xrslam_node DESTINATION lib/${PROJECT_NAME})
-install(PROGRAMS scripts/leroy_localization_health DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS
+  scripts/leroy_localization_health
+  scripts/imu_stationary_diagnostics
+  scripts/imu_allan_diagnostics
+  scripts/xrslam_trajectory_diagnostics
+  scripts/camera_imu_temporal_diagnostics
+  scripts/camera_imu_axis_diagnostics
+  scripts/camera_imu_fixed_tf_diagnostics
+  DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/test_xrslam_startup_contract.py")

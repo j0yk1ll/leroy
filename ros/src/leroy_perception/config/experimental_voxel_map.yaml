@@ -1,0 +1,21 @@
+/**:
+  ros__parameters:
+    input_cloud_topic: /xrslam/experimental_scene/depth_cloud
+    pose_topic: /xrslam/experimental_metric/pose
+    metric_status_topic: /xrslam/experimental_metric/status
+    output_cloud_topic: /xrslam/experimental_scene/voxel_map
+    mapper_status_topic: /xrslam/experimental_scene/voxel_map_status
+    archive_topic_prefix: /xrslam/experimental_scene/voxel_archive/slot_
+    max_archive_segments: 3
+    max_archive_voxels_per_segment: 30000
+    world_frame: xrslam_experimental_metric_world
+    camera_frame: camera_optical_frame
+    body_frame: base_link
+    voxel_size_m: 0.05
+    max_voxels: 60000
+    max_depth_age_s: 8.0
+    max_pose_delta_s: 0.12
+    max_pose_history_s: 20.0
+    max_pending_clouds: 8
+    max_points_per_cloud: 4800
+    publish_period_s: 1.0
