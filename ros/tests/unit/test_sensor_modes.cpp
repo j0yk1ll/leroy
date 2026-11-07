@@ -30,7 +30,9 @@ int main() {
   ok &= check("mono no depth",sensor_mode_requires_depth("monocular"),false);
   ok &= check("rgbd no IMU",sensor_mode_requires_imu("rgbd"),false);
   ok &= check("reject stereo",supported_sensor_mode("stereo"),false);
-  ok &= check("reject rgbd",supported_sensor_mode("rgbd_imu"),false);
+  ok &= check("experimental rgbd imu parsed",supported_sensor_mode("rgbd_imu"),true);
+  ok &= check("rgbd imu needs depth",sensor_mode_requires_depth("rgbd_imu"),true);
+  ok &= check("rgbd imu needs imu",sensor_mode_requires_imu("rgbd_imu"),true);
   ok &= check("reject empty",supported_sensor_mode(""),false);
   ok &= check("mono does not need IMU",sensor_mode_requires_imu("monocular"),false);
   ok &= check("vio requires IMU",sensor_mode_requires_imu("monocular_imu"),true);
