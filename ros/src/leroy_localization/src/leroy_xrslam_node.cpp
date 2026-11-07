@@ -239,7 +239,10 @@ public:
     }
     info_sub_=create_subscription<sensor_msgs::msg::CameraInfo>(info_topic_,qos,
       [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr p){ info(*p); });
-    image_sub_=create_subscription<sensor_msgs::msg::Image>(image_topic_,qos,
+    // Reliable image delivery is required for repeatable rosbag VIO replay.
+    // Keep IMU and CameraInfo on SensorDataQoS; do not grant pose authority.
+    image_sub_=create_subscription<sensor_msgs::msg::Image>(
+      image_topic_, rclcpp::QoS(20).reliable(),
       [this](sensor_msgs::msg::Image::ConstSharedPtr p){ image(p); });
     if(use_depth_) {
       depth_sub_=create_subscription<sensor_msgs::msg::Image>(depth_topic_,qos,
