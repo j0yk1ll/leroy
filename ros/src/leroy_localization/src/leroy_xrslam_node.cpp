@@ -162,7 +162,7 @@ public:
         slam["sensor"]["mode"].as<std::string>() : "";
     if(!leroy_xrslam::supported_sensor_mode(mode))
       throw std::runtime_error(
-        "XRSLAM adapter supports sensor.mode=monocular, monocular_imu or rgbd only");
+        "XRSLAM adapter supports monocular, monocular_imu, rgbd or experimental rgbd_imu");
     use_imu_=leroy_xrslam::sensor_mode_requires_imu(mode);
     if(use_imu_) {
       for(double v : {imu_cov_g_,imu_cov_a_,imu_cov_bg_,imu_cov_ba_})
@@ -172,17 +172,36 @@ public:
     }
     use_depth_=leroy_xrslam::sensor_mode_requires_depth(mode);
     async_depth_stage_a1_=declare_parameter<bool>("async_depth_stage_a1",false);
+    experimental_vio_depth_=declare_parameter<bool>("experimental_vio_depth",false);
+    const bool tri_modal=(mode=="rgbd_imu");
+    if(tri_modal != experimental_vio_depth_)
+      throw std::runtime_error(
+        "rgbd_imu requires experimental_vio_depth=true; all other modes require false");
+    if(experimental_vio_depth_ &&
+       (!async_depth_stage_a1_ || experimental_metric_preview_ ||
+        pose_validated_ || enable_map_tf_))
+      throw std::runtime_error(
+        "Experimental VIO depth requires asynchronous depth, no preview and zero navigation authority");
     if(experimental_metric_preview_ && !async_depth_stage_a1_)
       throw std::runtime_error(
         "Experimental metric preview requires Stage A1 asynchronous RGB-D");
-    if(async_depth_stage_a1_ && (!use_depth_ || use_imu_ ||
+    if(async_depth_stage_a1_ && (!use_depth_ ||
+       (use_imu_ && !experimental_vio_depth_) ||
        pose_validated_ || enable_map_tf_))
       throw std::runtime_error(
-        "Stage A1 requires RGB-D without IMU, metric pose authority or map TF");
+        "Asynchronous depth requires experimental guarded mode and no pose authority");
     // The native experimental mode is activated only for this process,
     // before XRSLAMCreate. Never enable it in conventional RGB-D mode.
-    if(async_depth_stage_a1_)
+    if(experimental_vio_depth_) {
+      setenv("XRSLAM_EXPERIMENTAL_VIO_DEPTH","1",1);
+      unsetenv("XRSLAM_ASYNC_DEPTH_STAGE_A1");
+    } else if(async_depth_stage_a1_) {
       setenv("XRSLAM_ASYNC_DEPTH_STAGE_A1","1",1);
+      unsetenv("XRSLAM_EXPERIMENTAL_VIO_DEPTH");
+    } else {
+      unsetenv("XRSLAM_EXPERIMENTAL_VIO_DEPTH");
+      unsetenv("XRSLAM_ASYNC_DEPTH_STAGE_A1");
+    }
     if(use_imu_ && !is_finite_value(offset_))
       throw std::runtime_error(
         "monocular_imu requires a measured camera_imu_offset_sec");
@@ -469,7 +488,8 @@ private:
     XRSLAMAsyncDepthStats native{};
     const bool native_ok = initialized_ && async_depth_stage_a1_ &&
       XRSLAMGetAsyncDepthStats(&native)!=0;
-    out.data="stage_a1_visual_only="+std::to_string(async_depth_stage_a1_?1:0)+
+    out.data="stage_a1_visual_only="+std::to_string(async_depth_stage_a1_ && !experimental_vio_depth_?1:0)+
+      " experimental_vio_depth="+std::to_string(experimental_vio_depth_?1:0)+
       " depth_received="+std::to_string(depth_received_)+
       " native_depth_received="+std::to_string(native_ok?native.received:0)+
       " depth_frames_associated="+std::to_string(native_ok?native.associated:0)+
@@ -514,7 +534,7 @@ private:
       " latest_depth_median_m="+std::to_string(native_ok?native.latest_depth_median_m:0.0)+
       " latest_ratio_median="+std::to_string(native_ok?native.latest_ratio_median:0.0)+
       " latest_ratio_mad="+std::to_string(native_ok?native.latest_ratio_mad:0.0)+
-      " depth_constraints_added="+std::to_string(native_ok?native.constraints_added:0)+
+      " depth_constraints_added="+std::to_string(native_ok && !experimental_vio_depth_?native.constraints_added:0)+
       " native_pending="+std::to_string(native_ok?native.pending:0)+
       " paired="+std::to_string(depth_pairs_)+
       " dropped_rgb="+std::to_string(depth_dropped_rgb_)+
@@ -1259,7 +1279,8 @@ private:
   std::string last_status_,last_landmark_status_;
   bool last_valid_=false,initialized_=false,failed_=false,pose_validated_=false;
   bool enable_map_tf_=false,map_valid_=false,use_imu_=true,use_depth_=false;
-  bool async_depth_stage_a1_=false;
+  bool async_depth_stage_a1_=false; 
+  bool experimental_vio_depth_=false;
   std::uint64_t prior_map_epoch_=0;
   double offset_=0,max_jump_=1,max_angular_jump_=1;
   double last_imu_time_=-1,last_image_time_=-1,last_pose_time_=-1;
