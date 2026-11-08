@@ -81,10 +81,24 @@ def _launch_xrslam(context, *args, **kwargs):
     )]
 
 
+
+def _validate_depth_backend(context, *args, **kwargs):
+    """Never run competing CPU depth backends in the normal bringup."""
+    vda = LaunchConfiguration('use_vda').perform(context).strip().lower()
+    depthart = LaunchConfiguration('use_depthart').perform(context).strip().lower()
+    if vda not in ('true', 'false') or depthart not in ('true', 'false'):
+        raise RuntimeError('use_vda and use_depthart must be true or false')
+    if vda == 'true' and depthart == 'true':
+        raise RuntimeError('Only one depth backend may run: disable VDA or DepthART')
+    return []
+
+
 def generate_launch_description():
     use_camera = LaunchConfiguration('use_camera')
     use_depthart = LaunchConfiguration('use_depthart')
+    use_vda = LaunchConfiguration('use_vda')
     use_xrslam = LaunchConfiguration('use_xrslam')
+    use_mcu_bridge = LaunchConfiguration('use_mcu_bridge')
 
     video_device = LaunchConfiguration('video_device')
     camera_name = LaunchConfiguration('camera_name')
@@ -106,6 +120,8 @@ def generate_launch_description():
         )
     )
 
+    # In the deployed split-container setup the STM32 serial owner is leroy-imu.
+    # The viz container must never start a second MCU bridge by default.
     bridge = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -113,7 +129,8 @@ def generate_launch_description():
                 'launch',
                 'leroy_mcu.launch.py',
             ])
-        )
+        ),
+        condition=IfCondition(use_mcu_bridge),
     )
 
     camera = Node(
@@ -123,6 +140,8 @@ def generate_launch_description():
         name='usb_cam',
         output='screen',
         condition=IfCondition(use_camera),
+        respawn=True,
+        respawn_delay=3.0,
         parameters=[{
             'video_device': video_device,
             'image_width': image_width,
@@ -143,6 +162,8 @@ def generate_launch_description():
         namespace='',
         output='screen',
         condition=IfCondition(use_camera),
+        respawn=True,
+        respawn_delay=3.0,
         composable_node_descriptions=[
             ComposableNode(
                 package='image_proc',
@@ -157,8 +178,9 @@ def generate_launch_description():
         ],
     )
 
-    # DepthART stays independent: no depth data is fed into localization or
-    # safety-critical collision avoidance by this launch.
+    # DepthART is legacy comparison-only; Metric Video Depth Anything Small
+    # is the selected experimental depth backend. Neither is authorized
+    # for safety-critical collision avoidance or native VIO constraints.
     depthart = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -168,6 +190,17 @@ def generate_launch_description():
             ])
         ),
         condition=IfCondition(use_depthart),
+    )
+
+    vda = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('leroy_perception'),
+                'launch',
+                'metric_video_depth.launch.py',
+            ])
+        ),
+        condition=IfCondition(use_vda),
     )
 
     return LaunchDescription([
@@ -184,7 +217,10 @@ def generate_launch_description():
         DeclareLaunchArgument('io_method', default_value='mmap'),
         DeclareLaunchArgument('pixel_format', default_value='mjpeg2rgb'),
         DeclareLaunchArgument('use_camera', default_value='true'),
-        DeclareLaunchArgument('use_depthart', default_value='true'),
+        # Explicit opt-in only: leroy-imu owns /dev/ttyACM0 in normal deployments.
+        DeclareLaunchArgument('use_mcu_bridge', default_value='false'),
+        DeclareLaunchArgument('use_depthart', default_value='false'),
+        DeclareLaunchArgument('use_vda', default_value='true'),
         DeclareLaunchArgument('use_xrslam', default_value='false'),
         # No guesswork: find actual rectified topic + matching CameraInfo.
         DeclareLaunchArgument('xrslam_image_topic', default_value=''),
@@ -198,6 +234,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'xrslam_pose_convention_validated', default_value='false',
         ),
+        OpaqueFunction(function=_validate_depth_backend),
         Node(package='leroy_bringup', executable='readiness_node',
              name='leroy_readiness', output='screen'),
         Node(package='leroy_sensors', executable='leroy_sensors_health', name='leroy_sensors_health', output='screen'),
@@ -209,5 +246,6 @@ def generate_launch_description():
         camera,
         image_proc_container,
         depthart,
+        vda,
         OpaqueFunction(function=_launch_xrslam, condition=IfCondition(use_xrslam)),
     ])

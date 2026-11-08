@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Offline fixed-TF rotation check; parallax-aware interpretation, no calibration.
+
+Compares signed frame-to-frame homography angular rates with gyroscope rates
+transformed by the EXISTING static TF. No TF publication or calibration writes.
+For manual motion, translations and parallax can bias homography rotations.
+The dominant IMU rotational mode is not labeled robot yaw without base_link TF.
+"""
+import argparse
+import json
+import math
+import os
+import runpy
+import sys
+
+import numpy as np
+
+axis = runpy.run_path(os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), "camera_imu_axis_diagnostics"))
+read_bag = axis["read_bag"]
+rotations = axis["rotations"]
+samples_for_shift = axis["samples_for_shift"]
+fit_rotation = axis["fit_rotation"]
+metrics = axis["metrics"]
+
+
+def as_matrix(values):
+    m = np.asarray(values, dtype=np.float64).reshape(3, 3)
+    if not np.isfinite(m).all():
+        raise ValueError("TF matrix has non-finite values")
+    u, s, vt = np.linalg.svd(m)
+    if np.linalg.det(u @ vt) < 0:
+        raise ValueError("TF matrix is a reflection; check frame direction")
+    orthogonal = u @ vt
+    if np.linalg.norm(orthogonal - m) > 0.01:
+        raise ValueError("TF matrix is not close enough to an SO(3) rotation")
+    return orthogonal
+
+
+def details(obs, imu, r):
+    values = metrics(obs, imu, r)
+    predicted = imu @ r.T
+    magnitude = np.linalg.norm(predicted, axis=1)
+    measured = np.linalg.norm(obs, axis=1)
+    moving = magnitude > 0.12
+    values["pairs"] = int(len(obs))
+    values["median_imu_rate_rad_s"] = round(float(np.median(magnitude)), 4)
+    values["median_camera_rate_rad_s"] = round(float(np.median(measured)), 4)
+    if moving.sum() >= 10:
+        # A gain far from 1 can indicate visual parallax or timestamp mismatch.
+        gain = float(np.sum(obs[moving] * predicted[moving])
+                     / np.sum(predicted[moving]**2))
+        values["signed_angular_rate_gain"] = round(gain, 4)
+        errors = np.linalg.norm(obs[moving] - predicted[moving], axis=1)
+        values["median_vector_residual_rad_s"] = round(float(np.median(errors)), 4)
+    return values
+
+
+def angular_difference(a, b):
+    diff = a @ b.T
+    return round(math.degrees(math.acos(float(np.clip(
+        (np.trace(diff) - 1) / 2, -1, 1)))), 3)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("bag")
+    parser.add_argument("--tf-camera-to-imu", required=True, nargs=9, type=float,
+                        metavar="R", help="Nine row-major entries printed by tf2_echo imu_link camera_optical_frame")
+    parser.add_argument("--shift-sec", default=0.0, type=float,
+                        help="Fixed IMU timestamp shift, NOT optimized (default: 0)")
+    args = parser.parse_args()
+    if not -0.15 <= args.shift_sec <= 0.15:
+        parser.error("fixed shift must lie within +/-0.15 s")
+    # tf2_echo imu_link camera_optical_frame maps camera vectors into imu_link.
+    camera_to_imu = as_matrix(args.tf_camera_to_imu)
+    imu_to_camera = camera_to_imu.T
+
+    images, k, ti, gy = read_bag(args.bag)
+    visual, rejected = rotations(images, k)
+    report = {
+        "purpose": "read-only fixed-TF consistency; NOT an extrinsic calibration",
+        "tf_direction_input": "imu_link <- camera_optical_frame (tf2_echo)",
+        "comparison_direction": "camera_optical_frame <- imu_link",
+        "fixed_shift_sec": args.shift_sec,
+        "image_count": len(images), "imu_count": len(ti),
+        "visual_pairs": int(len(visual)), "visual_rejections": rejected,
+        "decision": "INSUFFICIENT_EVIDENCE",
+        "limitations": [
+            "Manual rotation can include translation; homographies can mistake parallax for rotation",
+            "Scene geometry and distance are unknown; residual is not pure extrinsic error",
+            "Dominant IMU motion is not necessarily robot yaw without the base_link transform",
+            "No calibration of camera exposure timing, IMU bias/noise or extrinsic translation",
+            "Do not change TF, XRSLAM, navigation, or motor permissions based on this diagnostic"
+        ]
+    }
+    match = samples_for_shift(visual, ti, gy, args.shift_sec)
+    if match is None:
+        report["status"] = "TOO_FEW_ACTIVE_PAIRS"
+    else:
+        obs, imu, stamps = match
+        cut = float(np.median(stamps))
+        early = stamps < cut
+        late = ~early
+        if min(early.sum(), late.sum()) < 25:
+            report["status"] = "TOO_FEW_PAIRS_PER_HALF"
+        else:
+            trained = fit_rotation(obs[early], imu[early])
+            # Dominant IMU rotational axis is the first right singular vector.
+            centered = imu[early] - imu[early].mean(axis=0)
+            _, singular, vt = np.linalg.svd(centered, full_matrices=False)
+            principal = vt[0]
+            # Sign-invariant mismatch of the dominant axis under the two transforms.
+            tf_axis = imu_to_camera @ principal
+            fitted_axis = trained @ principal
+            axis_angle = math.degrees(math.acos(float(np.clip(
+                np.dot(tf_axis, fitted_axis), -1, 1))))
+            report.update({
+                "fixed_tf_camera_from_imu": np.round(imu_to_camera, 5).tolist(),
+                "fitted_training_camera_from_imu": np.round(trained, 5).tolist(),
+                "rotation_disagreement_degrees": angular_difference(
+                    imu_to_camera, trained),
+                "dominant_imu_motion_axis": np.round(principal, 5).tolist(),
+                "dominant_mode_axis_disagreement_degrees": round(axis_angle, 3),
+                "excitation_singular_values": np.round(singular, 5).tolist(),
+                "excitation_min_max_ratio": round(
+                    float(singular[-1] / singular[0]), 4) if singular[0] else 0,
+                "fixed_tf": {
+                    "early": details(obs[early], imu[early], imu_to_camera),
+                    "late": details(obs[late], imu[late], imu_to_camera),
+                    "all": details(obs, imu, imu_to_camera)},
+                "training_fitted_tf": {
+                    "early": details(obs[early], imu[early], trained),
+                    "late": details(obs[late], imu[late], trained)},
+                "status": "COMPARISON_AVAILABLE_NOT_CALIBRATED"})
+    print(json.dumps(report, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, RuntimeError, OSError, np.linalg.LinAlgError) as e:
+        print("Fixed TF diagnostic failed:", e, file=sys.stderr)
+        sys.exit(2)

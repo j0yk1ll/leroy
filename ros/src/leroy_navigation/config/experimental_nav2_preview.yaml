@@ -1,0 +1,13 @@
+/**:
+  ros__parameters:
+    input_cloud_topic: /xrslam/experimental_scene/voxel_map
+    metric_status_topic: /xrslam/experimental_scene/voxel_map_status
+    output_grid_topic: /xrslam/experimental_navigation/occupancy_preview
+    status_topic: /xrslam/experimental_navigation/preview_status
+    experimental_frame: xrslam_experimental_metric_world
+    resolution_m: 0.10
+    max_cells_per_axis: 400
+    # Provisional world-frame height slab, NOT a calibrated ground datum.
+    min_world_z_m: 0.08
+    max_world_z_m: 1.20
+    max_cloud_age_s: 5.0

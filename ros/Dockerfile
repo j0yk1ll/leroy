@@ -23,10 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-usb-cam \
     ros-jazzy-image-proc \
     ros-jazzy-rqt-image-view \
+    ros-jazzy-rviz2 \
     ros-jazzy-image-transport-plugins \
     ros-jazzy-rclcpp-components \
     ros-jazzy-cv-bridge \
     ros-jazzy-ament-cmake-python \
+    ros-jazzy-navigation2 \
+    ros-jazzy-nav2-bringup \
     ros-jazzy-nav2-costmap-2d \
     ros-jazzy-nav2-util \
     ros-jazzy-rclcpp-lifecycle \
@@ -145,6 +148,7 @@ RUN mkdir -p /leroy_ws/src
 #       └── leroy_localization/
 #
 COPY src/leroy_safety /leroy_ws/src/leroy_safety
+COPY src/leroy_navigation /leroy_ws/src/leroy_navigation
 COPY src/leroy_mcu /leroy_ws/src/leroy_mcu
 COPY src/leroy_bringup /leroy_ws/src/leroy_bringup
 COPY src/leroy_sensors /leroy_ws/src/leroy_sensors
@@ -226,4 +230,4 @@ RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc \
 COPY src/leroy_bringup/scripts/container_entrypoint.sh /usr/local/bin/leroy-entrypoint
 RUN chmod +x /usr/local/bin/leroy-entrypoint
 
-CMD ["/usr/local/bin/leroy-entrypoint"]
+# Normal container start always runs the ROS bringup as PID 1.\n# Recreate pre-existing containers to pick up this image configuration.\nENTRYPOINT ["/usr/local/bin/leroy-entrypoint"]\nCMD []

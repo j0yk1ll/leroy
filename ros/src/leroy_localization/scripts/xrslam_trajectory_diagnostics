@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""Read-only trajectory consistency summary for isolated XRSLAM replay.
+
+Inputs: status bag containing XRSLAM visual_pose, IMU and tracking_status.
+Compare body-frame relative pose rotations with integrated IMU angular rates.
+No absolute frame or metric scale is inferred from the pose.
+"""
+import argparse
+import json
+import math
+import sys
+
+import numpy as np
+from geometry_msgs.msg import PoseStamped
+from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
+from rclpy.serialization import deserialize_message
+from sensor_msgs.msg import Imu
+from std_msgs.msg import String, Bool
+
+
+def quat_multiply(a, b):
+    x1, y1, z1, w1 = a
+    x2, y2, z2, w2 = b
+    return np.array([
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+    ])
+
+
+def delta_rotvec(a, b):
+    # Relative body rotation assuming pose quaternion is world_from_body.
+    relative = quat_multiply(a * np.array([-1., -1., -1., 1.]), b)
+    if relative[3] < 0:
+        relative *= -1
+    vector = relative[:3]
+    norm = np.linalg.norm(vector)
+    if norm < 1e-12:
+        return np.zeros(3)
+    return vector / norm * (2 * math.atan2(norm, relative[3]))
+
+
+def integrate(t, w, query):
+    integrated = np.zeros_like(w)
+    integrated[1:] = np.cumsum(
+        0.5 * (w[1:] + w[:-1]) * np.diff(t)[:, None], axis=0)
+    idx = np.clip(np.searchsorted(t, query, side="right") - 1,
+                  0, len(t)-2)
+    dt = query - t[idx]
+    slope = (w[idx+1] - w[idx]) / (t[idx+1] - t[idx])[:, None]
+    return integrated[idx] + w[idx]*dt[:, None] + 0.5*slope*dt[:, None]**2
+
+
+def scalar(value):
+    return round(float(value), 6)
+
+
+def read(uri):
+    reader = SequentialReader()
+    reader.open(StorageOptions(uri=uri, storage_id="mcap"),
+                ConverterOptions(input_serialization_format="cdr",
+                                 output_serialization_format="cdr"))
+    poses, imu, statuses, validity = [], [], [], []
+    while reader.has_next():
+        topic, raw, received = reader.read_next()
+        if topic == "/xrslam/visual_pose":
+            msg = deserialize_message(raw, PoseStamped)
+            p, q = msg.pose.position, msg.pose.orientation
+            timestamp = msg.header.stamp.sec + msg.header.stamp.nanosec*1e-9
+            poses.append((timestamp, msg.header.frame_id,
+                          np.array([p.x, p.y, p.z], dtype=float),
+                          np.array([q.x, q.y, q.z, q.w], dtype=float)))
+        elif topic == "/imu/data_raw":
+            msg = deserialize_message(raw, Imu)
+            timestamp = msg.header.stamp.sec + msg.header.stamp.nanosec*1e-9
+            w = msg.angular_velocity
+            imu.append((timestamp, msg.header.frame_id,
+                        np.array([w.x, w.y, w.z], dtype=float)))
+        elif topic == "/xrslam/tracking_status":
+            msg = deserialize_message(raw, String)
+            statuses.append([round(received*1e-9, 3), msg.data])
+        elif topic == "/xrslam/localization_valid":
+            msg = deserialize_message(raw, Bool)
+            validity.append(bool(msg.data))
+    return poses, imu, statuses, validity
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("bag", help="Path to the isolated replay result status_bag")
+    parser.add_argument("--max-pose-gap-sec", type=float, default=0.25)
+    args = parser.parse_args()
+    if not 0.05 <= args.max_pose_gap_sec <= 2.0:
+        parser.error("Pose gap threshold must be 0.05..2 seconds")
+    poses, imu, statuses, validity = read(args.bag)
+    result = {
+        "decision": "INSUFFICIENT_EVIDENCE_FOR_METRIC_ODOMETRY",
+        "purpose": "read-only relative pose/gyro consistency",
+        "visual_pose_count": len(poses),
+        "imu_count": len(imu),
+        "tracking_status_events": statuses,
+        "localization_valid_true_seen": any(validity),
+        "limitations": [
+            "Visual poses are session-local; their metric scale is NOT verified",
+            "Pose quaternion frame convention is not independently verified",
+            "IMU rate comparison assumes imu_link axes equal base_link axes (as in provisional Leroy TF)",
+            "No independently measured ground-truth displacement or loop closure was provided",
+            "Temporal offset zero is provisional; translation and yaw-only motion can limit observability",
+            "Do not enable /odom, navigation TF, map authority, or motors from this analysis"
+        ],
+    }
+    if len(poses) < 3:
+        result["status"] = "TOO_FEW_VISUAL_POSES"
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
+
+    poses.sort(key=lambda x: x[0])
+    pt = np.array([p[0] for p in poses])
+    xyz = np.array([p[2] for p in poses])
+    q = np.array([p[3] for p in poses])
+    norms = np.linalg.norm(q, axis=1)
+    valid = (np.isfinite(xyz).all(axis=1) &
+             np.isfinite(q).all(axis=1) &
+             np.isfinite(pt) & (pt > 0) &
+             (norms > 0.99) & (norms < 1.01))
+    if not valid.all() or any(p[1] != "xrslam_visual_world" for p in poses):
+        result["status"] = "INVALID_VISUAL_POSE_OR_FRAME"
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
+    q = q / norms[:, None]
+    dt = np.diff(pt)
+    if np.any(dt <= 0):
+        result["status"] = "NONINCREASING_POSE_TIMESTAMPS"
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
+    translation = np.diff(xyz, axis=0)
+    step = np.linalg.norm(translation, axis=1)
+    duration = pt[-1] - pt[0]
+    result["visual_pose_summary"] = {
+        "first_header_sec": scalar(pt[0]),
+        "last_header_sec": scalar(pt[-1]),
+        "span_sec": scalar(duration),
+        "median_interval_sec": scalar(np.median(dt)),
+        "max_interval_sec": scalar(dt.max()),
+        "gaps_over_threshold": int(np.count_nonzero(dt > args.max_pose_gap_sec)),
+        "path_length_visual_units": scalar(step.sum()),
+        "start_end_displacement_visual_units": scalar(np.linalg.norm(xyz[-1]-xyz[0])),
+        "max_step_visual_units": scalar(step.max()),
+        "p95_step_visual_units": scalar(np.percentile(step, 95)),
+        "vertical_excursion_visual_units": scalar(np.ptp(xyz[:, 2])),
+        "zero_or_near_zero_step_count": int(np.count_nonzero(step < 1e-9)),
+    }
+    if len(imu) < 3:
+        result["status"] = "TOO_FEW_RECORDED_IMU_SAMPLES"
+    else:
+        imu.sort(key=lambda x: x[0])
+        ti = np.array([x[0] for x in imu])
+        wi = np.array([x[2] for x in imu])
+        if (any(x[1] != "imu_link" for x in imu) or
+                not np.isfinite(wi).all() or not np.isfinite(ti).all() or
+                np.any(np.diff(ti) <= 0)):
+            result["status"] = "INVALID_IMU_OR_TIMESTAMPS"
+        else:
+            rot = np.array([delta_rotvec(q[i], q[i+1])
+                            for i in range(len(q)-1)])
+            keep = ((pt[:-1] >= ti[0]) & (pt[1:] <= ti[-1]) &
+                    (dt <= args.max_pose_gap_sec))
+            result["matched_pose_interval_count"] = int(keep.sum())
+            if keep.sum() < 20:
+                result["status"] = "TOO_FEW_MATCHED_ROTATION_INTERVALS"
+            else:
+                delta_imu = (integrate(ti, wi, pt[1:][keep]) -
+                             integrate(ti, wi, pt[:-1][keep]))
+                delta_pose = rot[keep]
+                # Direct and inverse orientation hypotheses. Do not silently
+                # select a convention; compare both and retain uncertainty.
+                comparisons = {}
+                for sign, name in [(1., "world_from_body_assumption"),
+                                   (-1., "inverse_sign_control")]:
+                    errors = delta_pose*sign - delta_imu
+                    a, b = delta_pose[:, 2]*sign, delta_imu[:, 2]
+                    corr = None
+                    if np.std(a) > 1e-8 and np.std(b) > 1e-8:
+                        corr = scalar(np.corrcoef(a, b)[0, 1])
+                    comparisons[name] = {
+                        "yaw_increment_correlation": corr,
+                        "rms_yaw_increment_residual_rad":
+                            scalar(np.sqrt(np.mean((a-b)**2))),
+                        "rms_3d_increment_residual_rad":
+                            scalar(np.sqrt(np.mean(np.sum(errors**2, axis=1)))),
+                        "integrated_imu_z_angle_rad": scalar(b.sum()),
+                        "integrated_pose_z_angle_rad": scalar(a.sum()),
+                    }
+                result["rotation_vs_imu"] = comparisons
+                result["status"] = "RELATIVE_TRAJECTORY_COMPARISON_AVAILABLE"
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, ValueError, OSError, np.linalg.LinAlgError) as exc:
+        print("Trajectory diagnostic failed:", exc, file=sys.stderr)
+        sys.exit(2)

@@ -5,10 +5,14 @@
 
 namespace leroy_xrslam {
 
-// The ROS adapter intentionally supports just these two XRSLAM modes. Do not
-// silently accept RGB-D configurations for which no depth subscriber exists.
+// RGB-D is admitted only with the explicit depth subscriber and exact-stamp pairing.
+// RGB-D plus IMU is not supported yet.
 inline bool supported_sensor_mode(std::string_view mode) {
-  return mode == "monocular" || mode == "monocular_imu";
+  return mode == "monocular" || mode == "monocular_imu" || mode == "rgbd";
+}
+
+inline bool sensor_mode_requires_depth(std::string_view mode) {
+  return mode == "rgbd";
 }
 
 inline bool sensor_mode_requires_imu(std::string_view mode) {
