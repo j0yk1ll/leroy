@@ -17,7 +17,7 @@ class CommandRejected(ValueError):
 
 ZERO_WHEELS = "set_wheels 0 0 0 0"
 _ALLOWED_STREAM_RATES = frozenset((0, 10, 20, 50, 100))
-_SETTING = re.compile(r"(?P<name>set_watchdog_ms|set_imu_stream_hz|set_encoder_stream_hz) (?P<value>[0-9]+)\Z")
+_SETTING = re.compile(r"(?P<name>set_watchdog_ms|set_imu_stream_hz|set_encoder_stream_hz|set_tof_stream_hz) (?P<value>[0-9]+)\Z")
 
 
 def command_to_bytes(command):
@@ -44,6 +44,9 @@ def command_to_bytes(command):
     if name == "set_watchdog_ms":
         if not 1 <= value <= 60000:
             raise CommandRejected("watchdog must remain enabled")
+    elif name == "set_tof_stream_hz":
+        if value not in (0, 5):
+            raise CommandRejected("invalid ToF stream rate")
     elif value not in _ALLOWED_STREAM_RATES:
         raise CommandRejected("invalid sensor stream rate")
     return (command + "\n").encode("ascii")
