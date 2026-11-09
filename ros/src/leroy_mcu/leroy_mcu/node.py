@@ -28,7 +28,7 @@ from rclpy.qos import (
     DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy,
 )
 from nav_msgs.msg import Odometry, OccupancyGrid
-from sensor_msgs.msg import Imu, Image
+from sensor_msgs.msg import Imu, Image, Range
 from std_msgs.msg import String, Bool
 from tf2_ros import TransformBroadcaster
 from tf2_msgs.msg import TFMessage
@@ -92,6 +92,8 @@ class LeroyBridgeNode(Node):
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('imu_stream_hz', 100)
         self.declare_parameter('encoder_stream_hz', 50)
+        self.declare_parameter('tof_stream_hz', 0)  # opt-in, 5Hz only
+        self.declare_parameter('tof_frame_id', 'vl53l1x_link')
         self.declare_parameter('watchdog_ms', 500,
                                descriptor=ParameterDescriptor(read_only=True))
         self.declare_parameter('keepalive_period_s', 0.10,
@@ -145,6 +147,8 @@ class LeroyBridgeNode(Node):
         self._baudrate = int(self.get_parameter('baudrate').value)
         self._imu_stream_hz = int(self.get_parameter('imu_stream_hz').value)
         self._encoder_stream_hz = int(self.get_parameter('encoder_stream_hz').value)
+        self._tof_stream_hz = int(self.get_parameter('tof_stream_hz').value)
+        self._tof_frame_id = str(self.get_parameter('tof_frame_id').value)
         self._watchdog_ms = int(self.get_parameter('watchdog_ms').value)
         self._keepalive_period_s = float(self.get_parameter('keepalive_period_s').value)
         self._cmd_vel_timeout_s = float(self.get_parameter('cmd_vel_timeout_s').value)
@@ -181,6 +185,10 @@ class LeroyBridgeNode(Node):
         )
 
         self._imu_pub = self.create_publisher(Imu, '/imu/data_raw', sensor_qos)
+        self._tof_pub = (self.create_publisher(Range, '/tof/range', sensor_qos)
+                         if self._tof_stream_hz == 5 else None)
+        self._tof_status_pub = (self.create_publisher(String, '/tof/status', sensor_qos)
+                                if self._tof_stream_hz == 5 else None)
         self._encoder_pub = self.create_publisher(
             EncoderCounts, '/wheel/encoder_counts', sensor_qos
         )
@@ -217,6 +225,7 @@ class LeroyBridgeNode(Node):
         self._motor_watchdog_ack = threading.Event()
         # Validate optional signer custody BEFORE opening real MCU CDC.
         self._configure_signed_motor_ingress()
+        self._last_tof_seq: Optional[int] = None
         self._last_imu_seq: Optional[int] = None
         self._last_encoder_seq: Optional[int] = None
 
@@ -256,6 +265,8 @@ class LeroyBridgeNode(Node):
             self._motor_authority.stop()
         self._send_command(f'set_imu_stream_hz {self._imu_stream_hz}')
         self._send_command(f'set_encoder_stream_hz {self._encoder_stream_hz}')
+        if self._tof_stream_hz == 5:
+            self._send_command('set_tof_stream_hz 5')
 
         self._keepalive_timer = self.create_timer(
             self._keepalive_period_s, self._send_keepalive
@@ -513,6 +524,10 @@ class LeroyBridgeNode(Node):
         allowed_stream_hz = {0, 10, 20, 50, 100}
         if self._imu_stream_hz not in allowed_stream_hz:
             raise ValueError('imu_stream_hz must be one of 0, 10, 20, 50, 100')
+        if self._tof_stream_hz not in (0, 5):
+            raise ValueError('tof_stream_hz must be 0 or 5')
+        if not self._tof_frame_id:
+            raise ValueError('tof_frame_id required')
         if self._encoder_stream_hz not in allowed_stream_hz:
             raise ValueError('encoder_stream_hz must be one of 0, 10, 20, 50, 100')
         if self._watchdog_ms < 1 or self._watchdog_ms > 60000:
@@ -751,6 +766,9 @@ class LeroyBridgeNode(Node):
             # MCU accepted the timeout; this is NOT a stop acknowledgement.
             self._motor_watchdog_ack.set()
             return
+        if line.startswith('telemetry tof '):
+            self._publish_tof(self._fields(line))
+            return
         if line.startswith('telemetry imu '):
             self._publish_imu(self._fields(line))
             return
@@ -787,6 +805,35 @@ class LeroyBridgeNode(Node):
                 f'{kind} telemetry sequence gap: expected {expected}, got {sequence} '
                 f'(~{lost} sample(s) skipped)'
             )
+
+    def _publish_tof(self, fields: Dict[str, int]) -> None:
+        """Diagnostic optical-axis range only. Not a certified depth pixel."""
+        if self._tof_pub is None:
+            return
+        required = ('seq', 't_us', 'distance_mm', 'status', 'valid')
+        if any(name not in fields for name in required):
+            raise ValueError('missing ToF telemetry field')
+        seq = fields['seq'] & 0xFFFFFFFF
+        self._check_sequence('ToF', seq, self._last_tof_seq)
+        self._last_tof_seq = seq
+        stamp = self._clock_mapper.stamp(fields['t_us'])
+        distance = fields['distance_mm']
+        raw_status = fields['status']
+        valid = (fields['valid'] == 1 and raw_status == 9
+                 and 40 <= distance <= 1300)
+        msg = Range()
+        msg.header.stamp = stamp
+        msg.header.frame_id = self._tof_frame_id
+        msg.radiation_type = Range.INFRARED
+        # Nominal VL53L1X full-ROI cone, not yet surveyed on Leroy.
+        msg.field_of_view = 0.47
+        msg.min_range = 0.04
+        msg.max_range = 1.30
+        msg.range = distance / 1000.0 if valid else float('nan')
+        self._tof_pub.publish(msg)
+        self._tof_status_pub.publish(String(
+            data=f'seq={seq} status={raw_status} valid={int(valid)} '
+                 f'distance_mm={distance} calibrated=0'))
 
     def _publish_imu(self, fields: Dict[str, int]) -> None:
         required = ('seq', 't_us', 'af_mm_s2', 'al_mm_s2', 'au_mm_s2',
