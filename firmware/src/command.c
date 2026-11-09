@@ -12,6 +12,7 @@
 
 #include "encoders.h"
 #include "imu.h"
+#include "tof.h"
 #include "limits.h"
 #include "manipulator.h"
 #include "platform.h"
@@ -48,6 +49,10 @@ static uint32_t g_imu_stream_next_us;
 static uint32_t g_imu_stream_sequence;
 static uint32_t g_imu_stream_dropped;
 static uint32_t g_imu_stream_errors;
+
+static uint32_t g_tof_stream_hz;
+static uint32_t g_tof_stream_sequence;
+static uint32_t g_tof_stream_dropped;
 
 static uint32_t g_encoder_stream_hz;
 static uint32_t g_encoder_stream_period_us;
@@ -306,6 +311,8 @@ static void print_config(void)
     usb_serial_write_u32(g_watchdog_ms);
     usb_serial_write(" imu_stream_hz=");
     usb_serial_write_u32(g_imu_stream_hz);
+    usb_serial_write(" tof_stream_hz=");
+    usb_serial_write_u32(g_tof_stream_hz);
     usb_serial_write(" encoder_stream_hz=");
     usb_serial_write_u32(g_encoder_stream_hz);
     usb_serial_write("\r\n");
@@ -558,6 +565,8 @@ static void print_help(void)
     usb_serial_write_line("  calibrate_imu_gyro");
     usb_serial_write_line("  set_imu_stream_hz <0|10|20|50|100>");
     usb_serial_write_line("  get_imu_stream");
+    usb_serial_write_line("  set_tof_stream_hz <0|5>");
+    usb_serial_write_line("  get_tof_stream");
     usb_serial_write_line("  set_encoder_stream_hz <0|10|20|50|100>");
     usb_serial_write_line("  get_encoder_stream");
     usb_serial_write_line("  keepalive");
@@ -763,6 +772,29 @@ static void process_command(char *line)
         return;
     }
 
+    if (strings_equal(command, "set_tof_stream_hz")) {
+        if (!parse_u32(argument, &value) || (value != 0U && value != 5U)) {
+            usb_serial_write_line("error set_tof_stream_hz expects 0 or 5");
+        } else if (!tof_set_enabled(value != 0U)) {
+            usb_serial_write_line("error tof_unavailable");
+        } else {
+            g_tof_stream_hz = value;
+            usb_serial_write_line("ok set_tof_stream_hz");
+        }
+        return;
+    }
+    if (strings_equal(command, "get_tof_stream")) {
+        usb_serial_write("tof_stream_hz=");
+        usb_serial_write_u32(g_tof_stream_hz);
+        usb_serial_write(" available=");
+        usb_serial_write(tof_available() ? "1" : "0");
+        usb_serial_write(" seq=");
+        usb_serial_write_u32(g_tof_stream_sequence);
+        usb_serial_write(" dropped=");
+        usb_serial_write_u32(g_tof_stream_dropped);
+        usb_serial_write("\r\n");
+        return;
+    }
     if (strings_equal(command, "set_encoder_stream_hz")) {
         if (!parse_u32(argument, &value) || !valid_stream_hz(value)) {
             usb_serial_write_line("error set_encoder_stream_hz expects 0,10,20,50,100");
@@ -885,6 +917,10 @@ void command_init(void)
     g_imu_stream_dropped = 0U;
     g_imu_stream_errors = 0U;
 
+    g_tof_stream_hz = 0U;
+    g_tof_stream_sequence = 0U;
+    g_tof_stream_dropped = 0U;
+
     g_encoder_stream_hz = 0U;
     g_encoder_stream_period_us = 0U;
     g_encoder_stream_next_us = 0U;
@@ -982,6 +1018,31 @@ static void emit_imu_telemetry(void)
     usb_serial_write("\r\n");
 }
 
+static void emit_tof_telemetry(void)
+{
+    tof_sample_t sample;
+    if (g_tof_stream_hz == 0U || !tof_take_sample(&sample)) {
+        return;
+    }
+    /* Never let diagnostic ToF reports congest safety/IMU CDC traffic. */
+    if (usb_serial_tx_free() < IMU_STREAM_MIN_TX_FREE) {
+        ++g_tof_stream_dropped;
+        return;
+    }
+    const uint32_t sequence = ++g_tof_stream_sequence;
+    usb_serial_write("telemetry tof seq=");
+    usb_serial_write_u32(sequence);
+    usb_serial_write(" t_us=");
+    usb_serial_write_u32(sample.t_us);
+    usb_serial_write(" distance_mm=");
+    usb_serial_write_u32(sample.distance_mm);
+    usb_serial_write(" status=");
+    usb_serial_write_u32(sample.range_status);
+    usb_serial_write(" valid=");
+    usb_serial_write(sample.valid ? "1" : "0");
+    usb_serial_write("\r\n");
+}
+
 static void emit_encoder_telemetry(void)
 {
     if (g_encoder_stream_hz == 0U) {
@@ -1027,4 +1088,5 @@ void command_emit_telemetry(void)
 {
     emit_imu_telemetry();
     emit_encoder_telemetry();
+    emit_tof_telemetry();
 }
