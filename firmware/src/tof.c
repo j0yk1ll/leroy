@@ -100,8 +100,10 @@ static bool ready(bool *yes)
     if (!rd(READY_GPIO, &value)) {
         return false;
     }
-    /* Default GPIO polarity is active-low: 0 means data ready. */
-    *yes = (value & 1U) == 0U;
+    /* The installed ULD default_config writes 0x01 to GPIO_HV_MUX__CTRL
+     * (0x0030): bit 4 clear => active-HIGH data-ready. ST's ULD compares
+     * GPIO__TIO_HV_STATUS bit 0 with that selected polarity. */
+    *yes = (value & 1U) != 0U;
     return true;
 }
 
