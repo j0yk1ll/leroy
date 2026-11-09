@@ -36,7 +36,7 @@ class TofMetricDepth(Node):
         # Invalid by default: forces the user to supply a measured rotation.
         self.declare_parameter("tof_rotation_in_camera_xyzw", [0.0, 0.0, 0.0, 0.0])
         self.declare_parameter("max_stamp_difference_ms", 60.0)
-        self.declare_parameter("roi_radius_px", 20)
+        self.declare_parameter("roi_radius_px", 160)
         self.declare_parameter("max_relative_roi_spread", 0.20)
         p = lambda name: self.get_parameter(name).value
         self.ready = all(bool(p(flag)) for flag in (
@@ -49,7 +49,7 @@ class TofMetricDepth(Node):
         self.spread = float(p("max_relative_roi_spread"))
         self.tof_frame = str(p("tof_frame_id"))
         if (self.max_ns <= 0 or self.max_ns > 100_000_000 or
-                not 4 <= self.radius <= 100 or not 0.05 <= self.spread <= 0.5 or
+                not 4 <= self.radius <= 220 or not 0.05 <= self.spread <= 0.5 or
                 len(self.origin) != 3 or len(self.rotation) != 4):
             raise ValueError("unsafe depth scale configuration")
         self.bridge = CvBridge()
