@@ -10,10 +10,10 @@ CFLAGS := $(CPU) -std=gnu11 -Os -g3 -ffunction-sections -fdata-sections \
 LDLIBS := /usr/arm-none-eabi/lib/libopencm3_stm32f4.a -Wl,--start-group -lc -lgcc -lnosys -Wl,--end-group
 LDFLAGS := $(CPU) -nostartfiles -T../stm32f401cc.ld -Wl,--gc-sections -Wl,-Map=build/i2c_gpio_diag.map --specs=nano.specs --specs=nosys.specs
 
-.PHONY: build check-deps
-.DEFAULT_GOAL := build
+.PHONY: all check-deps
+.DEFAULT_GOAL := all
 
-build: check-deps build/i2c_gpio_diag.bin
+all: check-deps build/i2c_gpio_diag.bin
 	@$(SIZE) build/i2c_gpio_diag.elf
 
 check-deps:
@@ -21,13 +21,14 @@ check-deps:
 	@command -v $(OBJCOPY) >/dev/null
 	@test -f /usr/arm-none-eabi/lib/libopencm3_stm32f4.a
 
-build:
+build/.dir:
 	@mkdir -p build
+	@touch $@
 
-build/diag_main.o: i2c_gpio_main.c | build
+build/diag_main.o: i2c_gpio_main.c | build/.dir
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/usb_serial.o: ../src/usb_serial.c | build
+build/usb_serial.o: ../src/usb_serial.c | build/.dir
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 build/i2c_gpio_diag.elf: build/diag_main.o build/usb_serial.o ../stm32f401cc.ld
