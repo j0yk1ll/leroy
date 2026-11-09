@@ -78,7 +78,10 @@ static void delay_ms(uint32_t delay)
 static void i2c_configure_peripheral(void)
 {
     i2c_peripheral_disable(I2C1);
-    i2c_set_speed(I2C1, i2c_speed_fm_400k, 42U);
+    /* Step 129: both ICM-20948 and VL53L1X identity reads verified
+     * on shared PB8/PB9 at 100 kHz, not yet at 400 kHz. Keep startup
+     * recovery and all actuator controls unchanged for commissioning. */
+    i2c_set_speed(I2C1, i2c_speed_sm_100k, 42U);
     i2c_enable_ack(I2C1);
     i2c_peripheral_enable(I2C1);
 }
