@@ -25,6 +25,10 @@ def generate_launch_description():
         DeclareLaunchArgument("imu_cov_a_diagonal"),
         DeclareLaunchArgument("imu_cov_bg_diagonal"),
         DeclareLaunchArgument("imu_cov_ba_diagonal"),
+        # Existing metric VDA remains default; experimental ToF-anchored relative
+        # depth requires explicitly changing the topic in offline commissioning.
+        DeclareLaunchArgument("depth_topic",
+                              default_value="/video_depth_anything/depth"),
         Node(
             package="leroy_localization",
             executable="leroy_xrslam_node",
@@ -43,7 +47,7 @@ def generate_launch_description():
                 "imu_cov_a_diagonal": ParameterValue(LaunchConfiguration("imu_cov_a_diagonal"), value_type=float),
                 "imu_cov_bg_diagonal": ParameterValue(LaunchConfiguration("imu_cov_bg_diagonal"), value_type=float),
                 "imu_cov_ba_diagonal": ParameterValue(LaunchConfiguration("imu_cov_ba_diagonal"), value_type=float),
-                "depth_topic": "/video_depth_anything/depth",
+                "depth_topic": LaunchConfiguration("depth_topic"),
                 "async_depth_stage_a1": True,
                 "experimental_vio_depth": True,
                 "experimental_metric_preview": False,
