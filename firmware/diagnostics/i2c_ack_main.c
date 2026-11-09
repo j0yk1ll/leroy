@@ -1,9 +1,9 @@
 /* TEMPORARY DIAGNOSTIC: fixed-address STM32 I2C1 100 kHz ACK probe.
  * NO actuator/encoder/IMU/ToF application drivers, NO timer4 ISR,
- * NO ranging configuration writes. This only transmits I2C address+W.
+ * NO ranging configuration writes. This probes fixed addresses and reads only identity registers.
  * It MUST NOT run with motor-driver power connected.
  *
- * USB commands: diag_id, status, probe, release
+ * USB commands: diag_id, status, probe, read_ids, release
  * probe addresses ONLY 0x29, 0x68, 0x69. No full bus scan.
  */
 #include "board.h"
@@ -138,6 +138,120 @@ static void probe_one(uint8_t address)
     }
 }
 
+
+/* Read one immutable identification register. The only transmitted data
+ * bytes are register POINTERS; never write device configuration values.
+ * Uses STOP between pointer-set and single-byte receive, as the existing
+ * Leroy driver does. Each wait is bounded and recovers on error. */
+static bool wait_flags(uint32_t mask, const char **why)
+{
+    const uint32_t start = tick_ms;
+    for (;;) {
+        const uint32_t sr1 = I2C_SR1(I2C1);
+        if (sr1 & (ERROR_BITS & ~I2C_SR1_AF)) {
+            *why = "bus_error";
+            return false;
+        }
+        if (sr1 & I2C_SR1_AF) {
+            *why = "nack";
+            return false;
+        }
+        if ((sr1 & mask) != 0U) {
+            return true;
+        }
+        if ((uint32_t)(tick_ms - start) >= I2C_TIMEOUT_MS) {
+            *why = "timeout";
+            return false;
+        }
+    }
+}
+
+static bool wait_idle(const char **why)
+{
+    const uint32_t start = tick_ms;
+    while (I2C_SR2(I2C1) & I2C_SR2_BUSY) {
+        if ((uint32_t)(tick_ms - start) >= I2C_TIMEOUT_MS) {
+            *why = "busy_timeout";
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool start_address(uint8_t address, uint8_t direction, const char **why)
+{
+    i2c_send_start(I2C1);
+    if (!wait_flags(I2C_SR1_SB, why)) {
+        return false;
+    }
+    i2c_send_7bit_address(I2C1, address, direction);
+    if (!wait_flags(I2C_SR1_ADDR, why)) {
+        return false;
+    }
+    return true;
+}
+
+static bool read_identity_byte(uint8_t address, uint16_t register_number,
+                               bool reg16, uint8_t *result, const char **why)
+{
+    if (!wait_idle(why) ||
+        !start_address(address, I2C_WRITE, why)) {
+        goto fail;
+    }
+    (void)I2C_SR1(I2C1);
+    (void)I2C_SR2(I2C1);
+
+    if (reg16) {
+        i2c_send_data(I2C1, (uint8_t)(register_number >> 8U));
+        if (!wait_flags(I2C_SR1_BTF, why)) {
+            goto fail;
+        }
+    }
+
+    i2c_send_data(I2C1, (uint8_t)register_number);
+    if (!wait_flags(I2C_SR1_BTF, why)) {
+        goto fail;
+    }
+    i2c_send_stop(I2C1);
+    if (!wait_idle(why) ||
+        !start_address(address, I2C_READ, why)) {
+        goto fail;
+    }
+
+    /* STM32F4 single-byte RX: NACK before clearing ADDR, STOP before RXNE. */
+    i2c_disable_ack(I2C1);
+    (void)I2C_SR1(I2C1);
+    (void)I2C_SR2(I2C1);
+    i2c_send_stop(I2C1);
+    if (!wait_flags(I2C_SR1_RxNE, why)) {
+        goto fail;
+    }
+    *result = i2c_get_data(I2C1);
+    i2c_enable_ack(I2C1);
+    return true;
+
+fail:
+    recover_i2c();
+    return false;
+}
+
+static void read_and_report(const char *name, uint8_t address,
+                            uint16_t reg, bool reg16)
+{
+    uint8_t value = 0;
+    const char *why = "unknown";
+    usb_serial_write("i2c100 id=");
+    usb_serial_write(name);
+    usb_serial_write(" result=");
+    if (read_identity_byte(address, reg, reg16, &value, &why)) {
+        usb_serial_write("ok value_dec=");
+        usb_serial_write_u32(value);
+    } else {
+        usb_serial_write(why);
+    }
+    usb_serial_write("\r\n");
+}
+
 int main(void)
 {
     init_clock();
@@ -152,7 +266,7 @@ int main(void)
             continue;
         }
         if (strcmp(command, "diag_id") == 0) {
-            usb_serial_write_line("LER0Y_I2C_ACK_DIAG_V1 100KHZ NO_MOTOR");
+            usb_serial_write_line("LER0Y_I2C_ID_DIAG_V1 100KHZ NO_MOTOR");
         } else if (strcmp(command, "status") == 0) {
             usb_serial_write("i2c100 idle_sr1=");
             usb_serial_write_u32(I2C_SR1(I2C1));
@@ -164,6 +278,11 @@ int main(void)
             probe_one(0x68U);
             probe_one(0x69U);
             usb_serial_write_line("i2c100 probe_done");
+        } else if (strcmp(command, "read_ids") == 0) {
+            read_and_report("imu_whoami", 0x68U, 0x0000U, false);
+            read_and_report("tof_model_h", 0x29U, 0x010FU, true);
+            read_and_report("tof_model_l", 0x29U, 0x0110U, true);
+            usb_serial_write_line("i2c100 read_ids_done");
         } else if (strcmp(command, "release") == 0) {
             /* I2C peripheral disabled; pins become open-drain released. */
             i2c_peripheral_disable(I2C1);
