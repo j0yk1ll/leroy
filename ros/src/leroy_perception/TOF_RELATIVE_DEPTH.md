@@ -24,8 +24,10 @@ ICM-20948. It is an **opt-in sensor-only** extension.
 
 **Firmware has NOT been cross-compiled, flashed, or hardware-tested.**
 The MCU I²C1 speed remains the existing 400 kHz; the Arduino prototype
-used 100 kHz. Verify shared-bus reliability and pull-up voltage before
-any real deployment. Use `make -C firmware build`, NEVER plain
+used 100 kHz. The ToF I/O-pad config bit matches Pololu's default
+\`init(io_2v8=true)\`, rather than the raw ULD 1V8 default.
+**Measure the actual supply, I²C pull-up voltage, and shared-bus reliability**
+before flashing; this is a code assumption, not physical verification. Use `make -C firmware build`, NEVER plain
 `make -C firmware` (its default target flashes hardware).
 
 ## ROS
