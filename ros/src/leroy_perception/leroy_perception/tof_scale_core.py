@@ -34,7 +34,8 @@ def project_tof_hit(range_m, k, origin_xyz, rotation_xyzw):
 
 
 def scale_relative_depth(image, range_m, k, origin_xyz, rotation_xyzw,
-                         radius_px, max_relative_spread=0.20):
+                         radius_px, max_relative_spread=0.20,
+                         tof_cone_fov_rad=0.47):
     """Return (metric_depth, diagnostics) or raise ValueError.
 
     Only valid for relative DEPTH proportional to distance, not disparity.
@@ -43,9 +44,15 @@ def scale_relative_depth(image, range_m, k, origin_xyz, rotation_xyzw,
     exact pixel correspondence.
     """
     arr = np.asarray(image, dtype=np.float32)
-    if arr.ndim != 2 or not 4 <= int(radius_px) <= 100:
+    if arr.ndim != 2 or not 4 <= int(radius_px) <= 220:
         raise ValueError("invalid relative depth or ROI radius")
     u, v, z = project_tof_hit(range_m, k, origin_xyz, rotation_xyzw)
+    # Require a crop comparable to the ToF cone's nominal camera footprint.
+    # This is conservative, not a calibrated per-pixel correspondence.
+    fx, fy, _, _ = k
+    nominal_cone_px = max(fx, fy) * math.tan(float(tof_cone_fov_rad) / 2.0)
+    if radius_px < 0.85 * nominal_cone_px:
+        raise ValueError("ROI smaller than ToF beam cone; cannot assign point depth")
     h, w = arr.shape
     if u < radius_px or v < radius_px or u >= w-radius_px or v >= h-radius_px:
         raise ValueError("projected ToF center outside usable camera image")
