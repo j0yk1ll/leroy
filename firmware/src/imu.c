@@ -8,6 +8,7 @@
  */
 
 #include "imu.h"
+#include "i2c_shared.h"
 
 #include "board.h"
 #include "timebase.h"
@@ -603,3 +604,86 @@ bool imu_read_robot(imu_robot_sample_t *sample)
     return true;
 }
 
+
+/* VL53L1X's 16-bit register address on the shared I2C1 bus. These helpers
+ * are synchronous and must run only from the single-threaded main loop.
+ * They intentionally reuse the IMU's bounded I2C timeouts and recovery.
+ * Never call from interrupts or a second I2C owner. */
+bool i2c_shared_write16_reg8(uint8_t address, uint16_t reg, uint8_t value)
+{
+    if (!wait_bus_idle()) {
+        return false;
+    }
+    i2c_send_start(I2C1);
+    if (!wait_sr1(I2C_SR1_SB)) {
+        return false;
+    }
+    i2c_send_7bit_address(I2C1, address, I2C_WRITE);
+    if (!wait_sr1(I2C_SR1_ADDR)) {
+        return false;
+    }
+    (void)I2C_SR1(I2C1);
+    (void)I2C_SR2(I2C1);
+    i2c_send_data(I2C1, (uint8_t)(reg >> 8));
+    if (!wait_sr1(I2C_SR1_BTF)) {
+        return false;
+    }
+    i2c_send_data(I2C1, (uint8_t)reg);
+    if (!wait_sr1(I2C_SR1_BTF)) {
+        return false;
+    }
+    i2c_send_data(I2C1, value);
+    if (!wait_sr1(I2C_SR1_BTF)) {
+        return false;
+    }
+    i2c_send_stop(I2C1);
+    return true;
+}
+
+bool i2c_shared_read16_reg8(uint8_t address, uint16_t reg, uint8_t *value)
+{
+    if (value == 0 || !wait_bus_idle()) {
+        return false;
+    }
+    i2c_send_start(I2C1);
+    if (!wait_sr1(I2C_SR1_SB)) {
+        return false;
+    }
+    i2c_send_7bit_address(I2C1, address, I2C_WRITE);
+    if (!wait_sr1(I2C_SR1_ADDR)) {
+        return false;
+    }
+    (void)I2C_SR1(I2C1);
+    (void)I2C_SR2(I2C1);
+    i2c_send_data(I2C1, (uint8_t)(reg >> 8));
+    if (!wait_sr1(I2C_SR1_BTF)) {
+        return false;
+    }
+    i2c_send_data(I2C1, (uint8_t)reg);
+    if (!wait_sr1(I2C_SR1_BTF)) {
+        return false;
+    }
+    i2c_send_stop(I2C1);
+    if (!wait_bus_idle()) {
+        return false;
+    }
+    i2c_send_start(I2C1);
+    if (!wait_sr1(I2C_SR1_SB)) {
+        return false;
+    }
+    i2c_send_7bit_address(I2C1, address, I2C_READ);
+    if (!wait_sr1(I2C_SR1_ADDR)) {
+        return false;
+    }
+    i2c_disable_ack(I2C1);
+    (void)I2C_SR1(I2C1);
+    (void)I2C_SR2(I2C1);
+    i2c_send_stop(I2C1);
+    if (!wait_sr1(I2C_SR1_RxNE)) {
+        i2c_enable_ack(I2C1);
+        return false;
+    }
+    *value = i2c_get_data(I2C1);
+    i2c_enable_ack(I2C1);
+    return true;
+}
