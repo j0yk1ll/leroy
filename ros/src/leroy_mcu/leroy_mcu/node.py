@@ -1023,6 +1023,7 @@ class LeroyBridgeNode(Node):
         self._stop_event.set()
         try:
             self._send_command('set_wheels 0 0 0 0')
+            self._send_command('set_tof_stream_hz 0')
             self._send_command('set_imu_stream_hz 0')
             self._send_command('set_encoder_stream_hz 0')
         finally:
