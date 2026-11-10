@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    image_topic: /camera/image_rect
+    relative_depth_topic: /relative_depth/zipdepth
+    status_topic: /relative_depth/zipdepth_status
+    model_root: /opt/ZipDepth
+    checkpoint: checkpoints/zipdepth_base_npu.pth
+    device: cpu
+    input_size: 384
+    torch_threads: 4
+    npu_upsampling: true
+    stats_period_sec: 5.0
