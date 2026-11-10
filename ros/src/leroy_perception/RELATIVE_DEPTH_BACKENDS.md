@@ -88,3 +88,30 @@ authorization **must remain disabled**.
 
 This initial ZipDepth adapter is source-staged only. It has **not yet passed**
 a Leroy ROS build, inference test, calibration, or live hardware validation.
+
+## Multi-anchor diagnostic core (Step 174)
+
+The ROS-free `affine_inverse_depth_core.py` now exposes:
+- `DepthAnchor(prediction, camera_z_m, evidence_id, target_id)`;
+- `fit_diagnostic_inverse_depth(anchors)`, testing
+  `1/camera_z_m = slope*prediction + intercept`;
+- `DiagnosticFit.depth_image(prediction)`, producing 32FC1 values in meters
+  **only within the measured predictor support**, invalid elsewhere.
+
+The function requires six unique evidence identities, three target groups,
+and at least 20 cm of measured depth diversity. It searches for pairwise
+consensus, refits inliers, and rejects inadequate residuals or unsupported
+extrapolation. This is an internal diagnostic calculation, **not a
+calibrated navigation product**, even if the synthetic tests pass.
+`navigation_qualified` is permanently `False`.
+
+There is intentionally **no subscriber, launch addition, or connection**
+to `/experimental/tof_metric_depth`, XRSLAM, the occupancy grid, or motors.
+A real anchor generator must first supply physically correlated ToF/camera
+samples and provenance of geometric/timing measurements. One physical ToF
+reading cannot identify both affine parameters. Independently held-out
+scenes and measured calibration are required to evaluate bias and confidence.
+
+Test file: `test/test_affine_inverse_depth_core.py`. The test code and
+calibration core are committed, but a complete installed Jazzy runtime and
+Leroy hardware validation are not yet claimed.
