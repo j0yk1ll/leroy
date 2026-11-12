@@ -42,6 +42,10 @@ static uint32_t g_last_activity_ms;
 static bool g_watchdog_reported;
 static bool g_motor_tx_seen;
 static uint32_t g_motor_last_tx;
+/* Independent expiry for accepted sequenced wheel motion. */
+static bool g_motor_motion_active;
+static uint32_t g_motor_motion_last_ms;
+static uint32_t g_motor_motion_timeout_ms;
 
 static uint32_t g_imu_stream_hz;
 static uint32_t g_imu_stream_period_us;
@@ -74,6 +78,7 @@ static void refresh_activity(void)
 
 static void stop_all(void)
 {
+    g_motor_motion_active = false;
     platform_stop();
     manipulator_stop();
 }
@@ -662,6 +667,7 @@ static void process_command(char *line)
         /* Stopping is unconditional, even with a stale sequence.
          * Explicitly disable wheel driver enables, not just zero duty. */
         platform_disable();
+        g_motor_motion_active = false;
         if (!g_motor_tx_seen || seq > g_motor_last_tx) {
             g_motor_last_tx = seq;
             g_motor_tx_seen = true;
@@ -700,8 +706,16 @@ static void process_command(char *line)
             g_motor_tx_seen = true;
             g_motor_last_tx = seq;
             if (fl == 0 && fr == 0 && rl == 0 && rr == 0) {
+                g_motor_motion_active = false;
                 platform_disable();
             } else {
+                /* Only accepted wheel transactions refresh motion expiry. */
+                g_motor_motion_last_ms = millis();
+                g_motor_motion_timeout_ms = g_watchdog_ms;
+                if (g_motor_motion_timeout_ms > max_watchdog) {
+                    g_motor_motion_timeout_ms = max_watchdog;
+                }
+                g_motor_motion_active = true;
                 platform_set_wheels(fl, fr, rl, rr);
             }
             refresh_activity();
@@ -723,6 +737,7 @@ static void process_command(char *line)
         } else if (fl != 0 || fr != 0 || rl != 0 || rr != 0) {
             usb_serial_write_line("error legacy_nonzero_wheels_disabled");
         } else {
+            g_motor_motion_active = false;
             platform_disable();
             refresh_activity();
             usb_serial_write_line("ok set_wheels");
@@ -889,6 +904,15 @@ static void process_command(char *line)
 
 static void update_watchdog(void)
 {
+    /* Generic keepalive MUST NOT prolong sequenced wheel motion. */
+    if (g_motor_motion_active &&
+        (uint32_t)(millis() - g_motor_motion_last_ms) >
+            g_motor_motion_timeout_ms) {
+        platform_disable();
+        g_motor_motion_active = false;
+        usb_serial_write_line("event watchdog_stop");
+    }
+
     if (g_watchdog_ms == 0U || !anything_moving()) {
         return;
     }
@@ -909,6 +933,9 @@ void command_init(void)
     g_watchdog_reported = false;
     g_motor_tx_seen = false;
     g_motor_last_tx = 0U;
+    g_motor_motion_active = false;
+    g_motor_motion_last_ms = 0U;
+    g_motor_motion_timeout_ms = 0U;
 
     g_imu_stream_hz = 0U;
     g_imu_stream_period_us = 0U;

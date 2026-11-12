@@ -41,6 +41,7 @@ from leroy_safety.authorized_session import (
 )
 from leroy_safety.motor_authority import MotorAuthority, HEALTH_KEYS
 from leroy_mcu.motor_cdc_protocol import MotorCdcProtocol
+from leroy_mcu.motor_sequence_ledger import MotorSequenceLedger
 from leroy_mcu.motor_sensor_health import MotorSensorHealth
 from leroy_mcu.motor_gpio_feedback import PhysicalMotorFeedback
 from leroy_mcu.motor_signed_ingress import (
@@ -210,6 +211,10 @@ class LeroyBridgeNode(Node):
         # CDC writer. This deployment has no trusted hardware interlock
         # provider or key custody yet; production physical release remains
         # structurally unavailable (not a user-togglable ROS parameter).
+        self.declare_parameter(
+            'motor_sequence_ledger_file', '',
+            descriptor=ParameterDescriptor(read_only=True))
+        self._motor_sequence_ledger = None
         self._motor_authority = None
         self._motor_cdc = None
         self._motor_stop_requested = False
@@ -340,7 +345,15 @@ class LeroyBridgeNode(Node):
             half_track_m=float(self._half_track_m),
             pwm_per_rad_s=float(self._wheel_velocity_to_pwm_gain),
             max_pwm=int(self._max_pwm))
-        self._motor_cdc = MotorCdcProtocol()
+        ledger_path = self.get_parameter(
+            'motor_sequence_ledger_file').value
+        if type(ledger_path) is not str or not ledger_path:
+            raise ValueError(
+                'signed motor authority requires an existing '
+                'persistent MCU sequence ledger')
+        ledger = MotorSequenceLedger(ledger_path)
+        self._motor_sequence_ledger = ledger
+        self._motor_cdc = MotorCdcProtocol(ledger=ledger)
         self._motor_health = MotorSensorHealth()
         chip = self.get_parameter('motor_gpio_chip').value
         estop_offset = self.get_parameter(
@@ -760,7 +773,8 @@ class LeroyBridgeNode(Node):
                 line, now_ns=time.monotonic_ns()):
             if not self._motor_cdc.healthy:
                 with self._serial_lock:
-                    self._motor_authority.stop()
+                    if self._motor_authority is not None:
+                        self._motor_authority.stop()
             return
         if line == 'ok set_watchdog_ms':
             # MCU accepted the timeout; this is NOT a stop acknowledgement.
@@ -1004,7 +1018,8 @@ class LeroyBridgeNode(Node):
     def destroy_node(self):
         # Revoke any outstanding motor decision before serial teardown.
         if getattr(self, '_motor_authority', None) is not None:
-            self._motor_authority.stop()
+            if self._motor_authority is not None:
+                self._motor_authority.stop()
             # Request MCU driver disable, retaining the reader briefly to
             # collect its sequence-matched stop ACK. Timeout is NOT a stop.
             if not self._transport_fault.is_set():
@@ -1034,6 +1049,8 @@ class LeroyBridgeNode(Node):
                 self._serial.close()
             if self._motor_feedback is not None:
                 self._motor_feedback.close()
+            if self._motor_sequence_ledger is not None:
+                self._motor_sequence_ledger.close()
         return super().destroy_node()
 
 
