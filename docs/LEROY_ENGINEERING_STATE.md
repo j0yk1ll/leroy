@@ -80,6 +80,26 @@ IMPORTANT:
 - Do not restart calibration merely because a previous conversation
   lost its context.
 
+### Depth perception and autonomous navigation
+
+ESTABLISHED DECISION:
+- Do not require accurate dense metric depth as a prerequisite for autonomy.
+- Monocular depth estimation primarily supplies relative scene geometry,
+  obstacle relationships, and free-space information.
+- The time-of-flight sensor provides independent local range evidence;
+  it is not expected to make the entire monocular depth map metrically exact.
+- Do not repeatedly attempt global metric-depth calibration as a prerequisite
+  for progressing with perception and autonomous-navigation development.
+- Use uncertainty-aware obstacle avoidance and conservative safety margins.
+- Conventional Nav2 components still require consistent metric geometry for
+  robot footprint, collision clearance, and trajectory planning.
+- Validate those safety-critical geometric quantities where necessary,
+  without demanding accurate metric distance for every scene pixel.
+- Keep autonomous motor authority gated until the relevant localization,
+  obstacle-detection, and stopping safeguards are demonstrated.
+- Distinguish relative visual understanding from validated metric pose;
+  neither should be misrepresented as the other.
+
 ### Motor authority
 
 DECISION:
