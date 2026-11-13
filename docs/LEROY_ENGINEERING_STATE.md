@@ -355,6 +355,44 @@ Next:
 - Do not promote either diagnostic to obstacle or free-space authority
   based only on numerical contrast.
 
+## Regional-depth visual assessment and next decision
+
+Date: 2026-11-13.
+
+Reviewed:
+- Regional contrast comparison images for frames 100, 800 and 1500
+  of the existing `leroy_cam_imu_05` recording.
+- Compared against the previous pixel-level boundary visualizations.
+
+Findings:
+- Regional contrast captures broader prediction changes than the
+  sparse pixel-level boundary detector.
+- Strong contrast overlaps parts of the container, calibration
+  checkerboard, lower image regions, and adjacent wall.
+- The 6x8 grid does not reliably separate the container from its
+  background or establish complete physical object boundaries.
+- All 48 valid regions indicate numerical support, NOT safe space.
+- Visualization alters the image red channel and does not provide
+  a perceptually uniform quantitative contrast representation.
+- Neither diagnostic identifies verified traversable free space.
+
+Decision:
+- Retain both diagnostic modules for experimental analysis.
+- Do not promote either to standalone obstacle detection.
+- Do not connect diagnostic outputs to navigation costmaps or motors.
+- Do not restart dense metric-depth calibration.
+- Develop scene-geometry reasoning using camera geometry, validated
+  motion evidence, ground-versus-object cues and uncertainty handling.
+- Treat time-of-flight as independent local range evidence rather
+  than a global metric calibration of monocular depth.
+- Missing obstacle evidence must never imply traversability.
+- Preserve all existing autonomous motor-authority safety gates.
+
+Next engineering task:
+- Review existing scene-geometry, ground classification and
+  camera/ToF integration code before introducing another algorithm.
+- Select one specific missing capability, avoiding duplication.
+
 ## Next engineering milestone
 
 Advance the existing XRSLAM localization system toward verified
