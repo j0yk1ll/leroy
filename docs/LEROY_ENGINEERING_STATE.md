@@ -1,6 +1,6 @@
 # Leroy Engineering State
 
-Last updated: 2026-11-12
+Last updated: 2026-11-13
 
 ## Purpose
 
@@ -268,6 +268,45 @@ Next milestone:
 - Evaluate relative-depth boundary behavior on existing recorded
   camera imagery before attempting obstacle or free-space interpretation.
 - Preserve the diagnostic-only boundary and all motor safety gates.
+
+## Real-camera relative-depth diagnostic evaluation
+
+Date: 2026-11-13.
+
+Source:
+- Existing `/leroy_ws/calibration/leroy_cam_imu_05` MCAP recording.
+- ZipDepth Base NPU-compatible checkpoint, CPU inference.
+- Three selected rectified camera frames (100, 800, 1500).
+- Existing `relative_depth_structure.py`, default diagnostic thresholds.
+
+Measured results:
+- Frame 100: 558 boundary pixels, 0.1816% coverage, 107 ms inference.
+- Frame 800: 816 boundary pixels, 0.2656% coverage, 42 ms inference.
+- Frame 1500: 714 boundary pixels, 0.2324% coverage, 43 ms inference.
+- Each prediction had 640x480 resolution and 100% finite pixels.
+- Three samples do not establish sustained inference throughput.
+
+Visual inspection of camera/overlay comparisons:
+- Some genuine container contour sections were detected.
+- Substantial sections of the same object's silhouette were missed.
+- Checkerboard features were mostly not classified as boundaries,
+  although a few isolated marks appeared.
+- Detected contours were sparse and did not define complete obstacles.
+
+Decision:
+- Retain the relative-depth boundary detector as diagnostic only.
+- Do not interpret absence of boundaries as traversable free space.
+- Do not connect this output to occupancy authority, Nav2 or motors.
+- Do not resume global metric-depth calibration to solve this issue.
+- Explore region-level relative scene structure and uncertainty handling
+  as the next perception-development direction.
+- Require separate real-scene evaluation and safety validation before
+  relying on any derived obstacle-clearance decisions.
+
+Evaluation outputs in the development container:
+`/leroy_ws/calibration/relative_depth_boundary_eval_f__rblex/`
+
+The output directory is local evidence, not a committed repository asset.
 
 ## Next engineering milestone
 
