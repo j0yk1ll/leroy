@@ -223,6 +223,52 @@ and step175 depth-acceptance artifacts.
 Do not stage, overwrite, clean, or revert those changes as part
 of motor commissioning or SLAM integration.
 
+## Relative-depth boundary diagnostic — completed milestone
+
+Implementation commit: `94e324e` — Add isolated relative-depth boundary diagnostics.
+
+Verified:
+- Added ROS-independent `relative_depth_structure.py`.
+- Added opt-in `relative_depth_boundary_node.py`.
+- Registered `relative_depth_boundary_diagnostic` through the existing
+  `ament_cmake` package and executable wrapper.
+- Six synthetic unit tests passed.
+- ROS 2 Jazzy `leroy_perception` package built successfully in `leroy-dev`.
+- ROS 2 executable discovery succeeded.
+- Isolated ROS message-level integration test passed:
+  - `32FC1` relative-depth input delivered successfully.
+  - `mono8` boundary diagnostic published successfully.
+  - Original timestamp and camera frame preserved.
+  - Expected synthetic discontinuity classification verified.
+
+Interface:
+- Input: `/relative_depth/zipdepth`
+- Output: `/relative_depth/boundary_diagnostic`
+- Class 0: unknown.
+- Class 1: possible relative-depth boundary.
+
+Limitations and safety:
+- The algorithm detects relative-depth discontinuities, not confirmed
+  physical obstacles or navigable free space.
+- It deliberately makes no assumption about near/far prediction ordering.
+- It requires no metric-depth calibration.
+- It provides no occupancy grid, Nav2 integration, motor commands,
+  localization authority, or autonomous motion authorization.
+- Real-camera and recorded-scene performance remains unvalidated.
+
+Development environment note:
+- The Arch host checkout is mounted at `/work/leroy` inside `leroy-dev`.
+- The container builds from a separate `/leroy_ws/src` tree.
+- Changes made to the host checkout are not automatically reflected in
+  `/leroy_ws/src`; synchronize only intended files while preserving
+  unrelated modifications.
+- Source ROS 2 setup scripts without Bash `nounset` (`set -u`).
+
+Next milestone:
+- Evaluate relative-depth boundary behavior on existing recorded
+  camera imagery before attempting obstacle or free-space interpretation.
+- Preserve the diagnostic-only boundary and all motor safety gates.
+
 ## Next engineering milestone
 
 Advance the existing XRSLAM localization system toward verified
