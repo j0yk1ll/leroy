@@ -308,6 +308,53 @@ Evaluation outputs in the development container:
 
 The output directory is local evidence, not a committed repository asset.
 
+## Regional relative-depth analysis — offline evaluation
+
+Date: 2026-11-13.
+
+Implementation:
+- `leroy_perception/relative_depth_regions.py`
+- `test/test_relative_depth_regions.py`
+- ROS-independent diagnostic algorithm operating on a 6x8 region grid.
+- Region contrast uses neighboring median relative-depth differences
+  normalized by the frame's robust prediction range.
+- No assumption about whether larger predictions mean nearer or farther.
+- Five synthetic tests passed, including affine/sign invariance,
+  regional discontinuity detection, and invalid-region handling.
+
+Offline evaluation:
+- Existing `leroy_cam_imu_05` recording.
+- Same frames 100, 800 and 1500 as the earlier boundary evaluation.
+- ZipDepth Base NPU checkpoint, CPU, input size 384.
+- All 48 regions were valid and scored in each evaluated frame.
+- Frame 100: median contrast 0.154291, maximum 0.897175,
+  inference plus analysis 68 ms.
+- Frame 800: median contrast 0.304146, maximum 0.945285,
+  inference plus analysis 51 ms.
+- Frame 1500: median contrast 0.100319, maximum 0.885480,
+  inference plus analysis 47 ms.
+- Only three frames were evaluated; these timings are not a sustained
+  performance benchmark.
+
+Interpretation and safety:
+- Valid regions are NOT confirmed traversable regions.
+- Contrast is NOT obstacle probability or physical distance.
+- No free-space clearing, occupancy authority, Nav2 integration,
+  localization authority, or motor authorization is established.
+- The regional algorithm has not yet been visually evaluated against
+  physical scene structure.
+- Preserve the existing diagnostic-only boundary.
+
+Local experimental artifacts:
+`/leroy_ws/calibration/relative_depth_boundary_eval_f__rblex/`
+
+Next:
+- Review saved regional comparison images against the camera scene.
+- Determine whether regional contrast supplies additional useful
+  scene-structure information beyond the sparse boundary diagnostic.
+- Do not promote either diagnostic to obstacle or free-space authority
+  based only on numerical contrast.
+
 ## Next engineering milestone
 
 Advance the existing XRSLAM localization system toward verified
